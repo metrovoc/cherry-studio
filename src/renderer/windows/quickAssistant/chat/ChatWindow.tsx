@@ -1,5 +1,3 @@
-import '@cherrystudio/ui/components/composites/markdown/styles'
-
 import { Scrollbar } from '@cherrystudio/ui'
 import type { MessageListItem } from '@renderer/components/chat/messages/types'
 import type { Assistant } from '@renderer/types/assistant'
