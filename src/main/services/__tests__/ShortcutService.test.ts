@@ -31,7 +31,8 @@ const {
   },
   windowManagerMock: {
     open: vi.fn(),
-    broadcastToType: vi.fn()
+    broadcastToType: vi.fn(),
+    onWindowCreatedByType: vi.fn()
   },
   selectionServiceMock: {
     toggleEnabled: vi.fn(),
@@ -153,6 +154,8 @@ describe('ShortcutService', () => {
   let service: ShortcutService
   let mainWindow: MockBrowserWindow
   let currentMainWindow: MockBrowserWindow
+  let mainWindowCreated: ((window: MockBrowserWindow) => void) | undefined
+  let quickAssistantWindowCreated: ((managed: { window: MockBrowserWindow }) => void) | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -164,9 +167,17 @@ describe('ShortcutService', () => {
     // Tests exercise the same path by firing the callback synchronously on subscribe.
     // Tests that simulate a service restart can reassign `currentMainWindow` before the second onInit.
     windowServiceMock.onMainWindowCreated.mockImplementation((callback: (window: MockBrowserWindow) => void) => {
+      mainWindowCreated = callback
       callback(currentMainWindow)
       return { dispose: vi.fn() }
     })
+    quickAssistantWindowCreated = undefined
+    windowManagerMock.onWindowCreatedByType.mockImplementation(
+      (type: WindowType, callback: (managed: { window: MockBrowserWindow }) => void) => {
+        if (type === WindowType.QuickAssistant) quickAssistantWindowCreated = callback
+        return { dispose: vi.fn() }
+      }
+    )
 
     globalShortcutMock.register.mockReturnValue(true)
 
@@ -205,6 +216,27 @@ describe('ShortcutService', () => {
 
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(commandServiceMock.execute).toHaveBeenCalledWith('app.zoom.in', mainWindow)
+  })
+
+  it('handles zoom-out from the quick assistant window', async () => {
+    await (service as any).onInit()
+    const quickAssistant = new MockBrowserWindow()
+    quickAssistantWindowCreated?.({ window: quickAssistant })
+
+    const event = { preventDefault: vi.fn() }
+    quickAssistant.emitWebContents('before-input-event', event, {
+      type: 'keyDown',
+      key: '-',
+      code: 'Minus',
+      control: process.platform !== 'darwin',
+      meta: process.platform === 'darwin',
+      alt: false,
+      shift: false,
+      isComposing: false
+    })
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(commandServiceMock.execute).toHaveBeenCalledWith('app.zoom.out', quickAssistant)
   })
 
   it.each([
@@ -393,7 +425,7 @@ describe('ShortcutService', () => {
     globalShortcutMock.register.mockClear()
     globalShortcutMock.unregister.mockClear()
 
-    ;(service as any).registerForWindow(nextWindow)
+    mainWindowCreated?.(nextWindow)
 
     expect(globalShortcutMock.unregister).toHaveBeenCalledWith('CommandOrControl+M')
 
