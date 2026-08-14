@@ -81,6 +81,7 @@ export const finalizeLiveMessages = (messages: CherryUIMessage[]): CherryUIMessa
 const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const [readClipboardAtStartup] = usePreference('feature.quick_assistant.read_clipboard_at_startup')
   const [quickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
+  const [saveConversations] = usePreference('feature.quick_assistant.save_conversations')
   const [windowStyle] = usePreference('ui.window_style')
   const { theme } = useTheme()
   const { t } = useTranslation()
@@ -101,6 +102,9 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   }, [])
 
   const lastClipboardTextRef = useRef<string | null>(null)
+  const initialRequestTextRef = useRef('')
+  const persistingTopicIdRef = useRef<string | null>(null)
+  const persistedTopicIdRef = useRef<string | null>(null)
   const inputBarRef = useRef<HTMLDivElement>(null)
   const featureMenusRef = useRef<FeatureMenusRef>(null)
 
@@ -115,7 +119,8 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const {
     topicId: temporaryTopicId,
     ready: isTopicReady,
-    reset: resetTemporaryTopic
+    reset: resetTemporaryTopic,
+    persist: persistTemporaryTopic
   } = useTemporaryTopic({ enabled: true, assistantId: chosenAssistant?.id })
 
   const requestText = useMemo(() => {
@@ -126,6 +131,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   }, [clipboardText, isFirstMessage, userInputText])
 
   const [isPreparing, setIsPreparing] = useState(false)
+  const [isPersisting, setIsPersisting] = useState(false)
   const [flowError, setFlowError] = useState<string | null>(null)
 
   const {
@@ -149,7 +155,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   // no assistant content. We accumulate assistant turns across completed
   // streams in `completedAssistants` so the multi-turn conversation
   // renders properly. Cleared on `clear()` together with `setMessages([])`.
-  const { activeExecutions, isPending } = useTopicStreamStatus(temporaryTopicId ?? 'pending-temp')
+  const { status: streamStatus, activeExecutions, isPending } = useTopicStreamStatus(temporaryTopicId ?? 'pending-temp')
   const {
     liveAssistants,
     reset: resetExecutionMessages,
@@ -170,6 +176,35 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
       }
     }
   }, [activeExecutions, liveAssistants, resetExecutionMessages])
+
+  useEffect(() => {
+    if (
+      !saveConversations ||
+      !chosenAssistant ||
+      !temporaryTopicId ||
+      streamStatus !== 'done' ||
+      persistingTopicIdRef.current === temporaryTopicId ||
+      persistedTopicIdRef.current === temporaryTopicId
+    ) {
+      return
+    }
+
+    persistingTopicIdRef.current = temporaryTopicId
+    setIsPersisting(true)
+    void persistTemporaryTopic(initialRequestTextRef.current)
+      .then(() => {
+        persistedTopicIdRef.current = temporaryTopicId
+      })
+      .catch((persistError) => {
+        logger.error('Failed to save quick assistant conversation', persistError as Error)
+      })
+      .finally(() => {
+        if (persistingTopicIdRef.current === temporaryTopicId) {
+          persistingTopicIdRef.current = null
+          setIsPersisting(false)
+        }
+      })
+  }, [chosenAssistant, persistTemporaryTopic, saveConversations, streamStatus, temporaryTopicId])
 
   useEffect(() => {
     if (isPending) setIsPreparing(false)
@@ -245,7 +280,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setIsPreparing(false)
   }, [stopChat, setMessages, clearExecutionMessages])
 
-  const isLoading = isPreparing || isStreaming
+  const isLoading = isPreparing || isStreaming || isPersisting
   const isOutputted = messageItems.some((message) => message.role === 'assistant')
 
   useEffect(() => {
@@ -302,6 +337,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
       try {
         setFlowError(null)
+        if (isFirstMessage) initialRequestTextRef.current = requestText
         setIsFirstMessage(false)
         setUserInputText('')
         setIsPreparing(true)
@@ -317,7 +353,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         logger.error('Error fetching result:', resolvedError)
       }
     },
-    [currentModel, isAssistantMode, isTopicReady, requestText, sendMessage, temporaryTopicId]
+    [currentModel, isAssistantMode, isFirstMessage, isTopicReady, requestText, sendMessage, temporaryTopicId]
   )
 
   const handlePause = useCallback(() => {
@@ -326,6 +362,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   const resetConversation = useCallback(() => {
     // Drop the current temporary topic and let useTemporaryTopic lease a fresh one.
+    initialRequestTextRef.current = ''
     resetTemporaryTopic()
     clear()
   }, [clear, resetTemporaryTopic])

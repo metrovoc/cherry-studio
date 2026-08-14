@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "Нажмите на иконку трея для запуска",
   "settings.quickAssistant.enable_quick_assistant": "Включить быстрый помощник",
   "settings.quickAssistant.read_clipboard_at_startup": "Чтение буфера обмена при запуске",
+  "settings.quickAssistant.save_conversations": "Сохранять разговоры в истории ассистента",
+  "settings.quickAssistant.save_conversations_tooltip": "Сохраняется после первого ответа и отображается у выбранного ассистента. Доступно только в режиме ассистента.",
   "settings.quickAssistant.title": "Быстрый помощник",
   "settings.quickAssistant.use_shortcut_to_show": "Нажмите на иконку трея или используйте горячие клавиши для запуска",
   "settings.quickPanel.back": "Назад",

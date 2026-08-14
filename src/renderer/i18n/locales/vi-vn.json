@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "Nhấp vào biểu tượng khay để bắt đầu",
   "settings.quickAssistant.enable_quick_assistant": "Bật Trợ lý Nhanh",
   "settings.quickAssistant.read_clipboard_at_startup": "Đọc clipboard khi khởi động",
+  "settings.quickAssistant.save_conversations": "Lưu cuộc trò chuyện vào lịch sử trợ lý",
+  "settings.quickAssistant.save_conversations_tooltip": "Được lưu sau phản hồi đầu tiên và hiển thị bên dưới trợ lý đã chọn. Chỉ khả dụng ở chế độ Trợ lý.",
   "settings.quickAssistant.title": "Trợ lý Nhanh",
   "settings.quickAssistant.use_shortcut_to_show": "Nhấp chuột phải vào biểu tượng khay hoặc sử dụng phím tắt để bắt đầu",
   "settings.quickPanel.back": "Quay lại",

@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "Haz clic en el icono de la bandeja para iniciar",
   "settings.quickAssistant.enable_quick_assistant": "Habilitar Asistente Rápido",
   "settings.quickAssistant.read_clipboard_at_startup": "Leer portapapeles al iniciar",
+  "settings.quickAssistant.save_conversations": "Guardar conversaciones en el historial del asistente",
+  "settings.quickAssistant.save_conversations_tooltip": "Se guarda después de la primera respuesta y se muestra en el asistente seleccionado. Disponible solo en el modo Asistente.",
   "settings.quickAssistant.title": "Asistente Rápido",
   "settings.quickAssistant.use_shortcut_to_show": "Haz clic derecho en el icono de la bandeja o usa un atajo de teclado para iniciar",
   "settings.quickPanel.back": "Atrás",

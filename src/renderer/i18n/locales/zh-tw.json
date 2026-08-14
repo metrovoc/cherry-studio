@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "點選系統匣圖示啟動",
   "settings.quickAssistant.enable_quick_assistant": "啟用快速助理",
   "settings.quickAssistant.read_clipboard_at_startup": "啟動時讀取剪貼簿",
+  "settings.quickAssistant.save_conversations": "將對話儲存至助手歷史記錄",
+  "settings.quickAssistant.save_conversations_tooltip": "首輪回覆完成後儲存，並顯示於所選助手下。僅限助手模式使用。",
   "settings.quickAssistant.title": "快速助理",
   "settings.quickAssistant.use_shortcut_to_show": "在系統匣圖示上按一下滑鼠右鍵，或使用快捷鍵啟動",
   "settings.quickPanel.back": "後退",

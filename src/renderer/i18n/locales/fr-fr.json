@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "Cliquez sur l'icône dans la barre d'état système pour démarrer",
   "settings.quickAssistant.enable_quick_assistant": "Activer l'assistant rapide",
   "settings.quickAssistant.read_clipboard_at_startup": "Lire le presse-papiers au démarrage",
+  "settings.quickAssistant.save_conversations": "Enregistrer les conversations dans l’historique de l’assistant",
+  "settings.quickAssistant.save_conversations_tooltip": "Enregistrée après la première réponse et affichée sous l’assistant sélectionné. Disponible uniquement en mode Assistant.",
   "settings.quickAssistant.title": "Assistant Rapide",
   "settings.quickAssistant.use_shortcut_to_show": "Cliquez avec le bouton droit sur l'icône dans la barre d'état système ou utilisez un raccourci clavier pour démarrer",
   "settings.quickPanel.back": "Retour",

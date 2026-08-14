@@ -4719,6 +4719,8 @@
   "settings.quickAssistant.click_tray_to_show": "Click the tray icon to start",
   "settings.quickAssistant.enable_quick_assistant": "Enable Quick Assistant",
   "settings.quickAssistant.read_clipboard_at_startup": "Read clipboard at startup",
+  "settings.quickAssistant.save_conversations": "Save conversations to assistant history",
+  "settings.quickAssistant.save_conversations_tooltip": "Saved after the first response and shown under the selected assistant. Available only in Assistant mode.",
   "settings.quickAssistant.title": "Quick Assistant",
   "settings.quickAssistant.use_shortcut_to_show": "Right-click the tray icon or use shortcuts to start",
   "settings.quickPanel.back": "Back",
