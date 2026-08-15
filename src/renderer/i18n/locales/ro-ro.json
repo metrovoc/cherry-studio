@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Clipboardul este gol",
+  "quickAssistant.errors.save_conversation_failed": "Această conversație nu a putut fi salvată. Reîncercați înainte de a începe o conversație nouă.",
   "quickAssistant.feature.chat": "Răspunde la această întrebare",
   "quickAssistant.feature.explanation": "Explicație",
   "quickAssistant.feature.summary": "Rezumat conținut",

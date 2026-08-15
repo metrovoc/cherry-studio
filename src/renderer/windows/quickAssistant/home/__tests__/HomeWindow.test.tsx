@@ -157,16 +157,23 @@ vi.mock('../components/FeatureMenus', () => ({
   default: vi.fn(
     ({
       onSendMessage,
+      setRoute,
       ref
     }: {
       onSendMessage: () => void
+      setRoute: React.Dispatch<React.SetStateAction<'translate' | 'summary' | 'chat' | 'explanation' | 'home'>>
       ref?: React.RefObject<{ useFeature: () => void; resetSelectedIndex: () => void } | null>
     }) => {
       if (ref) {
         ref.current = { useFeature: onSendMessage, resetSelectedIndex: vi.fn() }
       }
       return (
-        <button type="button" onClick={onSendMessage}>
+        <button
+          type="button"
+          onClick={() => {
+            setRoute('chat')
+            onSendMessage()
+          }}>
           Ask
         </button>
       )
@@ -301,6 +308,29 @@ describe('HomeWindow', () => {
     await waitFor(() => {
       expect(state.persistTemporaryTopic).toHaveBeenCalledWith('First question')
     })
+  })
+
+  it('keeps a failed conversation save visible and retryable', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    state.streamStatus = 'streaming'
+    state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Important question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    expect(await screen.findByText('quickAssistant.errors.save_conversation_failed')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'common.retry' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('quickAssistant.errors.save_conversation_failed')).not.toBeInTheDocument()
+    })
+    expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(2)
   })
 
   it('keeps model-only conversations temporary when the saved preference is enabled', async () => {

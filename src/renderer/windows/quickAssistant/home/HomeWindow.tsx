@@ -1,5 +1,5 @@
 import { useChat } from '@ai-sdk/react'
-import { Separator } from '@cherrystudio/ui'
+import { Button, Separator } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import { toMessageListItem } from '@renderer/components/chat/messages/utils/messageListItem'
@@ -111,6 +111,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const { quickModel: quickApiModel } = useDefaultModel()
   const { assistant: chosenAssistant, model: chosenApiModel } = useAssistant(quickAssistantId ?? '')
   const isAssistantMode = Boolean(quickAssistantId)
+  const chosenAssistantId = chosenAssistant?.id
   const currentAssistant = chosenAssistant
   const currentModel = isAssistantMode ? chosenApiModel : quickApiModel
 
@@ -121,7 +122,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     ready: isTopicReady,
     reset: resetTemporaryTopic,
     persist: persistTemporaryTopic
-  } = useTemporaryTopic({ enabled: true, assistantId: chosenAssistant?.id })
+  } = useTemporaryTopic({ enabled: true, assistantId: chosenAssistantId })
 
   const requestText = useMemo(() => {
     const trimmedUserInput = userInputText.trim()
@@ -133,6 +134,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const [isPreparing, setIsPreparing] = useState(false)
   const [isPersisting, setIsPersisting] = useState(false)
   const [flowError, setFlowError] = useState<string | null>(null)
+  const [failedPersistenceTopicId, setFailedPersistenceTopicId] = useState<string | null>(null)
 
   const {
     messages: chatMessages,
@@ -177,34 +179,33 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     }
   }, [activeExecutions, liveAssistants, resetExecutionMessages])
 
-  useEffect(() => {
-    if (
-      !saveConversations ||
-      !chosenAssistant ||
-      !temporaryTopicId ||
-      streamStatus !== 'done' ||
-      persistingTopicIdRef.current === temporaryTopicId ||
-      persistedTopicIdRef.current === temporaryTopicId
-    ) {
+  const persistConversation = useCallback(async () => {
+    const topicId = temporaryTopicId
+    if (!topicId || persistingTopicIdRef.current === topicId || persistedTopicIdRef.current === topicId) {
       return
     }
 
-    persistingTopicIdRef.current = temporaryTopicId
+    persistingTopicIdRef.current = topicId
     setIsPersisting(true)
-    void persistTemporaryTopic(initialRequestTextRef.current)
-      .then(() => {
-        persistedTopicIdRef.current = temporaryTopicId
-      })
-      .catch((persistError) => {
-        logger.error('Failed to save quick assistant conversation', persistError as Error)
-      })
-      .finally(() => {
-        if (persistingTopicIdRef.current === temporaryTopicId) {
-          persistingTopicIdRef.current = null
-          setIsPersisting(false)
-        }
-      })
-  }, [chosenAssistant, persistTemporaryTopic, saveConversations, streamStatus, temporaryTopicId])
+    try {
+      await persistTemporaryTopic(initialRequestTextRef.current)
+      persistedTopicIdRef.current = topicId
+      setFailedPersistenceTopicId((failedId) => (failedId === topicId ? null : failedId))
+    } catch (persistError) {
+      setFailedPersistenceTopicId(topicId)
+      logger.error('Failed to save quick assistant conversation', persistError as Error)
+    } finally {
+      if (persistingTopicIdRef.current === topicId) {
+        persistingTopicIdRef.current = null
+        setIsPersisting(false)
+      }
+    }
+  }, [persistTemporaryTopic, temporaryTopicId])
+
+  useEffect(() => {
+    if (!saveConversations || !chosenAssistantId || streamStatus !== 'done') return
+    void persistConversation()
+  }, [chosenAssistantId, persistConversation, saveConversations, streamStatus])
 
   useEffect(() => {
     if (isPending) setIsPreparing(false)
@@ -277,6 +278,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setCompletedAssistants([])
     clearExecutionMessages()
     setFlowError(null)
+    setFailedPersistenceTopicId(null)
     setIsPreparing(false)
   }, [stopChat, setMessages, clearExecutionMessages])
 
@@ -502,6 +504,20 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
           {flowError && (
             <div className="mb-3 break-all rounded border border-error-border bg-error-subtle px-3 py-2 text-[13px] text-error-subtle-foreground">
               {flowError}
+            </div>
+          )}
+          {failedPersistenceTopicId === temporaryTopicId && (
+            <div className="mb-3 flex items-center gap-2 rounded border border-error-border bg-error-subtle px-3 py-2 text-[13px] text-error-subtle-foreground">
+              <span className="min-w-0 flex-1">{t('quickAssistant.errors.save_conversation_failed')}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0"
+                loading={isPersisting}
+                onClick={() => void persistConversation()}>
+                {t('common.retry')}
+              </Button>
             </div>
           )}
 

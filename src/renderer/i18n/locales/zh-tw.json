@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "剪貼簿為空",
+  "quickAssistant.errors.save_conversation_failed": "無法儲存此對話。請在開始新對話前重試。",
   "quickAssistant.feature.chat": "回答此問題",
   "quickAssistant.feature.explanation": "解釋說明",
   "quickAssistant.feature.summary": "內容摘要",

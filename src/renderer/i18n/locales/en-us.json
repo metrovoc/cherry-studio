@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Clipboard is empty",
+  "quickAssistant.errors.save_conversation_failed": "This conversation could not be saved. Retry before starting a new conversation.",
   "quickAssistant.feature.chat": "Answer this question",
   "quickAssistant.feature.explanation": "Explanation",
   "quickAssistant.feature.summary": "Content summary",

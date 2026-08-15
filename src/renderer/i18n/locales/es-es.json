@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "El portapapeles está vacío",
+  "quickAssistant.errors.save_conversation_failed": "No se pudo guardar esta conversación. Vuelve a intentarlo antes de iniciar una nueva conversación.",
   "quickAssistant.feature.chat": "Responder a esta pregunta",
   "quickAssistant.feature.explanation": "Explicación",
   "quickAssistant.feature.summary": "Resumen del contenido",

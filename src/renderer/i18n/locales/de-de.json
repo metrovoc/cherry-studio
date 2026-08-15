@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Zwischenablage ist leer",
+  "quickAssistant.errors.save_conversation_failed": "Diese Unterhaltung konnte nicht gespeichert werden. Versuche es erneut, bevor du eine neue Unterhaltung beginnst.",
   "quickAssistant.feature.chat": "Diese Frage beantworten",
   "quickAssistant.feature.explanation": "Erklärung",
   "quickAssistant.feature.summary": "Zusammenfassung",

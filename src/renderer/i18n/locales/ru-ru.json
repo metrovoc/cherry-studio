@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Буфер обмена пуст",
+  "quickAssistant.errors.save_conversation_failed": "Не удалось сохранить этот разговор. Повторите попытку перед началом нового разговора.",
   "quickAssistant.feature.chat": "Ответить на этот вопрос",
   "quickAssistant.feature.explanation": "Объяснение",
   "quickAssistant.feature.summary": "Содержание",

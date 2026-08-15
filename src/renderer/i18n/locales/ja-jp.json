@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "クリップボードが空です",
+  "quickAssistant.errors.save_conversation_failed": "この会話を保存できませんでした。新しい会話を始める前に再試行してください。",
   "quickAssistant.feature.chat": "この質問に回答",
   "quickAssistant.feature.explanation": "説明",
   "quickAssistant.feature.summary": "内容要約",

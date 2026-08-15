@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "A área de transferência está vazia",
+  "quickAssistant.errors.save_conversation_failed": "Não foi possível guardar esta conversa. Tente novamente antes de iniciar uma nova conversa.",
   "quickAssistant.feature.chat": "Responder a esta pergunta",
   "quickAssistant.feature.explanation": "Explicação",
   "quickAssistant.feature.summary": "Resumo do conteúdo",

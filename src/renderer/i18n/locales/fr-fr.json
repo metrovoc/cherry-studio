@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Presse-papiers vide",
+  "quickAssistant.errors.save_conversation_failed": "Cette conversation n’a pas pu être enregistrée. Réessayez avant de commencer une nouvelle conversation.",
   "quickAssistant.feature.chat": "Répondre à cette question",
   "quickAssistant.feature.explanation": "Explication",
   "quickAssistant.feature.summary": "Résumé du contenu",

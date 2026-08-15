@@ -3019,6 +3019,7 @@
   "provider.zhinao": "360AI",
   "provider.zhipu": "BigModel",
   "quickAssistant.clipboard.empty": "Το πινάκιδα κόπων είναι άδειο",
+  "quickAssistant.errors.save_conversation_failed": "Δεν ήταν δυνατή η αποθήκευση αυτής της συνομιλίας. Δοκιμάστε ξανά πριν ξεκινήσετε μια νέα συνομιλία.",
   "quickAssistant.feature.chat": "Απάντηση σ' αυτή την ερώτηση",
   "quickAssistant.feature.explanation": "Εξήγηση",
   "quickAssistant.feature.summary": "Σύνοψη",
