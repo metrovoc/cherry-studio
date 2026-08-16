@@ -102,6 +102,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   }, [])
 
   const lastClipboardTextRef = useRef<string | null>(null)
+  const latestRequestTextRef = useRef('')
   const initialRequestTextRef = useRef('')
   const persistingTopicIdRef = useRef<string | null>(null)
   const persistedTopicIdRef = useRef<string | null>(null)
@@ -204,6 +205,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   useEffect(() => {
     if (!saveConversations || !chosenAssistantId || streamStatus !== 'done') return
+    if (!initialRequestTextRef.current) initialRequestTextRef.current = latestRequestTextRef.current
     void persistConversation()
   }, [chosenAssistantId, persistConversation, saveConversations, streamStatus])
 
@@ -339,7 +341,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
       try {
         setFlowError(null)
-        if (isFirstMessage) initialRequestTextRef.current = requestText
+        latestRequestTextRef.current = requestText
         setIsFirstMessage(false)
         setUserInputText('')
         setIsPreparing(true)
@@ -355,7 +357,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         logger.error('Error fetching result:', resolvedError)
       }
     },
-    [currentModel, isAssistantMode, isFirstMessage, isTopicReady, requestText, sendMessage, temporaryTopicId]
+    [currentModel, isAssistantMode, isTopicReady, requestText, sendMessage, temporaryTopicId]
   )
 
   const handlePause = useCallback(() => {
@@ -364,6 +366,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   const resetConversation = useCallback(() => {
     // Drop the current temporary topic and let useTemporaryTopic lease a fresh one.
+    latestRequestTextRef.current = ''
     initialRequestTextRef.current = ''
     resetTemporaryTopic()
     clear()

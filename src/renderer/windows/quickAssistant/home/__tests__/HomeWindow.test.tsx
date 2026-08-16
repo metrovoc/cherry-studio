@@ -288,25 +288,29 @@ describe('HomeWindow', () => {
     expect(screen.queryByTestId('clipboard-preview')).not.toBeInTheDocument()
   })
 
-  it('saves the first completed conversation under the selected assistant', async () => {
+  it('names a saved conversation from the first successful request', async () => {
     const user = userEvent.setup()
     state.quickAssistantId = 'assistant-1'
     state.saveConversations = true
-    state.streamStatus = 'streaming'
     const { rerender } = render(<HomeWindow draggable={false} />)
 
-    await user.type(screen.getByTestId('quick-input'), 'First question')
+    await user.type(screen.getByTestId('quick-input'), 'Failed question')
     await user.click(screen.getByRole('button', { name: 'Ask' }))
 
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
     state.streamStatus = 'error'
     rerender(<HomeWindow draggable={false} />)
     expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
+
+    await user.type(screen.getByTestId('quick-input'), 'Successful question')
+    await user.keyboard('{Enter}')
 
     state.streamStatus = 'done'
     rerender(<HomeWindow draggable={false} />)
 
     await waitFor(() => {
-      expect(state.persistTemporaryTopic).toHaveBeenCalledWith('First question')
+      expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Successful question')
     })
   })
 
