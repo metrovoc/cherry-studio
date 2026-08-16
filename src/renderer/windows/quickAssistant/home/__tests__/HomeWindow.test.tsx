@@ -318,12 +318,13 @@ describe('HomeWindow', () => {
     const user = userEvent.setup()
     state.quickAssistantId = 'assistant-1'
     state.saveConversations = true
-    state.streamStatus = 'streaming'
     state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'Important question')
     await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
     state.streamStatus = 'done'
     rerender(<HomeWindow draggable={false} />)
 
@@ -335,6 +336,34 @@ describe('HomeWindow', () => {
       expect(screen.queryByText('quickAssistant.errors.save_conversation_failed')).not.toBeInTheDocument()
     })
     expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(2)
+  })
+
+  it('prevents retrying a conversation save while a response is streaming', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full'))
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Important question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    const retry = await screen.findByRole('button', { name: 'common.retry' })
+
+    await user.type(screen.getByTestId('quick-input'), 'Retry question')
+    await user.keyboard('{Enter}')
+    expect(retry).toBeDisabled()
+
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+
+    expect(retry).toBeDisabled()
+    await user.click(retry)
+    expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(1)
   })
 
   it('keeps model-only conversations temporary when the saved preference is enabled', async () => {

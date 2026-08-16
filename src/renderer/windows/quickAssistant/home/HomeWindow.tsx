@@ -518,6 +518,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
                 size="sm"
                 className="h-7 shrink-0"
                 loading={isPersisting}
+                disabled={isPreparing || isStreaming}
                 onClick={() => void persistConversation()}>
                 {t('common.retry')}
               </Button>
