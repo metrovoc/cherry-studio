@@ -123,7 +123,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     ready: isTopicReady,
     reset: resetTemporaryTopic,
     persist: persistTemporaryTopic
-  } = useTemporaryTopic({ enabled: true, assistantId: chosenAssistantId })
+  } = useTemporaryTopic({ enabled: !isAssistantMode || !!chosenAssistantId, assistantId: chosenAssistantId })
 
   const requestText = useMemo(() => {
     const trimmedUserInput = userInputText.trim()
@@ -345,19 +345,24 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         setIsFirstMessage(false)
         setUserInputText('')
         setIsPreparing(true)
-        const message = { text: [prompt, requestText].filter(Boolean).join('\n\n') }
-        if (!isAssistantMode && currentModel) {
-          void sendMessage(message, { body: { mentionedModels: [currentModel.id] } })
-        } else {
-          void sendMessage(message)
-        }
+        // Temporary topics are linear, while persisted topics need the current branch tip.
+        // Main ignores the anchor until this topic is promoted to persistent history.
+        void sendMessage(
+          { text: [prompt, requestText].filter(Boolean).join('\n\n') },
+          {
+            body: {
+              ...(latestAssistantUIMsg && { parentAnchorId: latestAssistantUIMsg.id }),
+              ...(!isAssistantMode && currentModel && { mentionedModels: [currentModel.id] })
+            }
+          }
+        )
       } catch (streamError) {
         const resolvedError = streamError instanceof Error ? streamError : new Error('An error occurred')
         setFlowError(resolvedError.message)
         logger.error('Error fetching result:', resolvedError)
       }
     },
-    [currentModel, isAssistantMode, isTopicReady, requestText, sendMessage, temporaryTopicId]
+    [currentModel, isAssistantMode, isTopicReady, latestAssistantUIMsg, requestText, sendMessage, temporaryTopicId]
   )
 
   const handlePause = useCallback(() => {
@@ -482,7 +487,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
                 text={userInputText}
                 model={currentModel}
                 placeholder={inputPlaceholder}
-                loading={isLoading}
                 handleKeyDown={handleKeyDown}
                 handleChange={handleChange}
                 ref={inputBarRef}
@@ -549,7 +553,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               text={userInputText}
               model={currentModel}
               placeholder={inputPlaceholder}
-              loading={isLoading}
               handleKeyDown={handleKeyDown}
               handleChange={handleChange}
               ref={inputBarRef}

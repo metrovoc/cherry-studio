@@ -39,6 +39,8 @@ import { isSafeExternalUrl } from '../utils/externalUrlSafety'
  * older releases need to restore the prior app's focus.
  */
 const MACOS_AUTO_FOCUS_VERSION = 26
+// Covers short-lived key windows used by input-source utilities while keeping real app switches responsive.
+const BLUR_HIDE_GRACE_MS = 150
 
 // ─── Post-unpin focus poll: rationale, trade-offs, degradation modes ───────
 //
@@ -109,6 +111,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
   // "Post-unpin focus poll" block above the file's constants for the full
   // rationale, trade-offs, and degradation modes.
   private postUnpinFocusPollTimer: ReturnType<typeof setInterval> | null = null
+  private blurHideTimer: ReturnType<typeof setTimeout> | null = null
   // Gate for arming the post-unpin focus poll. `false` immediately after a
   // fresh show (Electron's blur tracker is healthy at that point), flips to
   // `true` on the first real 'blur' event. The poll only starts when this is
@@ -122,6 +125,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
   private mainWindowRef: BrowserWindow | null = null
 
   protected async onInit() {
+    this.registerDisposable(() => this.stopBlurHideGrace())
     this.subscribeMainWindowLifecycle()
 
     // Attach per-instance behavior to each fresh QuickAssistant window. Fires exactly
@@ -197,6 +201,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
     }
     this.isPinnedQuickAssistant = false
     this.hasBlurredSinceShow = false
+    this.stopBlurHideGrace()
     this.stopPostUnpinFocusPoll()
   }
 
@@ -315,8 +320,11 @@ export class QuickAssistantService extends BaseService implements Activatable {
       // workaround is needed (see that method for the full rationale).
       this.hasBlurredSinceShow = true
       if (!this.isPinnedQuickAssistant) {
-        this.hideQuickAssistant()
+        this.startBlurHideGrace(window)
       }
+    }
+    const onFocus = () => {
+      this.stopBlurHideGrace()
     }
     // Renderer-facing event: HomeWindow listens to this and re-reads clipboard
     // + focuses input on every show. The symmetric "Hidden" event used to exist
@@ -325,24 +333,56 @@ export class QuickAssistantService extends BaseService implements Activatable {
       // Window is freshly shown and focused — focus tracker is healthy, and
       // any post-unpin focus poll from a previous lifetime is irrelevant.
       this.hasBlurredSinceShow = false
+      this.stopBlurHideGrace()
       this.stopPostUnpinFocusPoll()
       if (this.windowId && !window.isDestroyed()) {
         application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
       }
     }
     const onHide = () => {
+      this.stopBlurHideGrace()
       this.stopPostUnpinFocusPoll()
+    }
+    const onClosed = () => {
+      this.stopBlurHideGrace()
     }
 
     window.on('blur', onBlur)
+    window.on('focus', onFocus)
     window.on('show', onShow)
     window.on('hide', onHide)
+    window.on('closed', onClosed)
     this.registerDisposable(() => {
       if (window.isDestroyed()) return
       window.removeListener('blur', onBlur)
+      window.removeListener('focus', onFocus)
       window.removeListener('show', onShow)
       window.removeListener('hide', onHide)
+      window.removeListener('closed', onClosed)
     })
+  }
+
+  private startBlurHideGrace(window: BrowserWindow) {
+    this.stopBlurHideGrace()
+    this.blurHideTimer = setTimeout(() => {
+      this.blurHideTimer = null
+      if (
+        this.getQuickAssistant() !== window ||
+        window.isDestroyed() ||
+        window.isFocused() ||
+        this.isPinnedQuickAssistant
+      ) {
+        return
+      }
+      this.hideQuickAssistant()
+    }, BLUR_HIDE_GRACE_MS)
+  }
+
+  private stopBlurHideGrace() {
+    if (this.blurHideTimer) {
+      clearTimeout(this.blurHideTimer)
+      this.blurHideTimer = null
+    }
   }
 
   /** Returns the live quick window or null if not created / already destroyed. */
@@ -409,6 +449,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
   }
 
   public hideQuickAssistant() {
+    this.stopBlurHideGrace()
     const window = this.getQuickAssistant()
     if (!window) return
 
@@ -450,6 +491,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
    * as a final fallback in WindowManager.onDestroy() at app quit.
    */
   public closeQuickAssistant() {
+    this.stopBlurHideGrace()
     this.getQuickAssistant()?.hide()
   }
 
@@ -464,6 +506,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
   public setPinQuickAssistant(isPinned: boolean) {
     this.isPinnedQuickAssistant = isPinned
+    if (isPinned) this.stopBlurHideGrace()
 
     // Arm the post-unpin focus poll only on macOS, only when un-pinning, and
     // only after a real blur has fired since the last show — that combination

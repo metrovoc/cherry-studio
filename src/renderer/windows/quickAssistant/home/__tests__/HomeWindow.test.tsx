@@ -248,6 +248,9 @@ describe('HomeWindow', () => {
     }
     state.saveConversations = false
     state.streamStatus = undefined
+    state.messages = []
+    state.activeExecutions = []
+    state.liveAssistants = []
     state.sendMessage.mockClear()
     state.stopChat.mockClear()
     state.setMessages.mockClear()
@@ -277,6 +280,33 @@ describe('HomeWindow', () => {
 
     expect(screen.queryByTestId('quick-input')).not.toBeInTheDocument()
     expect(state.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('continues from the latest assistant after the topic is saved', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'My dog is Jack')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'streaming'
+    state.activeExecutions = [{}] as never[]
+    rerender(<HomeWindow draggable={false} />)
+    state.streamStatus = 'done'
+    state.activeExecutions = []
+    state.liveAssistants = [{ id: 'assistant-turn-1', role: 'assistant', parts: [] }] as never[]
+    rerender(<HomeWindow draggable={false} />)
+    await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledWith('My dog is Jack'))
+    await waitFor(() => expect(screen.getByTestId('quick-input')).not.toBeDisabled())
+
+    await user.type(screen.getByTestId('quick-input'), 'What is my dog called?')
+    await user.keyboard('{Enter}')
+
+    expect(state.sendMessage).toHaveBeenLastCalledWith(
+      { text: 'What is my dog called?' },
+      { body: { parentAnchorId: 'assistant-turn-1' } }
+    )
   })
 
   it('keeps typed input out of the clipboard preview', () => {
