@@ -23,7 +23,7 @@ import {
 } from '@shared/utils/command'
 import { getShortcutBindingFromKeyboardEvent } from '@shared/utils/shortcut'
 import type { BrowserWindow, WebContents } from 'electron'
-import { globalShortcut } from 'electron'
+import { app, globalShortcut } from 'electron'
 
 const logger = loggerService.withContext('ShortcutService')
 type ShortcutHandler = (window?: BrowserWindow) => void
@@ -64,7 +64,7 @@ const toContextValue = (value: unknown): ContextValue => {
 
 @Injectable('ShortcutService')
 @ServicePhase(Phase.WhenReady)
-@DependsOn(['MainWindowService', 'CommandService', 'WindowManager'])
+@DependsOn(['MainWindowService', 'CommandService', 'WindowManager', 'PowerService'])
 export class ShortcutService extends BaseService {
   private mainWindow: BrowserWindow | null = null
   private handlers = new Map<CommandId, ShortcutHandler>()
@@ -76,6 +76,7 @@ export class ShortcutService extends BaseService {
   protected async onInit() {
     this.registerBuiltInHandlers()
     this.subscribeToPreferenceChanges()
+    this.subscribeToLifecycleReconciliation()
     this.registerDisposable(() => {
       for (const cleanup of [...this.guestInputCleanups.values()]) {
         cleanup()
@@ -123,6 +124,16 @@ export class ShortcutService extends BaseService {
         })
       )
     }
+  }
+
+  private subscribeToLifecycleReconciliation(): void {
+    const reconcile = () => this.reregisterShortcuts()
+    app.on('activate', reconcile)
+    this.registerDisposable(() => app.removeListener('activate', reconcile))
+
+    const powerService = application.get('PowerService')
+    this.registerDisposable(powerService.onResume(reconcile))
+    this.registerDisposable(powerService.onUnlockScreen(reconcile))
   }
 
   private registerForMainWindow(window: BrowserWindow): void {
@@ -257,9 +268,12 @@ export class ShortcutService extends BaseService {
     // Unregister shortcuts that are no longer needed or have a different handler
     for (const [accelerator, previous] of this.registeredAccelerators) {
       const entry = desired.get(accelerator)
-      if (!entry || entry.handler !== previous.handler || entry.window !== previous.window) {
+      const isRegistered = globalShortcut.isRegistered(accelerator)
+      if (!entry || entry.handler !== previous.handler || entry.window !== previous.window || !isRegistered) {
         try {
-          globalShortcut.unregister(accelerator)
+          if (isRegistered) {
+            globalShortcut.unregister(accelerator)
+          }
         } catch (error) {
           logger.debug(`Failed to unregister shortcut accelerator: ${accelerator}`, error as Error)
         }
