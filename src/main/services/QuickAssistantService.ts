@@ -30,7 +30,7 @@ import { isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
 import type { BrowserWindow } from 'electron'
-import { app, screen, shell } from 'electron'
+import { app, screen, shell, systemPreferences } from 'electron'
 
 import { isSafeExternalUrl } from '../utils/externalUrlSafety'
 
@@ -40,7 +40,9 @@ import { isSafeExternalUrl } from '../utils/externalUrlSafety'
  * older releases need to restore the prior app's focus.
  */
 const MACOS_AUTO_FOCUS_VERSION = 26
-const BLUR_HIDE_GRACE_MS = 150
+const MACOS_APP_ACTIVATED_NOTIFICATION = 'NSWorkspaceDidActivateApplicationNotification'
+// Activation order selects the focus target; this only bounds auto-hide latency for a real app switch.
+const MACOS_ACTIVATION_SETTLE_MS = 200
 
 const logger = loggerService.withContext('QuickAssistantService')
 
@@ -50,7 +52,6 @@ const logger = loggerService.withContext('QuickAssistantService')
 export class QuickAssistantService extends BaseService implements Activatable {
   private windowId: string | null = null
   private isPinnedQuickAssistant = false
-  private blurHideTimer: ReturnType<typeof setTimeout> | null = null
   // Captured before each show; hideQuickAssistant consults it to decide whether to call app.hide()
   // so that the previous foreground app gets focus back instead of an unrelated app.
   private wasMainWindowFocused = false
@@ -58,7 +59,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
   private mainWindowRef: BrowserWindow | null = null
 
   protected async onInit() {
-    this.registerDisposable(() => this.stopBlurHideGrace())
     this.subscribeMainWindowLifecycle()
 
     // Attach per-instance behavior to each fresh QuickAssistant window. Fires exactly
@@ -123,7 +123,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
       this.windowId = null
     }
     this.isPinnedQuickAssistant = false
-    this.stopBlurHideGrace()
   }
 
   /**
@@ -236,60 +235,93 @@ export class QuickAssistantService extends BaseService implements Activatable {
     //   - macOS <26 additionally calls `app.hide()` to return focus to the previous app
     // A generic `window.hide()` dispatch in WM cannot express either path.
     const onBlur = () => {
-      if (!this.isPinnedQuickAssistant) {
-        this.startBlurHideGrace(window)
+      if (!isMac && !this.isPinnedQuickAssistant) {
+        this.hideQuickAssistant()
       }
-    }
-    const onFocus = () => {
-      this.stopBlurHideGrace()
     }
     // Renderer-facing event: HomeWindow listens to this and re-reads clipboard
     // + focuses input on every show. The symmetric "Hidden" event used to exist
     // but had no listener anywhere — removed as dead code.
     const onShow = () => {
-      this.stopBlurHideGrace()
       if (this.windowId && !window.isDestroyed()) {
         application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
       }
     }
-    const onHide = () => {
-      this.stopBlurHideGrace()
+    let workspaceActivationSubscription: number | null = null
+    let activationHideTimer: ReturnType<typeof setTimeout> | null = null
+    let hasPendingActivationTransfer = false
+    const finishExternalActivation = () => {
+      hasPendingActivationTransfer = false
+      if (activationHideTimer) {
+        clearTimeout(activationHideTimer)
+        activationHideTimer = null
+      }
     }
+    const onHide = () => {
+      finishExternalActivation()
+    }
+    const onBrowserWindowFocus = (_event: Electron.Event, focusedWindow: BrowserWindow) => {
+      if (focusedWindow === window || !window.isVisible() || window.isDestroyed() || this.isPinnedQuickAssistant) return
 
-    window.on('blur', onBlur)
-    window.on('focus', onFocus)
-    window.on('show', onShow)
-    window.on('hide', onHide)
-    this.registerDisposable(() => {
-      if (window.isDestroyed()) return
-      window.removeListener('blur', onBlur)
-      window.removeListener('focus', onFocus)
-      window.removeListener('show', onShow)
-      window.removeListener('hide', onHide)
-    })
-  }
-
-  private startBlurHideGrace(window: BrowserWindow) {
-    this.stopBlurHideGrace()
-    this.blurHideTimer = setTimeout(() => {
-      this.blurHideTimer = null
-      if (
-        this.getQuickAssistant() !== window ||
-        window.isDestroyed() ||
-        window.isFocused() ||
-        this.isPinnedQuickAssistant
-      ) {
+      if (hasPendingActivationTransfer) {
+        window.focus()
         return
       }
       this.hideQuickAssistant()
-    }, BLUR_HIDE_GRACE_MS)
-  }
-
-  private stopBlurHideGrace() {
-    if (this.blurHideTimer) {
-      clearTimeout(this.blurHideTimer)
-      this.blurHideTimer = null
     }
+    const disposeMacFocusTransfer = () => {
+      finishExternalActivation()
+      if (workspaceActivationSubscription !== null) {
+        systemPreferences.unsubscribeWorkspaceNotification(workspaceActivationSubscription)
+        workspaceActivationSubscription = null
+      }
+      app.removeListener('browser-window-focus', onBrowserWindowFocus)
+    }
+    const onClosed = () => {
+      disposeMacFocusTransfer()
+    }
+
+    window.on('blur', onBlur)
+    window.on('show', onShow)
+    window.on('hide', onHide)
+    window.on('closed', onClosed)
+
+    if (isMac) {
+      app.on('browser-window-focus', onBrowserWindowFocus)
+      workspaceActivationSubscription = systemPreferences.subscribeWorkspaceNotification(
+        MACOS_APP_ACTIVATED_NOTIFICATION,
+        (_event, userInfo) => {
+          if (window.isDestroyed() || !window.isVisible() || this.isPinnedQuickAssistant) return
+
+          const activatedApplication = String(userInfo.NSWorkspaceApplicationKey ?? '')
+          if (activatedApplication.includes(` - ${process.pid})`)) {
+            if (hasPendingActivationTransfer) {
+              window.focus()
+            }
+            return
+          }
+
+          finishExternalActivation()
+          hasPendingActivationTransfer = true
+          activationHideTimer = setTimeout(() => {
+            activationHideTimer = null
+            hasPendingActivationTransfer = false
+            if (!window.isDestroyed() && window.isVisible() && !window.isFocused() && !this.isPinnedQuickAssistant) {
+              this.hideQuickAssistant()
+            }
+          }, MACOS_ACTIVATION_SETTLE_MS)
+        }
+      )
+    }
+
+    this.registerDisposable(() => {
+      disposeMacFocusTransfer()
+      if (window.isDestroyed()) return
+      window.removeListener('blur', onBlur)
+      window.removeListener('show', onShow)
+      window.removeListener('hide', onHide)
+      window.removeListener('closed', onClosed)
+    })
   }
 
   /** Returns the live quick window or null if not created / already destroyed. */
@@ -356,7 +388,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
   }
 
   public hideQuickAssistant() {
-    this.stopBlurHideGrace()
     const window = this.getQuickAssistant()
     if (!window) return
 
@@ -398,7 +429,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
    * as a final fallback in WindowManager.onDestroy() at app quit.
    */
   public closeQuickAssistant() {
-    this.stopBlurHideGrace()
     this.getQuickAssistant()?.hide()
   }
 
@@ -413,6 +443,5 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
   public setPinQuickAssistant(isPinned: boolean) {
     this.isPinnedQuickAssistant = isPinned
-    if (isPinned) this.stopBlurHideGrace()
   }
 }
