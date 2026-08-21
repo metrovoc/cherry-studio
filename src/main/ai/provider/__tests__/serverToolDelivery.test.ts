@@ -53,6 +53,7 @@ const DELIVERY: Record<string, Partial<Record<string, Delivery>>> = {
     'url-context': factories('azure-anthropic')
   },
   openai: { 'web-search': factories('openai', 'openai-chat') },
+  'openai-codex': { 'web-search': factories('openai') },
   grok: { 'web-search': factories('xai-responses') },
   openrouter: { 'web-search': factories('openrouter'), 'url-context': factories('openrouter') },
   perplexity: { 'web-search': { kind: 'implicit' } },

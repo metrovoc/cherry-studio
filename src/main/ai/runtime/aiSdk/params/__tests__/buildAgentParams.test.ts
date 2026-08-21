@@ -817,6 +817,43 @@ describe('buildAgentParams web-tool routing', () => {
     expect(result.options.providerOptions?.openai).toMatchObject({ store: false })
   })
 
+  it('delivers OpenAI Codex built-in search through the OpenAI Responses runtime', async () => {
+    resolveProviderAiSdkConfigMock.mockResolvedValue({
+      config: { providerId: 'openai', providerSettings: {} },
+      credentialReceipt: { attribution: 'oauth' }
+    })
+    const codexProvider = makeProvider({
+      id: 'openai-codex',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      endpointConfigs: { [ENDPOINT_TYPE.OPENAI_RESPONSES]: { adapterFamily: 'openai' } },
+      serverTools: [{ id: SERVER_TOOL.WEB_SEARCH, modelScope: 'model-dependent' }]
+    })
+    const codexModel = makeModel({
+      id: 'openai-codex::gpt-5-6-luna',
+      providerId: 'openai-codex',
+      apiModelId: 'gpt-5.6-luna',
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL]
+    })
+    preferenceGetMock.mockImplementation((key: string) => {
+      if (key === 'chat.web_search.client_tools_preferred') return false
+      if (key === 'chat.web_search.max_results') return 5
+      if (key === 'chat.web_search.exclude_domains') return []
+      return null
+    })
+
+    const result = await buildAgentParams({
+      request: {},
+      signal: undefined,
+      provider: codexProvider,
+      model: codexModel,
+      assistant
+    })
+
+    expect(result.plugins.some((plugin) => plugin.name === 'webSearch')).toBe(true)
+    expect(result.tools?.web_search).toBeUndefined()
+  })
+
   it.each([
     { endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES, runtimeProviderId: 'openai', expectedRoute: 'server' },
     {
