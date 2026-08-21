@@ -22,6 +22,21 @@ export default defineProvider({
       reasoningFormat: { type: 'openai-responses', wire: openaiResponsesSummaryWire }
     }
   },
+  serverTools: [
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      modelIds: [
+        'gpt-5-3-codex-spark',
+        'gpt-5-4',
+        'gpt-5-4-mini',
+        'gpt-5-5',
+        'gpt-5-6-sol',
+        'gpt-5-6-terra',
+        'gpt-5-6-luna'
+      ]
+    }
+  ],
   metadata: {
     website: {
       official: 'https://openai.com/codex',

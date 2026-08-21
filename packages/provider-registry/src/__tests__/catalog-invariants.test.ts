@@ -425,6 +425,10 @@ describe('catalog invariants (data/*.json)', () => {
     expect(getServiceTierCatalogErrors(providers, providerModelOverrides)).toEqual([])
   })
 
+  it.each(['gpt-5-6-sol', 'gpt-5-6-terra', 'gpt-5-6-luna'])('enables Codex web search for %s', (modelId) => {
+    expect(isServerToolModelEligible(modelId, 'openai-codex', SERVER_TOOL.WEB_SEARCH)).toBe(true)
+  })
+
   it('budget wire operations require an explicit budget policy', () => {
     const result = ReasoningWireProfileSchema.safeParse({
       effort: {

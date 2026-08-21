@@ -938,7 +938,13 @@
         }
       },
       "modelListSource": "registry",
-      "name": "OpenAI Codex"
+      "name": "OpenAI Codex",
+      "serverTools": [
+        {
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authMethods": ["oauth"],
@@ -2483,5 +2489,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "fc4a6b28db3e604d"
+  "version": "77328637bbb981c7"
 }
