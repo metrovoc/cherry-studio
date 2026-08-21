@@ -29,7 +29,8 @@ import { type Activatable, BaseService, DependsOn, Injectable, Phase, ServicePha
 import { isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
-import { app, BrowserWindow, screen, shell, systemPreferences } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { app, screen, shell } from 'electron'
 
 import { isSafeExternalUrl } from '../utils/externalUrlSafety'
 
@@ -40,8 +41,6 @@ import { isSafeExternalUrl } from '../utils/externalUrlSafety'
  */
 const MACOS_AUTO_FOCUS_VERSION = 26
 const BLUR_HIDE_GRACE_MS = 150
-const MACOS_APP_ACTIVATED_NOTIFICATION = 'NSWorkspaceDidActivateApplicationNotification'
-const MACOS_ACTIVATION_SETTLE_MS = 200
 
 const logger = loggerService.withContext('QuickAssistantService')
 
@@ -96,23 +95,13 @@ export class QuickAssistantService extends BaseService implements Activatable {
    * Load heavy resources: the BrowserWindow and its bounds-tracking state. If creation
    * fails partway, releaseActivationResources() cleans up so the next activate() starts
    * from a clean slate (Activatable failure contract).
-   *
-   * Focus-steal workaround (macOS only): constructing a `type: 'panel'` BrowserWindow
-   * with `alwaysOnTop: true` briefly pulls the new NSPanel to the front even though
-   * `show: false` is set, causing the previously focused window (e.g. the main window
-   * from which the user just flipped the preference switch) to lose focus. We capture
-   * whichever BrowserWindow was focused before creation and restore focus afterwards.
    */
   async onActivate(): Promise<void> {
-    const focusedBefore = isMac ? BrowserWindow.getFocusedWindow() : null
     try {
       this.createQuickAssistant()
     } catch (error) {
       this.releaseActivationResources()
       throw error
-    }
-    if (focusedBefore && !focusedBefore.isDestroyed() && focusedBefore.id !== this.getQuickAssistant()?.id) {
-      focusedBefore.focus()
     }
   }
 
@@ -247,7 +236,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
     //   - macOS <26 additionally calls `app.hide()` to return focus to the previous app
     // A generic `window.hide()` dispatch in WM cannot express either path.
     const onBlur = () => {
-      if (!isMac && !this.isPinnedQuickAssistant) {
+      if (!this.isPinnedQuickAssistant) {
         this.startBlurHideGrace(window)
       }
     }
@@ -265,73 +254,18 @@ export class QuickAssistantService extends BaseService implements Activatable {
     }
     const onHide = () => {
       this.stopBlurHideGrace()
-      stopMacActivationHide()
-    }
-    let workspaceActivationSubscription: number | null = null
-    let macActivationHideTimer: ReturnType<typeof setTimeout> | null = null
-    const stopMacActivationHide = () => {
-      if (macActivationHideTimer) {
-        clearTimeout(macActivationHideTimer)
-        macActivationHideTimer = null
-      }
-    }
-    const onBrowserWindowFocus = (_event: Electron.Event, focusedWindow: BrowserWindow) => {
-      if (focusedWindow !== window && window.isVisible() && !window.isDestroyed() && !this.isPinnedQuickAssistant) {
-        this.hideQuickAssistant()
-      }
-    }
-    const disposeFocusTransferListeners = () => {
-      stopMacActivationHide()
-      if (workspaceActivationSubscription !== null) {
-        systemPreferences.unsubscribeWorkspaceNotification(workspaceActivationSubscription)
-        workspaceActivationSubscription = null
-      }
-      app.removeListener('browser-window-focus', onBrowserWindowFocus)
-    }
-    const onClosed = () => {
-      this.stopBlurHideGrace()
-      disposeFocusTransferListeners()
     }
 
     window.on('blur', onBlur)
     window.on('focus', onFocus)
     window.on('show', onShow)
     window.on('hide', onHide)
-    window.on('closed', onClosed)
-
-    if (isMac) {
-      app.on('browser-window-focus', onBrowserWindowFocus)
-      workspaceActivationSubscription = systemPreferences.subscribeWorkspaceNotification(
-        MACOS_APP_ACTIVATED_NOTIFICATION,
-        (_event, userInfo) => {
-          if (window.isDestroyed() || !window.isVisible() || this.isPinnedQuickAssistant) return
-
-          const activatedApplication = String(userInfo.NSWorkspaceApplicationKey ?? '')
-          if (activatedApplication.includes(` - ${process.pid})`)) {
-            stopMacActivationHide()
-            window.focus()
-            return
-          }
-
-          stopMacActivationHide()
-          macActivationHideTimer = setTimeout(() => {
-            macActivationHideTimer = null
-            if (!window.isDestroyed() && window.isVisible() && !window.isFocused() && !this.isPinnedQuickAssistant) {
-              this.hideQuickAssistant()
-            }
-          }, MACOS_ACTIVATION_SETTLE_MS)
-        }
-      )
-    }
-
     this.registerDisposable(() => {
-      disposeFocusTransferListeners()
       if (window.isDestroyed()) return
       window.removeListener('blur', onBlur)
       window.removeListener('focus', onFocus)
       window.removeListener('show', onShow)
       window.removeListener('hide', onHide)
-      window.removeListener('closed', onClosed)
     })
   }
 
@@ -398,10 +332,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
     window.setOpacity(1)
     window.show()
-    if (isMac) {
-      app.focus({ steal: true })
-      window.focus()
-    }
   }
 
   /**

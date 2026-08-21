@@ -35,6 +35,10 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
       skipTransformProcessType: true
     })
   })
+
+  it('keeps QuickAssistant activating so macOS can attach IME candidates', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac?.type).toBeUndefined()
+  })
 })
 
 // The shared preload bundle is code-split, and Electron's sandbox blocks a preload from
