@@ -120,6 +120,12 @@ describe('MiniMax endpoint matrix', () => {
   )
 })
 
+describe('openrouter server tools', () => {
+  it('advertises web search without coupling it to URL fetching', () => {
+    expect(provider('openrouter').serverTools).toEqual([{ id: 'web-search', modelScope: 'all-chat-models' }])
+  })
+})
+
 /**
  * OpenCode Go multiplexes three wire protocols over one base URL, and the protocol per model is
  * published as models.dev's per-model `provider.npm` (`@ai-sdk/openai` → Responses, `@ai-sdk/anthropic`

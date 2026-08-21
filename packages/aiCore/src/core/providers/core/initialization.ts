@@ -243,10 +243,7 @@ const OpenRouterExtension = ProviderExtension.create({
       (provider: OpenRouterProvider) =>
       (config: NonNullable<Parameters<OpenRouterProvider['tools']['webSearch']>[0]>) => ({
         tools: { webSearch: provider.tools.webSearch(config) }
-      }),
-    urlContext: (provider: OpenRouterProvider) => () => ({
-      tools: { urlContext: provider.tools.webFetch({}) }
-    })
+      })
   }
 } as const satisfies ProviderExtensionConfig<OpenRouterProviderSettings, OpenRouterProvider, 'openrouter'>)
 

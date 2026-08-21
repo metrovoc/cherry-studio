@@ -669,10 +669,6 @@
         {
           "id": "web-search",
           "modelScope": "all-chat-models"
-        },
-        {
-          "id": "url-context",
-          "modelScope": "all-chat-models"
         }
       ]
     },
@@ -2489,5 +2485,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "77328637bbb981c7"
+  "version": "7fff6795913d6bc3"
 }
