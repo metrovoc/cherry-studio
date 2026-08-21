@@ -282,6 +282,8 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       maxWidth: 1024,
       maxHeight: 768,
       frame: false,
+      // A regular activating window is required for macOS IME candidate windows;
+      // alwaysOnTop preserves the floating behavior without using an NSPanel.
       alwaysOnTop: true,
       useContentSize: true,
       skipTaskbar: true,
@@ -292,7 +294,6 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       fullscreenable: false,
       platformOverrides: {
         mac: {
-          type: 'panel',
           transparent: true,
           vibrancy: 'under-window',
           visualEffectState: 'followWindow'
