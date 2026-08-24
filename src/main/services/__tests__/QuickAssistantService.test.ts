@@ -186,6 +186,17 @@ describe('QuickAssistantService macOS focus transfer', () => {
     expect(window.isVisible()).toBe(true)
   })
 
+  it('brings a visible but unfocused quick window forward on shortcut toggle', () => {
+    window.setFocused(false)
+    const show = vi.spyOn(service, 'showQuickAssistant').mockImplementation(() => undefined)
+    const hide = vi.spyOn(service, 'hideQuickAssistant').mockImplementation(() => undefined)
+
+    service.toggleQuickAssistant()
+
+    expect(show).toHaveBeenCalledOnce()
+    expect(hide).not.toHaveBeenCalled()
+  })
+
   it('releases the workspace observer when the quick window closes', () => {
     window.emit('closed')
 

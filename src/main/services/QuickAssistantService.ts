@@ -434,7 +434,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
   public toggleQuickAssistant() {
     const window = this.getQuickAssistant()
-    if (window?.isVisible()) {
+    if (window?.isVisible() && window.isFocused()) {
       this.hideQuickAssistant()
       return
     }
