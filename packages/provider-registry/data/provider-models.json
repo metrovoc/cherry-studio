@@ -20859,6 +20859,18 @@
           "perMillionTokens": 1.2
         }
       },
+      "providerId": "opencode",
+      "reasoningContracts": {
+        "openai-chat-completions": {
+          "support": {
+            "controls": []
+          }
+        }
+      }
+    },
+    {
+      "endpointTypes": ["openai-chat-completions"],
+      "modelId": "longcat-2-0",
       "providerId": "opencode"
     },
     {
@@ -39017,5 +39029,5 @@
       "providerId": "zhipu"
     }
   ],
-  "version": "3b165733c434fc84"
+  "version": "e2eb7ff03ba33a6a"
 }
