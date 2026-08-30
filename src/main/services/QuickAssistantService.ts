@@ -9,19 +9,10 @@
  *   - feature flag gate (`feature.quick_assistant.enabled`)
  *   - pin / blur auto-hide
  *   - cursor-aware repositioning across displays
- *   - platform-specific hide branch (Windows minimize+opacity, macOS app.hide)
+ *   - platform-specific hide branch (Windows minimize+opacity)
  *   - mainWindow lifecycle coupling (auto-hide when main window appears)
  *   - strict navigation safety (block navigation outside the renderer origin)
  *   - bounds persistence (via WindowManager's rememberBounds capability)
- *
- * Notes for future maintainers:
- *   - `mainWindowRef` caches the BrowserWindow directly because MainWindowService is
- *     not yet under WindowManager. Once it is, replace the cache with
- *     `wm.getWindowsByType(WindowType.Main)[0]`.
- *   - `wasMainWindowFocused` is captured exactly once per show, inside
- *     `showQuickAssistant`. The original service captured it both there and in
- *     `ready-to-show`, but with `show: false` in the registry every user-visible
- *     show now flows through `showQuickAssistant`, so a single capture point suffices.
  */
 import { application } from '@application'
 import { loggerService } from '@logger'
@@ -30,19 +21,11 @@ import { isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
 import type { BrowserWindow } from 'electron'
-import { app, screen, shell, systemPreferences } from 'electron'
+import { screen, shell, systemPreferences } from 'electron'
 
 import { isSafeExternalUrl } from '../utils/externalUrlSafety'
 
-/**
- * On macOS 26+ (Tahoe / future), hiding a panel-style window keeps the previous
- * application as the frontmost without the manual `app.hide()` workaround the
- * older releases need to restore the prior app's focus.
- */
-const MACOS_AUTO_FOCUS_VERSION = 26
-const MACOS_APP_ACTIVATED_NOTIFICATION = 'NSWorkspaceDidActivateApplicationNotification'
-// Activation order selects the focus target; this only bounds auto-hide latency for a real app switch.
-const MACOS_ACTIVATION_SETTLE_MS = 200
+const MACOS_WINDOW_RESIGNED_KEY_NOTIFICATION = 'NSWindowDidResignKeyNotification'
 
 const logger = loggerService.withContext('QuickAssistantService')
 
@@ -52,13 +35,10 @@ const logger = loggerService.withContext('QuickAssistantService')
 export class QuickAssistantService extends BaseService implements Activatable {
   private windowId: string | null = null
   private isPinnedQuickAssistant = false
-  // Captured before each show; hideQuickAssistant consults it to decide whether to call app.hide()
-  // so that the previous foreground app gets focus back instead of an unrelated app.
-  private wasMainWindowFocused = false
-  // Cached mainWindow reference — see file-level docstring for why this asymmetry exists.
-  private mainWindowRef: BrowserWindow | null = null
+  private disposeWindowListeners: (() => void) | null = null
 
   protected async onInit() {
+    this.registerDisposable(() => this.disposeWindowListeners?.())
     this.subscribeMainWindowLifecycle()
 
     // Attach per-instance behavior to each fresh QuickAssistant window. Fires exactly
@@ -130,32 +110,21 @@ export class QuickAssistantService extends BaseService implements Activatable {
    *   - Hide quickWindow when mainWindow becomes visible ('show') or is restored from
    *     minimized ('restore'). Both are required: MainWindowService.showMainWindow calls
    *     mainWindow.restore() for the minimized branch, which does NOT fire 'show'.
-   *   - Cache the mainWindow reference so isFocused() can be read locally, without
-   *     calling MainWindowService methods at runtime.
    */
   private subscribeMainWindowLifecycle() {
     const windowService = application.get('MainWindowService')
 
     const attach = (mainWindow: BrowserWindow) => {
-      this.mainWindowRef = mainWindow
-
       const onMainVisible = () => {
         const window = this.getQuickAssistant()
         if (window) window.hide()
       }
-      const onMainClosed = () => {
-        if (this.mainWindowRef === mainWindow) {
-          this.mainWindowRef = null
-        }
-      }
 
       mainWindow.on('show', onMainVisible)
       mainWindow.on('restore', onMainVisible)
-      mainWindow.on('closed', onMainClosed)
       this.registerDisposable(() => {
         mainWindow.removeListener('show', onMainVisible)
         mainWindow.removeListener('restore', onMainVisible)
-        mainWindow.removeListener('closed', onMainClosed)
       })
     }
 
@@ -223,105 +192,74 @@ export class QuickAssistantService extends BaseService implements Activatable {
    * subscription registered in onInit.
    */
   private setupQuickAssistant(window: BrowserWindow) {
+    this.disposeWindowListeners?.()
     this.setupQuickAssistantWebContents(window)
 
     // Declarative window infra (initial alwaysOnTop level, cross-workspace visibility,
     // macOS level reapply across show cycles) is owned by WindowManager via the
     // `WindowType.QuickAssistant` registry entry (`behavior` + `quirks`).
 
-    // Auto-hide is intentionally kept here (not downsunk to behavior.hideOnBlur)
-    // because `hideQuickAssistant()` is a platform-specific business flow:
-    //   - Windows uses minimize + setOpacity(0) to avoid a show-flash
-    //   - macOS <26 additionally calls `app.hide()` to return focus to the previous app
-    // A generic `window.hide()` dispatch in WM cannot express either path.
+    // Windows needs minimize + opacity; macOS panels need Cocoa key-window events.
     const onBlur = () => {
       if (!isMac && !this.isPinnedQuickAssistant) {
         this.hideQuickAssistant()
       }
     }
-    // Renderer-facing event: HomeWindow listens to this and re-reads clipboard
-    // + focuses input on every show. The symmetric "Hidden" event used to exist
-    // but had no listener anywhere — removed as dead code.
+    // The renderer refreshes its clipboard and input focus on each show.
     const onShow = () => {
       if (this.windowId && !window.isDestroyed()) {
         application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
       }
     }
-    let workspaceActivationSubscription: number | null = null
-    let activationHideTimer: ReturnType<typeof setTimeout> | null = null
-    let hasPendingActivationTransfer = false
-    const finishExternalActivation = () => {
-      hasPendingActivationTransfer = false
-      if (activationHideTimer) {
-        clearTimeout(activationHideTimer)
-        activationHideTimer = null
+    let keyWindowSubscription: number | null = null
+    let focusCheck: ReturnType<typeof setImmediate> | null = null
+    const cancelFocusCheck = () => {
+      if (focusCheck) {
+        clearImmediate(focusCheck)
+        focusCheck = null
       }
     }
-    const onHide = () => {
-      finishExternalActivation()
-    }
-    const onBrowserWindowFocus = (_event: Electron.Event, focusedWindow: BrowserWindow) => {
-      if (focusedWindow === window || !window.isVisible() || window.isDestroyed() || this.isPinnedQuickAssistant) return
-
-      if (hasPendingActivationTransfer) {
-        window.focus()
-        return
+    const dispose = () => {
+      cancelFocusCheck()
+      if (keyWindowSubscription !== null) {
+        systemPreferences.unsubscribeLocalNotification(keyWindowSubscription)
+        keyWindowSubscription = null
       }
-      this.hideQuickAssistant()
-    }
-    const disposeMacFocusTransfer = () => {
-      finishExternalActivation()
-      if (workspaceActivationSubscription !== null) {
-        systemPreferences.unsubscribeWorkspaceNotification(workspaceActivationSubscription)
-        workspaceActivationSubscription = null
-      }
-      app.removeListener('browser-window-focus', onBrowserWindowFocus)
+      this.disposeWindowListeners = null
+      if (window.isDestroyed()) return
+      window.removeListener('blur', onBlur)
+      window.removeListener('show', onShow)
+      window.removeListener('hide', cancelFocusCheck)
+      window.removeListener('closed', onClosed)
     }
     const onClosed = () => {
-      disposeMacFocusTransfer()
+      this.windowId = null
+      dispose()
     }
 
     window.on('blur', onBlur)
     window.on('show', onShow)
-    window.on('hide', onHide)
-    window.on('closed', onClosed)
+    window.on('hide', cancelFocusCheck)
+    window.once('closed', onClosed)
 
     if (isMac) {
-      app.on('browser-window-focus', onBrowserWindowFocus)
-      workspaceActivationSubscription = systemPreferences.subscribeWorkspaceNotification(
-        MACOS_APP_ACTIVATED_NOTIFICATION,
-        (_event, userInfo) => {
-          if (window.isDestroyed() || !window.isVisible() || this.isPinnedQuickAssistant) return
-
-          const activatedApplication = String(userInfo.NSWorkspaceApplicationKey ?? '')
-          if (activatedApplication.includes(` - ${process.pid})`)) {
-            if (hasPendingActivationTransfer) {
-              window.focus()
-            }
-            return
-          }
-
-          finishExternalActivation()
-          hasPendingActivationTransfer = true
-          activationHideTimer = setTimeout(() => {
-            activationHideTimer = null
-            hasPendingActivationTransfer = false
+      // Electron's blur follows the main window, while a panel can lose key focus independently.
+      keyWindowSubscription = systemPreferences.subscribeLocalNotification(
+        MACOS_WINDOW_RESIGNED_KEY_NOTIFICATION,
+        () => {
+          cancelFocusCheck()
+          // Cocoa resigns the old key window before assigning the new one during show().
+          focusCheck = setImmediate(() => {
+            focusCheck = null
             if (!window.isDestroyed() && window.isVisible() && !window.isFocused() && !this.isPinnedQuickAssistant) {
               this.hideQuickAssistant()
             }
-          }, MACOS_ACTIVATION_SETTLE_MS)
+          })
         }
       )
     }
 
-    this.registerDisposable(() => {
-      disposeMacFocusTransfer()
-      if (window.isDestroyed()) return
-      window.removeListener('blur', onBlur)
-      window.removeListener('show', onShow)
-      window.removeListener('hide', onHide)
-      window.removeListener('closed', onClosed)
-    })
+    this.disposeWindowListeners = dispose
   }
 
   /** Returns the live quick window or null if not created / already destroyed. */
@@ -333,14 +271,10 @@ export class QuickAssistantService extends BaseService implements Activatable {
   }
 
   public showQuickAssistant() {
-    // Activation state is the single source of truth: when the feature preference is
-    // enabled, the service is activated and the window exists; when disabled, we simply
-    // bail. The preference subscription in onInit keeps these in lockstep.
+    // A closed window may be recreated only while the feature remains enabled.
     if (!this.isActivated) return
 
-    const window = this.getQuickAssistant()
-    if (!window) return
-
+    this.createQuickAssistant()
     this.proceedShow()
   }
 
@@ -348,8 +282,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
   private proceedShow() {
     const window = this.getQuickAssistant()
     if (!window) return
-
-    this.wasMainWindowFocused = this.mainWindowRef?.isFocused() ?? false
 
     // [Windows] Recovery from the minimize-instead-of-hide branch in hideQuickAssistant.
     // Note: do NOT use restore() — Electron has a bug across screens with different scale
@@ -397,22 +329,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
       // minimize animation entirely.
       window.setOpacity(0)
       window.minimize()
-      return
-    }
-
-    if (isMac) {
-      window.hide()
-      const majorVersion = parseInt(process.getSystemVersion().split('.')[0], 10)
-      if (majorVersion >= MACOS_AUTO_FOCUS_VERSION) {
-        // macOS 26+ already returns focus to the previous foreground app on hide.
-        return
-      }
-      // On older macOS, hide() leaves us as the frontmost app; app.hide() returns
-      // focus to whatever was focused before the quick window — but only if THAT
-      // window was not our own mainWindow (else we hide the whole app needlessly).
-      if (!this.wasMainWindowFocused) {
-        app.hide()
-      }
       return
     }
 

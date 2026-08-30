@@ -36,8 +36,8 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
     })
   })
 
-  it('keeps QuickAssistant activating so macOS can attach IME candidates', () => {
-    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac?.type).toBeUndefined()
+  it('keeps QuickAssistant nonactivating so showing it preserves the foreground app and Space', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac?.type).toBe('panel')
   })
 })
 
