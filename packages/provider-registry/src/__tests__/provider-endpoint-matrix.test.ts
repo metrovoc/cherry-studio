@@ -163,7 +163,7 @@ describe('opencode (Zen Go) endpoint matrix', () => {
     }
   )
 
-  it.each(['hy4-preview', 'hy3', 'kimi-k3', 'glm-5-2'])('pins %s to Chat Completions', (modelId) => {
+  it.each(['hy3', 'hy4-preview', 'kimi-k3', 'glm-5-2', 'longcat-2-0'])('pins %s to Chat Completions', (modelId) => {
     expect(endpointsOf('opencode', modelId)).toEqual(['openai-chat-completions'])
   })
 })

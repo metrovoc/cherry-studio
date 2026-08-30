@@ -20729,6 +20729,23 @@
       }
     },
     {
+      "endpointTypes": ["openai-chat-completions"],
+      "modelId": "hy4-preview",
+      "providerId": "opencode",
+      "reasoningContracts": {
+        "openai-chat-completions": {
+          "support": {
+            "controls": [
+              {
+                "kind": "effort",
+                "values": ["none", "high"]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "apiModelId": "kimi-k2.5",
       "endpointTypes": ["openai-chat-completions"],
       "modelId": "kimi-k2-5",
@@ -20859,18 +20876,6 @@
           "perMillionTokens": 1.2
         }
       },
-      "providerId": "opencode",
-      "reasoningContracts": {
-        "openai-chat-completions": {
-          "support": {
-            "controls": []
-          }
-        }
-      }
-    },
-    {
-      "endpointTypes": ["openai-chat-completions"],
-      "modelId": "longcat-2-0",
       "providerId": "opencode"
     },
     {
@@ -21505,6 +21510,11 @@
           "perMillionTokens": 0.47
         }
       },
+      "providerId": "opencode"
+    },
+    {
+      "endpointTypes": ["anthropic-messages"],
+      "modelId": "qwen3-8-flash",
       "providerId": "opencode",
       "reasoningContracts": {
         "anthropic-messages": {
@@ -39029,5 +39039,5 @@
       "providerId": "zhipu"
     }
   ],
-  "version": "e2eb7ff03ba33a6a"
+  "version": "5e025f94408c3292"
 }

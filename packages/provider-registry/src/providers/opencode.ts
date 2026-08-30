@@ -32,7 +32,6 @@ const chatFixedModels = [
   'kimi-k2-5',
   'kimi-k2-6',
   'kimi-k2-7-code',
-  'longcat-2-0',
   'mimo-v2-5',
   'mimo-v2-5-pro',
   'mimo-v2-omni',
@@ -61,6 +60,7 @@ const chatEffortModels: Array<{
     }
   },
   { modelId: 'hy3', values: ['none', 'low', 'high'] },
+  { modelId: 'hy4-preview', values: ['none', 'high'] },
   { modelId: 'kimi-k3', values: ['max'] },
   // Stealth model, no creator entry: models.dev routes it through `@ai-sdk/openai-compatible`
   // and prints an effort ladder, so pin chat/completions rather than let it fall back unpinned.
@@ -95,6 +95,7 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
     }
   })),
   { modelId: 'longcat-2-0', endpointTypes: ['openai-chat-completions'] },
+  { modelId: 'qwen3-8-flash', endpointTypes: ['anthropic-messages'] },
   // models.dev routes Zen Go's Grok 4.5 through `@ai-sdk/openai` (Responses); the Go endpoint table
   // still prints chat/completions, so Chat stays selectable behind the Responses default (#17860).
   {
