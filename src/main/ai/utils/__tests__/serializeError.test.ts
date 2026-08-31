@@ -4,6 +4,53 @@ import { describe, expect, it } from 'vitest'
 import { serializeError } from '../serializeError'
 
 describe('serializeError', () => {
+  it('preserves a structured provider stream error for display and diagnosis', () => {
+    const error = {
+      type: 'error',
+      sequence_number: 7,
+      error: {
+        type: 'service_unavailable_error',
+        code: 'server_is_overloaded',
+        message: 'Our servers are currently overloaded. Please try again later.',
+        param: null
+      }
+    }
+
+    expect(JSON.parse(JSON.stringify(serializeError(error)))).toMatchObject({
+      name: 'service_unavailable_error',
+      message: error.error.message,
+      code: 'server_is_overloaded',
+      stack: null,
+      data: error
+    })
+  })
+
+  it('preserves plain error metadata across an IPC round trip', () => {
+    const error = {
+      name: 'APICallError',
+      message: 'Invalid request',
+      statusCode: 400,
+      isRetryable: false,
+      responseBody: '{"error":{"message":"Invalid request"}}'
+    }
+
+    expect(serializeError(error)).toMatchObject(error)
+  })
+
+  it('renders an unrecognized circular payload without losing its fields or throwing', () => {
+    const error: Record<string, unknown> = { detail: 'Search failed', requestId: 123n }
+    error.self = error
+
+    const result = serializeError(error)
+
+    expect(JSON.parse(result.message!)).toEqual({ detail: 'Search failed', requestId: '123', self: '[Circular]' })
+    expect(() => JSON.stringify(result)).not.toThrow()
+  })
+
+  it.each([undefined, null, 'request failed', 503])('keeps primitive failures readable: %s', (error) => {
+    expect(serializeError(error).message).toBe(String(error))
+  })
+
   describe('null preservation (FIX error-1)', () => {
     it('serializes an absent cause to real null, not the string "null"', () => {
       const result = serializeError(new Error('boom'))
