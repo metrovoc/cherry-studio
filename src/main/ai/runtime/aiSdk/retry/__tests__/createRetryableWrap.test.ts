@@ -304,10 +304,19 @@ describe('createRetryableWrap', () => {
     }
   })
 
-  it('retries doStream when an error arrives before the first content part', async () => {
+  it.each([
+    { kind: 'HTTP', failure: makeApiError(429) },
+    {
+      kind: 'structured overload',
+      failure: { type: 'error', error: { code: 'server_is_overloaded', message: 'Search service unavailable' } }
+    },
+    {
+      kind: 'structured service failure',
+      failure: { type: 'error', error: { type: 'service_unavailable_error', message: 'Service unavailable' } }
+    }
+  ])('retries a $kind stream failure before the first content part', async ({ failure: streamError }) => {
     vi.useFakeTimers()
     try {
-      const streamError = makeApiError(429)
       const doStream = vi
         .fn()
         .mockResolvedValueOnce(
@@ -346,8 +355,10 @@ describe('createRetryableWrap', () => {
     }
   })
 
-  it('does not retry a doStream error after content has already been emitted', async () => {
-    const streamError = makeApiError(429)
+  it.each([
+    makeApiError(429),
+    { type: 'error', error: { code: 'server_is_overloaded', message: 'Service unavailable' } }
+  ])('does not replay content after a stream failure: %j', async (streamError) => {
     const doStream = vi.fn().mockResolvedValue(
       streamResult([
         { type: 'text-delta', id: 'text', delta: 'partial' },
@@ -368,5 +379,32 @@ describe('createRetryableWrap', () => {
       expect.objectContaining({ type: 'text-delta', delta: 'partial' }),
       { type: 'error', error: streamError }
     ])
+  })
+
+  it('does not retry structured authentication errors', async () => {
+    const failure = { error: { code: 'invalid_api_key', message: 'Invalid API key' } }
+    const generate = vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(okResult)
+    const wrap = createRetryableWrap({ fallbacks: [], retryPolicy: policy() })
+    await expect(wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] } as never)).rejects.toBe(
+      failure
+    )
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds repeated structured overload failures and preserves their details', async () => {
+    vi.useFakeTimers()
+    try {
+      const failure = { error: { code: 'server_is_overloaded', message: 'Service unavailable' } }
+      const generate = vi.fn().mockRejectedValue(failure)
+      const wrap = createRetryableWrap({ fallbacks: [], retryPolicy: policy({ maxAttempts: 2 }) })
+      const result = Promise.resolve(
+        wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] } as never)
+      ).catch((error) => error)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await result).toMatchObject({ errors: [failure, failure, failure] })
+      expect(generate).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
