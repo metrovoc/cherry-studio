@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Độ mờ",
   "selection.settings.window.remember_size.description": "Cửa sổ sẽ hiển thị ở kích thước đã điều chỉnh lần cuối trong quá trình ứng dụng đang chạy",
   "selection.settings.window.remember_size.title": "Nhớ Kích thước",
-  "selection.settings.window.save_conversations.description": "Lưu các tác vụ AI thành công vào lịch sử trò chuyện. Tác vụ dùng mô hình mặc định xuất hiện dưới dạng cuộc trò chuyện chưa liên kết.",
+  "selection.settings.window.save_conversations.description": "Lưu các tác vụ AI thành công dưới trợ lý đã chọn. Chỉ khả dụng cho tác vụ được cấu hình để dùng trợ lý.",
   "selection.settings.window.save_conversations.title": "Lưu cuộc trò chuyện vào lịch sử",
   "selection.settings.window.title": "Cửa hành động",
   "selector.agent.create_new": "Agent mới",

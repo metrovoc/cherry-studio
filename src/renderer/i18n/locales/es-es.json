@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Opacidad",
   "selection.settings.window.remember_size.description": "Durante la ejecución de la aplicación, la ventana se mostrará con el tamaño ajustado la última vez",
   "selection.settings.window.remember_size.title": "Recordar tamaño",
-  "selection.settings.window.save_conversations.description": "Guarda las acciones de IA completadas en el historial de conversaciones. Las acciones con el modelo predeterminado aparecen como conversaciones sin vincular.",
+  "selection.settings.window.save_conversations.description": "Guarda las acciones de IA completadas bajo el asistente seleccionado. Disponible solo para acciones configuradas para usar un asistente.",
   "selection.settings.window.save_conversations.title": "Guardar conversaciones en el historial",
   "selection.settings.window.title": "Ventana de funciones",
   "selector.agent.create_new": "Nuevo Agente",

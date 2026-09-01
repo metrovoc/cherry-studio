@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Transparenz",
   "selection.settings.window.remember_size.description": "Während der Laufzeit wird Fenster in zuletzt eingestellter Größe angezeigt",
   "selection.settings.window.remember_size.title": "Größe merken",
-  "selection.settings.window.save_conversations.description": "Speichert erfolgreiche KI-Aktionen im Unterhaltungsverlauf. Aktionen mit dem Standardmodell erscheinen als nicht verknüpfte Unterhaltungen.",
+  "selection.settings.window.save_conversations.description": "Speichert erfolgreiche KI-Aktionen unter dem ausgewählten Assistenten. Nur für Aktionen verfügbar, die einen Assistenten verwenden.",
   "selection.settings.window.save_conversations.title": "Unterhaltungen im Verlauf speichern",
   "selection.settings.window.title": "Funktionsfenster",
   "selector.agent.create_new": "Neuer Agent",

@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Opacidade",
   "selection.settings.window.remember_size.description": "Durante a execução da aplicação, a janela será exibida com o tamanho ajustado da última vez",
   "selection.settings.window.remember_size.title": "Lembrar do Tamanho",
-  "selection.settings.window.save_conversations.description": "Guarda ações de IA bem-sucedidas no histórico de conversas. As ações com o modelo predefinido aparecem como conversas não associadas.",
+  "selection.settings.window.save_conversations.description": "Guarda ações de IA bem-sucedidas no assistente selecionado. Disponível apenas para ações configuradas para usar um assistente.",
   "selection.settings.window.save_conversations.title": "Guardar conversas no histórico",
   "selection.settings.window.title": "Janela de Funções",
   "selector.agent.create_new": "Novo Agente",

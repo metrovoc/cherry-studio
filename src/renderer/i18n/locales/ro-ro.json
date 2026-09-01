@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Opacitate",
   "selection.settings.window.remember_size.description": "Fereastra se va afișa la ultima dimensiune ajustată în timpul rulării aplicației",
   "selection.settings.window.remember_size.title": "Memorează dimensiunea",
-  "selection.settings.window.save_conversations.description": "Salvează acțiunile AI reușite în istoricul conversațiilor. Acțiunile cu modelul implicit apar ca conversații neasociate.",
+  "selection.settings.window.save_conversations.description": "Salvează acțiunile AI reușite sub asistentul selectat. Disponibil numai pentru acțiunile configurate să folosească un asistent.",
   "selection.settings.window.save_conversations.title": "Salvează conversațiile în istoric",
   "selection.settings.window.title": "Fereastră de acțiune",
   "selector.agent.create_new": "Agent nou",

@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Opacity",
   "selection.settings.window.remember_size.description": "Window will display at the last adjusted size during the application running",
   "selection.settings.window.remember_size.title": "Remember Size",
-  "selection.settings.window.save_conversations.description": "Save successful AI actions to conversation history. Default-model actions appear as unlinked conversations.",
+  "selection.settings.window.save_conversations.description": "Save successful AI actions under their selected assistant. Available only for actions configured to use an assistant.",
   "selection.settings.window.save_conversations.title": "Save conversations to history",
   "selection.settings.window.title": "Action Window",
   "selector.agent.create_new": "New Agent",

@@ -196,9 +196,10 @@ describe('ActionGeneral', () => {
     expect(state.temporaryTopicOptions.at(-1)).toEqual({ enabled: true, assistantId: 'assistant-1' })
   })
 
-  it('saves a successful default-model action when conversation saving is enabled', async () => {
+  it('saves a successful assistant-backed action when conversation saving is enabled', async () => {
     state.saveConversations = true
-    const action = createAction({ assistantId: '', selectedText: 'Selected passage' })
+    state.assistant = { id: 'assistant-1' }
+    const action = createAction({ assistantId: 'assistant-1', selectedText: 'Selected passage' })
     const view = render(<ActionGeneral action={action} />)
 
     state.streamStatus = 'done'
@@ -207,7 +208,8 @@ describe('ActionGeneral', () => {
     await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Selected passage'))
   })
 
-  it('keeps successful actions temporary when conversation saving is disabled', () => {
+  it('keeps default-model actions temporary when conversation saving is enabled', () => {
+    state.saveConversations = true
     state.streamStatus = 'done'
 
     render(<ActionGeneral action={createAction()} />)
@@ -217,8 +219,9 @@ describe('ActionGeneral', () => {
 
   it('keeps a failed conversation save visible and retryable', async () => {
     state.saveConversations = true
+    state.assistant = { id: 'assistant-1' }
     state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
-    const action = createAction()
+    const action = createAction({ assistantId: 'assistant-1' })
     const view = render(<ActionGeneral action={action} />)
 
     state.streamStatus = 'done'

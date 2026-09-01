@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "透明度",
   "selection.settings.window.remember_size.description": "アプリケーション実行中、ウィンドウは最後に調整されたサイズで表示されます",
   "selection.settings.window.remember_size.title": "サイズを記憶",
-  "selection.settings.window.save_conversations.description": "成功したAIアクションを会話履歴に保存します。デフォルトモデルのアクションは未リンクの会話として表示されます。",
+  "selection.settings.window.save_conversations.description": "成功したAIアクションを選択したアシスタントの履歴に保存します。アシスタントを使用するよう設定されたアクションでのみ利用できます。",
   "selection.settings.window.save_conversations.title": "会話を履歴に保存",
   "selection.settings.window.title": "機能ウィンドウ",
   "selector.agent.create_new": "新しいエージェント",

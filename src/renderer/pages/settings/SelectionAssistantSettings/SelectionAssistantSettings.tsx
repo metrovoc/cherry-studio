@@ -55,6 +55,7 @@ const SelectionAssistantSettings: FC = () => {
     hasLinuxInputDeviceAccess: boolean
     isLinuxCompositorCompatible: boolean
   } | null>(null)
+  const hasAssistantAction = actionItems?.some((item) => item.id !== 'translate' && Boolean(item.assistantId)) ?? false
 
   // force disable selection assistant on non-windows systems
   useEffect(() => {
@@ -284,7 +285,12 @@ const SelectionAssistantSettings: FC = () => {
                 <SettingRowTitle>{t('selection.settings.window.save_conversations.title')}</SettingRowTitle>
                 <SettingDescription>{t('selection.settings.window.save_conversations.description')}</SettingDescription>
               </SettingLabel>
-              <Switch checked={saveConversations} onCheckedChange={setSaveConversations} />
+              <Switch
+                aria-label={t('selection.settings.window.save_conversations.title')}
+                checked={saveConversations}
+                disabled={!hasAssistantAction}
+                onCheckedChange={setSaveConversations}
+              />
             </SettingRow>
             <SettingDivider />
             <SettingRow>

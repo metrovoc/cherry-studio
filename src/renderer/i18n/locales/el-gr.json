@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Διαφάνεια",
   "selection.settings.window.remember_size.description": "Κατά τη διάρκεια της εκτέλεσης της εφαρμογής, το παράθυρο θα εμφανίζεται με το μέγεθος που ορίστηκε τελευταία φορά",
   "selection.settings.window.remember_size.title": "Να θυμάσαι το μέγεθος",
-  "selection.settings.window.save_conversations.description": "Αποθηκεύει επιτυχημένες ενέργειες AI στο ιστορικό συνομιλιών. Οι ενέργειες με το προεπιλεγμένο μοντέλο εμφανίζονται ως μη συνδεδεμένες συνομιλίες.",
+  "selection.settings.window.save_conversations.description": "Αποθηκεύει επιτυχημένες ενέργειες AI κάτω από τον επιλεγμένο βοηθό. Διαθέσιμο μόνο για ενέργειες που έχουν ρυθμιστεί να χρησιμοποιούν βοηθό.",
   "selection.settings.window.save_conversations.title": "Αποθήκευση συνομιλιών στο ιστορικό",
   "selection.settings.window.title": "Παράθυρο λειτουργίας",
   "selector.agent.create_new": "Νέος Πράκτορας",

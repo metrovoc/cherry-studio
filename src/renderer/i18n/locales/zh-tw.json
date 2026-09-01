@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "透明度",
   "selection.settings.window.remember_size.description": "應用程式運作期間，視窗會按上次調整的大小顯示",
   "selection.settings.window.remember_size.title": "記住大小",
-  "selection.settings.window.save_conversations.description": "將成功的 AI 操作儲存至對話歷史。使用預設模型的操作會顯示為未連結的對話。",
+  "selection.settings.window.save_conversations.description": "將成功的 AI 操作儲存至所選助手的歷史記錄。僅適用於設定為使用助手的操作。",
   "selection.settings.window.save_conversations.title": "將對話儲存至歷史記錄",
   "selection.settings.window.title": "功能視窗",
   "selector.agent.create_new": "新增 Agent",

@@ -174,9 +174,9 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
   }, [action.selectedText, persistTemporaryTopic, temporaryTopicId])
 
   useEffect(() => {
-    if (!saveConversations || streamStatus !== 'done') return
+    if (!saveConversations || !chosenAssistantId || streamStatus !== 'done') return
     void persistConversation()
-  }, [persistConversation, saveConversations, streamStatus])
+  }, [chosenAssistantId, persistConversation, saveConversations, streamStatus])
 
   const fetchResult = useCallback(() => {
     if (!ready || !temporaryTopicId || waitingForConfiguredAssistant) return

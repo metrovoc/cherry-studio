@@ -3330,7 +3330,7 @@
   "selection.settings.window.opacity.title": "Прозрачность",
   "selection.settings.window.remember_size.description": "При отключенном режиме, окно будет восстанавливаться до последнего размера при запуске приложения",
   "selection.settings.window.remember_size.title": "Запомнить размер",
-  "selection.settings.window.save_conversations.description": "Сохраняет успешные действия ИИ в истории разговоров. Действия с моделью по умолчанию отображаются как непривязанные разговоры.",
+  "selection.settings.window.save_conversations.description": "Сохраняет успешные действия ИИ в истории выбранного ассистента. Доступно только для действий, настроенных на использование ассистента.",
   "selection.settings.window.save_conversations.title": "Сохранять разговоры в истории",
   "selection.settings.window.title": "Окно действий",
   "selector.agent.create_new": "Новый агент",
