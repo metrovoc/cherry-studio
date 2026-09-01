@@ -15,7 +15,10 @@ const state = vi.hoisted(() => ({
   useChatIds: [] as string[],
   onError: undefined as ((error: Error) => void) | undefined,
   liveAssistants: [] as CherryUIMessage[],
-  isPending: false
+  isPending: false,
+  streamStatus: undefined as 'done' | 'error' | 'streaming' | undefined,
+  saveConversations: false,
+  persistTemporaryTopic: vi.fn()
 }))
 
 import ActionGeneral from '../ActionGeneral'
@@ -46,7 +49,7 @@ vi.mock('@ai-sdk/react', () => ({
 }))
 
 vi.mock('@data/hooks/usePreference', () => ({
-  usePreference: () => ['en-US']
+  usePreference: (key: string) => [key === 'feature.selection.save_conversations' ? state.saveConversations : 'en-US']
 }))
 
 vi.mock('@renderer/hooks/useAssistant', () => ({
@@ -56,12 +59,14 @@ vi.mock('@renderer/hooks/useAssistant', () => ({
 vi.mock('@renderer/hooks/useTemporaryTopic', () => ({
   useTemporaryTopic: (options: { enabled?: boolean; assistantId?: string }) => {
     state.temporaryTopicOptions.push(options)
-    return options.enabled === false ? { topicId: null, ready: false } : { topicId: 'temp-topic', ready: true }
+    return options.enabled === false
+      ? { topicId: null, ready: false, persist: state.persistTemporaryTopic }
+      : { topicId: 'temp-topic', ready: true, persist: state.persistTemporaryTopic }
   }
 }))
 
 vi.mock('@renderer/hooks/useTopicStreamStatus', () => ({
-  useTopicStreamStatus: () => ({ activeExecutions: [], isPending: state.isPending })
+  useTopicStreamStatus: () => ({ status: state.streamStatus, activeExecutions: [], isPending: state.isPending })
 }))
 
 vi.mock('@renderer/hooks/useExecutionOverlay', () => ({
@@ -135,6 +140,9 @@ describe('ActionGeneral', () => {
     state.onError = undefined
     state.liveAssistants = []
     state.isPending = false
+    state.streamStatus = undefined
+    state.saveConversations = false
+    state.persistTemporaryTopic.mockReset().mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -186,6 +194,41 @@ describe('ActionGeneral', () => {
 
     await waitFor(() => expect(state.sendMessage).toHaveBeenCalledTimes(1))
     expect(state.temporaryTopicOptions.at(-1)).toEqual({ enabled: true, assistantId: 'assistant-1' })
+  })
+
+  it('saves a successful default-model action when conversation saving is enabled', async () => {
+    state.saveConversations = true
+    const action = createAction({ assistantId: '', selectedText: 'Selected passage' })
+    const view = render(<ActionGeneral action={action} />)
+
+    state.streamStatus = 'done'
+    view.rerender(<ActionGeneral action={{ ...action }} />)
+
+    await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Selected passage'))
+  })
+
+  it('keeps successful actions temporary when conversation saving is disabled', () => {
+    state.streamStatus = 'done'
+
+    render(<ActionGeneral action={createAction()} />)
+
+    expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failed conversation save visible and retryable', async () => {
+    state.saveConversations = true
+    state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    const action = createAction()
+    const view = render(<ActionGeneral action={action} />)
+
+    state.streamStatus = 'done'
+    view.rerender(<ActionGeneral action={{ ...action }} />)
+
+    const retry = await screen.findByRole('button', { name: 'common.retry:' })
+    fireEvent.click(retry)
+
+    await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'common.retry:' })).not.toBeInTheDocument())
   })
 
   it('localizes a known error and leaves space above it', () => {

@@ -36,6 +36,7 @@ const SelectionAssistantSettings: FC = () => {
   const [isCompact, setIsCompact] = usePreference('feature.selection.compact')
   const [isAutoClose, setIsAutoClose] = usePreference('feature.selection.auto_close')
   const [isAutoPin, setIsAutoPin] = usePreference('feature.selection.auto_pin')
+  const [saveConversations, setSaveConversations] = usePreference('feature.selection.save_conversations')
   const [isFollowToolbar, setIsFollowToolbar] = usePreference('feature.selection.follow_toolbar')
   const [isRemeberWinSize, setIsRemeberWinSize] = usePreference('feature.selection.remember_win_size')
   const [actionWindowOpacity, setActionWindowOpacity] = usePreference('feature.selection.action_window_opacity')
@@ -276,6 +277,14 @@ const SelectionAssistantSettings: FC = () => {
                 <SettingDescription>{t('selection.settings.window.auto_pin.description')}</SettingDescription>
               </SettingLabel>
               <Switch checked={isAutoPin} onCheckedChange={setIsAutoPin} />
+            </SettingRow>
+            <SettingDivider />
+            <SettingRow>
+              <SettingLabel>
+                <SettingRowTitle>{t('selection.settings.window.save_conversations.title')}</SettingRowTitle>
+                <SettingDescription>{t('selection.settings.window.save_conversations.description')}</SettingDescription>
+              </SettingLabel>
+              <Switch checked={saveConversations} onCheckedChange={setSaveConversations} />
             </SettingRow>
             <SettingDivider />
             <SettingRow>

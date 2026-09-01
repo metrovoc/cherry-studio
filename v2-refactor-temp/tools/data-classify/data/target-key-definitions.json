@@ -313,6 +313,13 @@
       "description": "Save Quick Assistant conversations to the selected assistant's history"
     },
     {
+      "targetKey": "feature.selection.save_conversations",
+      "type": "boolean",
+      "defaultValue": false,
+      "status": "classified",
+      "description": "Save Selection Assistant AI action conversations to history"
+    },
+    {
       "targetKey": "feature.translate.model_id",
       "type": "string",
       "defaultValue": null,
