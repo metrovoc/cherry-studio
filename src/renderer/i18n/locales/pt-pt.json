@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Configurar mecanismo de pesquisa",
   "selection.settings.toolbar.compact_mode.description": "No modo compacto, somente ícones são exibidos, sem texto",
   "selection.settings.toolbar.compact_mode.title": "Modo Compacto",
+  "selection.settings.toolbar.show_logo.description": "Apresenta o ícone do Cherry Studio no lado esquerdo da barra de seleção",
+  "selection.settings.toolbar.show_logo.title": "Mostrar ícone Cherry",
   "selection.settings.toolbar.title": "Barra de Ferramentas",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Tecla Ctrl",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "Após selecionar uma palavra, mantenha pressionada a tecla Ctrl para exibir a barra de ferramentas",

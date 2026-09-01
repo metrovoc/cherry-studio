@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Configurer le moteur de recherche",
   "selection.settings.toolbar.compact_mode.description": "En mode compact, seules les icônes sont affichées, sans texte",
   "selection.settings.toolbar.compact_mode.title": "Mode Compact",
+  "selection.settings.toolbar.show_logo.description": "Affiche l’icône Cherry Studio à gauche de la barre de sélection",
+  "selection.settings.toolbar.show_logo.title": "Afficher l’icône Cherry",
   "selection.settings.toolbar.title": "Barre d'outils",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Touche Ctrl",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "Sélectionnez un mot, puis maintenez la touche Ctrl enfoncée pour afficher la barre d'outils",

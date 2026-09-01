@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Suchmaschine einstellen",
   "selection.settings.toolbar.compact_mode.description": "Im Kompaktmodus nur Symbole anzeigen, keinen Text",
   "selection.settings.toolbar.compact_mode.title": "Kompaktmodus",
+  "selection.settings.toolbar.show_logo.description": "Zeigt das Cherry-Studio-Symbol links in der Auswahlleiste an",
+  "selection.settings.toolbar.show_logo.title": "Cherry-Symbol anzeigen",
   "selection.settings.toolbar.title": "Werkzeugleiste",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Ctrl-Taste",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "Nach der Texterfassung die Ctrl-Taste länger drücken, um die Toolbar anzuzeigen",

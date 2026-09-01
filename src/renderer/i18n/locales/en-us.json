@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Set Search Engine",
   "selection.settings.toolbar.compact_mode.description": "In compact mode, only icons are displayed without text",
   "selection.settings.toolbar.compact_mode.title": "Compact Mode",
+  "selection.settings.toolbar.show_logo.description": "Display the Cherry Studio icon on the left side of the selection toolbar",
+  "selection.settings.toolbar.show_logo.title": "Show Cherry icon",
   "selection.settings.toolbar.title": "Toolbar",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Ctrl Key",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "After selection, hold down the Ctrl key to show the toolbar",

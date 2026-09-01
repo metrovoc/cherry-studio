@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Setează motorul de căutare",
   "selection.settings.toolbar.compact_mode.description": "În modul compact, sunt afișate doar pictogramele, fără text",
   "selection.settings.toolbar.compact_mode.title": "Mod compact",
+  "selection.settings.toolbar.show_logo.description": "Afișează pictograma Cherry Studio în partea stângă a barei de selecție",
+  "selection.settings.toolbar.show_logo.title": "Afișează pictograma Cherry",
   "selection.settings.toolbar.title": "Bară de instrumente",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Tasta Ctrl",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "După selecție, ține apăsată tasta Ctrl pentru a afișa bara de instrumente",

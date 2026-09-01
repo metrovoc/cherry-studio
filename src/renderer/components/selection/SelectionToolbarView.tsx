@@ -120,6 +120,7 @@ interface SelectionToolbarViewProps {
   handleAction: (action: SelectionActionItem) => void
   copyIconStatus: 'normal' | 'success' | 'fail'
   copyIconAnimation: 'none' | 'enter' | 'exit'
+  showLogo: boolean
   /**
    * Whether the logo carries the OS `[-webkit-app-region:drag]` region. The
    * real toolbar window needs it to move the frameless window; the settings
@@ -141,6 +142,7 @@ const SelectionToolbarView = ({
   handleAction,
   copyIconStatus,
   copyIconAnimation,
+  showLogo,
   draggable = false,
   ref
 }: SelectionToolbarViewProps) => {
@@ -153,17 +155,22 @@ const SelectionToolbarView = ({
         'shadow-[var(--selection-toolbar-shadow)] [--selection-toolbar-border:rgb(0_0_0_/_0.08)] [--selection-toolbar-shadow:0_2px_3px_rgb(50_50_50_/_0.1)]',
         'dark:[--selection-toolbar-border:rgb(255_255_255_/_0.2)] dark:[--selection-toolbar-shadow:0_2px_3px_rgb(50_50_50_/_0.3)]'
       )}>
-      <div
-        className={cn(
-          'm-0 flex items-center justify-center rounded-l-[10px] border-[var(--selection-toolbar-border)] border-solid bg-transparent [border-width:0.5px_0_0.5px_0.5px] [padding:0_6px_0_8px]',
-          draggable && '[-webkit-app-region:drag]'
-        )}>
-        <img src={AppLogo} className="size-[22px] rounded-full object-cover" draggable={false} alt="" />
-      </div>
+      {showLogo && (
+        <div
+          className={cn(
+            'm-0 flex items-center justify-center rounded-l-[10px] border-[var(--selection-toolbar-border)] border-solid bg-transparent [border-width:0.5px_0_0.5px_0.5px] [padding:0_6px_0_8px]',
+            draggable && '[-webkit-app-region:drag]'
+          )}>
+          <img src={AppLogo} className="size-[22px] rounded-full object-cover" draggable={false} alt="" />
+        </div>
+      )}
       <div
         className={cn(
           'flex flex-row items-center justify-center bg-transparent [-webkit-app-region:no-drag]',
-          'rounded-[0_10px_10px_0] border-[var(--selection-toolbar-border)] border-solid [border-width:0.5px_0.5px_0.5px_0]'
+          'border-[var(--selection-toolbar-border)] border-solid',
+          showLogo
+            ? 'rounded-[0_10px_10px_0] [border-width:0.5px_0.5px_0.5px_0]'
+            : 'rounded-[10px] [border-width:0.5px] [&>button:first-child]:rounded-l-[10px] [&>button:first-child]:pl-3'
         )}>
         <ActionIcons
           actionItems={actionItems}

@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Đặt Công cụ Tìm kiếm",
   "selection.settings.toolbar.compact_mode.description": "Trong chế độ thu gọn, chỉ biểu tượng được hiển thị mà không có văn bản",
   "selection.settings.toolbar.compact_mode.title": "Chế độ thu gọn",
+  "selection.settings.toolbar.show_logo.description": "Hiển thị biểu tượng Cherry Studio ở bên trái thanh công cụ lựa chọn",
+  "selection.settings.toolbar.show_logo.title": "Hiển thị biểu tượng Cherry",
   "selection.settings.toolbar.title": "Thanh công cụ",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Phím Ctrl",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "Sau khi chọn, giữ phím Ctrl để hiển thị thanh công cụ",

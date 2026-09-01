@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "検索エンジン設定",
   "selection.settings.toolbar.compact_mode.description": "アイコンのみ表示（テキスト非表示）",
   "selection.settings.toolbar.compact_mode.title": "コンパクトモード",
+  "selection.settings.toolbar.show_logo.description": "選択ツールバーの左側にCherry Studioアイコンを表示します",
+  "selection.settings.toolbar.show_logo.title": "Cherryアイコンを表示",
   "selection.settings.toolbar.title": "ツールバー",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Ctrlキー",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "テキスト選択後、Ctrlキーを押下して表示",

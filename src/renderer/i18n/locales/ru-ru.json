@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "Поисковая система",
   "selection.settings.toolbar.compact_mode.description": "Отображать только иконки без текста",
   "selection.settings.toolbar.compact_mode.title": "Компактный режим",
+  "selection.settings.toolbar.show_logo.description": "Показывает значок Cherry Studio слева на панели выделения",
+  "selection.settings.toolbar.show_logo.title": "Показывать значок Cherry",
   "selection.settings.toolbar.title": "Панель инструментов",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "По Ctrl",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "После выделения, удерживайте Ctrl для показа панели. Пожалуйста, установите Ctrl в настройках клавиатуры и активируйте его.",

@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "设置搜索引擎",
   "selection.settings.toolbar.compact_mode.description": "紧凑模式下，只显示图标，不显示文字",
   "selection.settings.toolbar.compact_mode.title": "紧凑模式",
+  "selection.settings.toolbar.show_logo.description": "在划词工具栏左侧显示 Cherry Studio 图标",
+  "selection.settings.toolbar.show_logo.title": "显示 Cherry 图标",
   "selection.settings.toolbar.title": "工具栏",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Ctrl 键",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "划词后，再 长按 Ctrl 键，才显示工具栏",

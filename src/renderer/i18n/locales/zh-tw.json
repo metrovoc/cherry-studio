@@ -3286,6 +3286,8 @@
   "selection.settings.search_modal.title": "設定搜尋引擎",
   "selection.settings.toolbar.compact_mode.description": "緊湊模式下，只顯示圖示，不顯示文字",
   "selection.settings.toolbar.compact_mode.title": "緊湊模式",
+  "selection.settings.toolbar.show_logo.description": "在選取工具列左側顯示 Cherry Studio 圖示",
+  "selection.settings.toolbar.show_logo.title": "顯示 Cherry 圖示",
   "selection.settings.toolbar.title": "工具列",
   "selection.settings.toolbar.trigger_mode.ctrlkey": "Ctrl 鍵",
   "selection.settings.toolbar.trigger_mode.ctrlkey_note": "選取文字後，再 按住 Ctrl 鍵，才顯示工具列",
