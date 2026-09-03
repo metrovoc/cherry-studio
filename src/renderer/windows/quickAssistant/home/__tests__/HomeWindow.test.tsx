@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +20,8 @@ type TestModel = {
 
 const state = vi.hoisted(() => ({
   quickAssistantId: '',
+  saveConversations: false,
+  streamStatus: undefined as 'done' | 'error' | 'streaming' | undefined,
   defaultModel: {
     id: 'cherryai::qwen',
     modelId: 'qwen',
@@ -53,7 +56,8 @@ const state = vi.hoisted(() => ({
   readMessageAloud: vi.fn(),
   isMac: false,
   theme: 'light',
-  windowStyle: 'default'
+  windowStyle: 'default',
+  persistTemporaryTopic: vi.fn()
 }))
 
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
@@ -78,6 +82,7 @@ vi.mock('@data/hooks/usePreference', () => ({
       'feature.quick_assistant.read_clipboard_at_startup': false,
       'feature.quick_assistant.assistant_id': state.quickAssistantId,
       'feature.voice.auto_read.enabled': state.autoReadEnabled,
+      'feature.quick_assistant.save_conversations': state.saveConversations,
       'app.language': 'en-US',
       'ui.window_style': state.windowStyle
     }
@@ -96,7 +101,10 @@ vi.mock('@renderer/utils/platform', () => ({
 }))
 
 vi.mock('@renderer/hooks/useAssistant', () => ({
-  useAssistant: () => ({ assistant: undefined, model: undefined })
+  useAssistant: () => ({
+    assistant: state.quickAssistantId ? { id: state.quickAssistantId, name: 'Assistant' } : undefined,
+    model: undefined
+  })
 }))
 
 vi.mock('@renderer/hooks/useModel', () => ({
@@ -107,12 +115,17 @@ vi.mock('@renderer/hooks/useTemporaryTopic', () => ({
   useTemporaryTopic: () => ({
     topicId: state.temporaryTopicId,
     ready: Boolean(state.temporaryTopicId),
-    reset: state.resetTemporaryTopic
+    reset: state.resetTemporaryTopic,
+    persist: state.persistTemporaryTopic
   })
 }))
 
 vi.mock('@renderer/hooks/useTopicStreamStatus', () => ({
-  useTopicStreamStatus: () => ({ activeExecutions: state.activeExecutions, isPending: state.isPending })
+  useTopicStreamStatus: () => ({
+    status: state.streamStatus,
+    activeExecutions: state.activeExecutions,
+    isPending: state.isPending || state.streamStatus === 'streaming'
+  })
 }))
 
 vi.mock('@renderer/hooks/useExecutionOverlay', () => ({
@@ -193,9 +206,9 @@ vi.mock('../components/FeatureMenus', () => ({
       onSendMessage,
       setRoute
     }: {
-      ref?: React.RefObject<{ useFeature: () => void; resetSelectedIndex: () => void } | null>
       onSendMessage: () => void
-      setRoute: (route: 'chat' | 'translate' | 'summary' | 'explanation') => void
+      setRoute: React.Dispatch<React.SetStateAction<'translate' | 'summary' | 'chat' | 'explanation' | 'home'>>
+      ref?: React.RefObject<{ useFeature: () => void; resetSelectedIndex: () => void } | null>
     }) => {
       if (ref) {
         ref.current = { useFeature: onSendMessage, resetSelectedIndex: vi.fn() }
@@ -207,6 +220,14 @@ vi.mock('../components/FeatureMenus', () => ({
           </button>
           <button type="button" onClick={() => setRoute('translate')}>
             Translate route
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRoute('chat')
+              onSendMessage()
+            }}>
+            Ask
           </button>
         </div>
       )
@@ -290,6 +311,8 @@ describe('HomeWindow', () => {
       providerId: 'anthropic',
       group: 'Anthropic'
     }
+    state.saveConversations = false
+    state.streamStatus = undefined
     state.sendMessage.mockClear()
     state.stopChat.mockClear()
     state.setMessages.mockClear()
@@ -315,6 +338,7 @@ describe('HomeWindow', () => {
     state.isMac = false
     state.theme = 'light'
     state.windowStyle = 'default'
+    state.persistTemporaryTopic.mockReset().mockResolvedValue(undefined)
   })
 
   it('uses an opaque floating surface for the Windows dark-mode first render', () => {
@@ -531,5 +555,99 @@ describe('HomeWindow', () => {
 
     expect(state.autoReadConsume).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Read result aloud' })).not.toBeInTheDocument()
+  })
+
+  it('names a saved conversation from the first successful request', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Failed question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+    state.streamStatus = 'error'
+    rerender(<HomeWindow draggable={false} />)
+    expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
+
+    await user.type(screen.getByTestId('quick-input'), 'Successful question')
+    await user.keyboard('{Enter}')
+
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    await waitFor(() => {
+      expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Successful question')
+    })
+  })
+
+  it('keeps a failed conversation save visible and retryable', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Important question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    expect(await screen.findByText('quickAssistant.errors.save_conversation_failed')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'common.retry' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('quickAssistant.errors.save_conversation_failed')).not.toBeInTheDocument()
+    })
+    expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(2)
+  })
+
+  it('prevents retrying a conversation save while a response is streaming', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full'))
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Important question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    const retry = await screen.findByRole('button', { name: 'common.retry' })
+
+    await user.type(screen.getByTestId('quick-input'), 'Retry question')
+    await user.keyboard('{Enter}')
+    expect(retry).toBeDisabled()
+
+    state.streamStatus = 'streaming'
+    rerender(<HomeWindow draggable={false} />)
+
+    expect(retry).toBeDisabled()
+    await user.click(retry)
+    expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps model-only conversations temporary when the saved preference is enabled', async () => {
+    const user = userEvent.setup()
+    state.saveConversations = true
+    state.streamStatus = 'streaming'
+    const { rerender } = render(<HomeWindow draggable={false} />)
+
+    await user.type(screen.getByTestId('quick-input'), 'Model question')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    state.streamStatus = 'done'
+    rerender(<HomeWindow draggable={false} />)
+
+    await waitFor(() => {
+      expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
+    })
   })
 })
