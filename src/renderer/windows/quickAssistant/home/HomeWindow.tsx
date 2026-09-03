@@ -3,15 +3,17 @@ import { Button, Separator } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import { toMessageListItem } from '@renderer/components/chat/messages/utils/messageListItem'
-import { useAssistant } from '@renderer/hooks/useAssistant'
+import { useAssistant, useAssistants } from '@renderer/hooks/useAssistant'
 import { useExecutionOverlay } from '@renderer/hooks/useExecutionOverlay'
 import { useDefaultModel } from '@renderer/hooks/useModel'
 import { useTemporaryTopic } from '@renderer/hooks/useTemporaryTopic'
 import { useTheme } from '@renderer/hooks/useTheme'
+import { useTopicMessages } from '@renderer/hooks/useTopicMessages'
 import { useTopicStreamStatus } from '@renderer/hooks/useTopicStreamStatus'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
-import { ipcChatTransport } from '@renderer/services/aiTransport'
+import { ipcChatTransport, streamDispatchService } from '@renderer/services/aiTransport'
 import { toast } from '@renderer/services/toast'
+import { mergeMessagesById } from '@renderer/utils/message/mergeMessagesById'
 import { getTextFromParts } from '@renderer/utils/message/partsHelpers'
 import { isMac } from '@renderer/utils/platform'
 import { cn } from '@renderer/utils/style'
@@ -24,8 +26,10 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 
 import ClipboardPreview from './components/ClipboardPreview'
+import ConversationNavigationBar from './components/ConversationNavigationBar'
 import Footer from './components/Footer'
 import InputBar from './components/InputBar'
+import { useQuickAssistantHistory } from './hooks/useQuickAssistantHistory'
 
 // The chat branch carries the heavy message rendering chain (ChatMarkdown,
 // CodeMirror, katex, mermaid), so keep it out of the initial home render.
@@ -36,9 +40,6 @@ const ChatWindow = React.lazy(() => import('../chat/ChatWindow'))
 const LazyBranchFallback = () => <div className="flex-1" />
 
 const logger = loggerService.withContext('HomeWindow')
-
-// Stable empty array — quick-assistant temp topic has no DB-backed messages.
-const EMPTY_UI_MESSAGES: CherryUIMessage[] = []
 
 type MiniRoute = 'home' | 'chat'
 
@@ -76,7 +77,7 @@ export const finalizeLiveMessages = (messages: CherryUIMessage[]): CherryUIMessa
 const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const [readClipboardAtStartup] = usePreference('feature.quick_assistant.read_clipboard_at_startup')
   const [quickAssistantId, setQuickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
-  const [saveConversations] = usePreference('feature.quick_assistant.save_conversations')
+  const [saveConversations, setSaveConversations] = usePreference('feature.quick_assistant.save_conversations')
   const [windowStyle] = usePreference('ui.window_style')
   const { theme } = useTheme()
   const { t } = useTranslation()
@@ -86,6 +87,9 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const [userInputText, setUserInputText] = useState('')
   const [clipboardText, setClipboardText] = useState('')
   const [isPinned, setIsPinnedState] = useState(false)
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const [hasRetainedScratch, setHasRetainedScratch] = useState(true)
+  const [pendingOlderTopicId, setPendingOlderTopicId] = useState<string | null>(null)
 
   // Wraps setState with an eager IPC call so main's pin flag is updated
   // synchronously inside the click handler — a useEffect-based sync would
@@ -102,13 +106,45 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const persistingTopicIdRef = useRef<string | null>(null)
   const persistedTopicIdRef = useRef<string | null>(null)
   const inputBarRef = useRef<HTMLDivElement>(null)
+  const scratchInputRef = useRef('')
+  const scratchRouteRef = useRef<MiniRoute>('home')
+  const scratchIsFirstMessageRef = useRef(true)
 
   const { quickModel: quickApiModel } = useDefaultModel()
-  const { assistant: chosenAssistant, model: chosenApiModel } = useAssistant(quickAssistantId ?? '')
-  const isAssistantMode = Boolean(quickAssistantId)
+  const { assistants, hasLoaded: haveAssistantsLoaded } = useAssistants()
+  const selectedAssistant = assistants.find((assistant) => assistant.id === quickAssistantId)
+  const firstAssistantId = assistants[0]?.id
+  const configuredAssistantId = !haveAssistantsLoaded || selectedAssistant ? (quickAssistantId ?? '') : ''
+  const effectiveAssistantId = saveConversations
+    ? haveAssistantsLoaded
+      ? (selectedAssistant?.id ?? firstAssistantId ?? '')
+      : configuredAssistantId
+    : configuredAssistantId
+  const isResolvingSavedAssistant = saveConversations && !effectiveAssistantId
+  const { assistant: chosenAssistant, model: chosenApiModel } = useAssistant(effectiveAssistantId)
+  const isAssistantMode = Boolean(effectiveAssistantId)
   const chosenAssistantId = chosenAssistant?.id
   const currentAssistant = chosenAssistant
-  const currentModel = isAssistantMode ? chosenApiModel : quickApiModel
+  const currentModel = isResolvingSavedAssistant ? undefined : isAssistantMode ? chosenApiModel : quickApiModel
+
+  useEffect(() => {
+    if (!haveAssistantsLoaded || selectedAssistant) return
+    if (saveConversations && firstAssistantId) {
+      void setQuickAssistantId(firstAssistantId)
+    } else if (saveConversations) {
+      void setSaveConversations(false)
+    } else if (quickAssistantId) {
+      void setQuickAssistantId('')
+    }
+  }, [
+    firstAssistantId,
+    haveAssistantsLoaded,
+    quickAssistantId,
+    saveConversations,
+    selectedAssistant,
+    setQuickAssistantId,
+    setSaveConversations
+  ])
 
   // Lease a temporary topic for the quick-assistant conversation.
   // Lifecycle is tied to this component; resetting the conversation drops and leases a new one.
@@ -118,6 +154,16 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     reset: resetTemporaryTopic,
     persist: persistTemporaryTopic
   } = useTemporaryTopic({ enabled: !isAssistantMode || !!chosenAssistantId, assistantId: chosenAssistantId })
+
+  const historyEnabled = saveConversations && isAssistantMode && Boolean(chosenAssistantId)
+  const history = useQuickAssistantHistory(chosenAssistantId, historyEnabled)
+  const activeTopicId = selectedTopicId ?? temporaryTopicId
+  const selectedTopic = history.topics.find((topic) => topic.id === selectedTopicId)
+  const {
+    uiMessages: persistedMessages,
+    activeNodeId,
+    isLoading: isLoadingPersistedMessages
+  } = useTopicMessages(selectedTopicId ?? '', { enabled: Boolean(selectedTopicId) })
 
   const requestText = useMemo(() => {
     const trimmedUserInput = userInputText.trim()
@@ -137,7 +183,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     stop: stopChat,
     setMessages
   } = useChat<CherryUIMessage>({
-    id: temporaryTopicId ?? 'pending-temp',
+    id: activeTopicId ?? 'pending-topic',
     transport: ipcChatTransport,
     experimental_throttle: 50,
     onError: (err) => {
@@ -146,18 +192,36 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     }
   })
 
+  useEffect(
+    () =>
+      streamDispatchService.subscribe(activeTopicId ?? 'pending-topic', (result) => {
+        if (!result.ok || result.ack.mode === 'blocked') return
+        const acknowledgedUser = result.ack.reservedMessages?.find((message) => message.role === 'user')
+        if (!acknowledgedUser) return
+
+        setMessages((current) => {
+          const optimisticIndex = current.findLastIndex((message) => message.role === 'user')
+          if (optimisticIndex < 0 || current[optimisticIndex].id === acknowledgedUser.id) return current
+          const next = [...current]
+          next[optimisticIndex] = acknowledgedUser
+          return next
+        })
+      }),
+    [activeTopicId, setMessages]
+  )
+
   // Chunks are routed to the per-execution collector (Main tags every
   // chunk with its modelId). Primary `useChat.state.messages`
   // (chatMessages) only receives user messages pushed by `sendMessage` —
   // no assistant content. We accumulate assistant turns across completed
   // streams in `completedAssistants` so the multi-turn conversation
   // renders properly. Cleared on `clear()` together with `setMessages([])`.
-  const { status: streamStatus, activeExecutions, isPending } = useTopicStreamStatus(temporaryTopicId ?? 'pending-temp')
+  const { status: streamStatus, activeExecutions, isPending } = useTopicStreamStatus(activeTopicId ?? 'pending-topic')
   const {
     liveAssistants,
     reset: resetExecutionMessages,
     clear: clearExecutionMessages
-  } = useExecutionOverlay(temporaryTopicId ?? 'pending-temp', activeExecutions, EMPTY_UI_MESSAGES)
+  } = useExecutionOverlay(activeTopicId ?? 'pending-topic', activeExecutions, persistedMessages)
   const [completedAssistants, setCompletedAssistants] = useState<CherryUIMessage[]>([])
 
   const prevActiveCountRef = useRef(activeExecutions.length)
@@ -176,7 +240,12 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   const persistConversation = useCallback(async () => {
     const topicId = temporaryTopicId
-    if (!topicId || persistingTopicIdRef.current === topicId || persistedTopicIdRef.current === topicId) {
+    if (
+      !historyEnabled ||
+      !topicId ||
+      persistingTopicIdRef.current === topicId ||
+      persistedTopicIdRef.current === topicId
+    ) {
       return
     }
 
@@ -185,6 +254,8 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     try {
       await persistTemporaryTopic(initialRequestTextRef.current)
       persistedTopicIdRef.current = topicId
+      setSelectedTopicId(topicId)
+      setHasRetainedScratch(false)
       setFailedPersistenceTopicId((failedId) => (failedId === topicId ? null : failedId))
     } catch (persistError) {
       setFailedPersistenceTopicId(topicId)
@@ -195,13 +266,17 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         setIsPersisting(false)
       }
     }
-  }, [persistTemporaryTopic, temporaryTopicId])
+  }, [historyEnabled, persistTemporaryTopic, temporaryTopicId])
 
   useEffect(() => {
-    if (!saveConversations || !chosenAssistantId || streamStatus !== 'done') return
+    if (!historyEnabled) setFailedPersistenceTopicId(null)
+  }, [historyEnabled])
+
+  useEffect(() => {
+    if (!historyEnabled || selectedTopicId || streamStatus !== 'done') return
     if (!initialRequestTextRef.current) initialRequestTextRef.current = latestRequestTextRef.current
     void persistConversation()
-  }, [chosenAssistantId, persistConversation, saveConversations, streamStatus])
+  }, [historyEnabled, persistConversation, selectedTopicId, streamStatus])
 
   useEffect(() => {
     if (isPending) setIsPreparing(false)
@@ -212,19 +287,11 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     [completedAssistants, liveAssistants]
   )
 
-  const partsByMessageId = useMemo<Record<string, CherryMessagePart[]>>(() => {
-    const next: Record<string, CherryMessagePart[]> = {}
-    for (const message of [...chatMessages, ...allAssistants]) {
-      next[message.id] = (message.parts ?? []) as CherryMessagePart[]
-    }
-    return next
-  }, [allAssistants, chatMessages])
-
   // Interleave user messages (from state.messages) with assistant turns
   // (accumulated completed + live). The assumption: users and assistants
   // alternate strictly — user[i] precedes assistant[i]. Temporary topics
   // are always a clean linear chat, no branches.
-  const displayMessages = useMemo<CherryUIMessage[]>(() => {
+  const temporaryDisplayMessages = useMemo<CherryUIMessage[]>(() => {
     const users = chatMessages.filter((m) => m.role === 'user')
     const latestAssistantId = liveAssistants[liveAssistants.length - 1]?.id
     const out: CherryUIMessage[] = []
@@ -248,18 +315,35 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     return out
   }, [chatMessages, allAssistants, liveAssistants, isPending])
 
+  const displayMessages = useMemo(
+    () =>
+      selectedTopicId ? mergeMessagesById(persistedMessages, chatMessages, liveAssistants) : temporaryDisplayMessages,
+    [chatMessages, liveAssistants, persistedMessages, selectedTopicId, temporaryDisplayMessages]
+  )
+
+  const partsByMessageId = useMemo<Record<string, CherryMessagePart[]>>(() => {
+    const next: Record<string, CherryMessagePart[]> = {}
+    for (const message of displayMessages) {
+      next[message.id] = (message.parts ?? []) as CherryMessagePart[]
+    }
+    return next
+  }, [displayMessages])
+
   const messageItems = useMemo(
     () =>
       displayMessages.map((message) =>
         toMessageListItem(message, {
           assistantId: currentAssistant?.id,
-          topicId: temporaryTopicId ?? ''
+          topicId: activeTopicId ?? ''
         })
       ),
-    [currentAssistant?.id, displayMessages, temporaryTopicId]
+    [activeTopicId, currentAssistant?.id, displayMessages]
   )
 
-  const latestAssistantUIMsg = useMemo(() => allAssistants[allAssistants.length - 1], [allAssistants])
+  const latestAssistantUIMsg = useMemo(
+    () => displayMessages.findLast((message) => message.role === 'assistant'),
+    [displayMessages]
+  )
 
   const content = useMemo(
     () => (latestAssistantUIMsg ? getTextFromParts(latestAssistantUIMsg.parts as CherryMessagePart[]) : ''),
@@ -278,7 +362,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setIsPreparing(false)
   }, [stopChat, setMessages, clearExecutionMessages])
 
-  const isLoading = isPreparing || isStreaming || isPersisting
+  const isLoading = isPreparing || isStreaming || isPersisting || isLoadingPersistedMessages
   const isOutputted = messageItems.some((message) => message.role === 'assistant')
 
   useEffect(() => {
@@ -331,7 +415,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const handleSendMessage = useCallback(
     async (prompt?: string) => {
       if (isEmpty(requestText)) return
-      if (!isTopicReady || !temporaryTopicId) return
+      if (!activeTopicId || (!selectedTopicId && !isTopicReady)) return
 
       try {
         setFlowError(null)
@@ -339,13 +423,14 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         setIsFirstMessage(false)
         setUserInputText('')
         setIsPreparing(true)
+        const parentAnchorId = selectedTopicId ? (activeNodeId ?? latestAssistantUIMsg?.id) : latestAssistantUIMsg?.id
         // Temporary topics are linear, while persisted topics need the current branch tip.
         // Main ignores the anchor until this topic is promoted to persistent history.
         void sendMessage(
           { text: [prompt, requestText].filter(Boolean).join('\n\n') },
           {
             body: {
-              ...(latestAssistantUIMsg && { parentAnchorId: latestAssistantUIMsg.id }),
+              ...(parentAnchorId && { parentAnchorId }),
               ...(!isAssistantMode && currentModel && { mentionedModels: [currentModel.id] })
             }
           }
@@ -356,7 +441,17 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         logger.error('Error fetching result:', resolvedError)
       }
     },
-    [currentModel, isAssistantMode, isTopicReady, latestAssistantUIMsg, requestText, sendMessage, temporaryTopicId]
+    [
+      activeNodeId,
+      activeTopicId,
+      currentModel,
+      isAssistantMode,
+      isTopicReady,
+      latestAssistantUIMsg,
+      requestText,
+      selectedTopicId,
+      sendMessage
+    ]
   )
 
   const handlePause = useCallback(() => {
@@ -369,7 +464,132 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     initialRequestTextRef.current = ''
     resetTemporaryTopic()
     clear()
+    setSelectedTopicId(null)
+    setHasRetainedScratch(true)
+    setPendingOlderTopicId(null)
   }, [clear, resetTemporaryTopic])
+
+  useEffect(() => {
+    if (!saveConversations && selectedTopicId) {
+      resetConversation()
+      setRoute('home')
+      setUserInputText('')
+    }
+  }, [resetConversation, saveConversations, selectedTopicId])
+
+  const selectHistoryTopic = useCallback(
+    (topicId: string | null) => {
+      void stopChat()
+      setMessages([])
+      setCompletedAssistants([])
+      clearExecutionMessages()
+      setFlowError(null)
+      setFailedPersistenceTopicId(null)
+      setIsPreparing(false)
+
+      if (selectedTopicId === null && topicId) {
+        scratchInputRef.current = userInputText
+        scratchRouteRef.current = route
+        scratchIsFirstMessageRef.current = isFirstMessage
+      }
+      setSelectedTopicId(topicId)
+      if (topicId) {
+        setUserInputText('')
+        setIsFirstMessage(false)
+        setRoute('chat')
+      } else {
+        setUserInputText(scratchInputRef.current)
+        setIsFirstMessage(scratchIsFirstMessageRef.current)
+        setRoute(scratchRouteRef.current)
+      }
+      requestAnimationFrame(focusInput)
+    },
+    [clearExecutionMessages, focusInput, isFirstMessage, route, selectedTopicId, setMessages, stopChat, userInputText]
+  )
+
+  const goToOlderConversation = useCallback(() => {
+    if (!historyEnabled || isLoading || failedPersistenceTopicId === temporaryTopicId) return
+    if (!selectedTopicId) {
+      const latest = history.topics[0]
+      if (latest) selectHistoryTopic(latest.id)
+      return
+    }
+
+    const index = history.topics.findIndex((topic) => topic.id === selectedTopicId)
+    const older = history.topics[index + 1]
+    if (older) {
+      selectHistoryTopic(older.id)
+    } else if (index >= 0 && history.hasNext) {
+      setPendingOlderTopicId(selectedTopicId)
+      history.loadNext()
+    }
+  }, [
+    failedPersistenceTopicId,
+    history,
+    historyEnabled,
+    isLoading,
+    selectHistoryTopic,
+    selectedTopicId,
+    temporaryTopicId
+  ])
+
+  useEffect(() => {
+    if (!pendingOlderTopicId) return
+    const index = history.topics.findIndex((topic) => topic.id === pendingOlderTopicId)
+    const older = history.topics[index + 1]
+    if (older) {
+      setPendingOlderTopicId(null)
+      selectHistoryTopic(older.id)
+    } else if (!history.hasNext && !history.isRefreshing) {
+      setPendingOlderTopicId(null)
+    }
+  }, [history.hasNext, history.isRefreshing, history.topics, pendingOlderTopicId, selectHistoryTopic])
+
+  const goToNewerConversation = useCallback(() => {
+    if (!historyEnabled || isLoading || !selectedTopicId || failedPersistenceTopicId === temporaryTopicId) return
+    const index = history.topics.findIndex((topic) => topic.id === selectedTopicId)
+    if (index > 0) {
+      selectHistoryTopic(history.topics[index - 1].id)
+    } else if (index === 0 && hasRetainedScratch) {
+      selectHistoryTopic(null)
+    }
+  }, [
+    failedPersistenceTopicId,
+    hasRetainedScratch,
+    history.topics,
+    historyEnabled,
+    isLoading,
+    selectHistoryTopic,
+    selectedTopicId,
+    temporaryTopicId
+  ])
+
+  const openCurrentConversation = useCallback(() => {
+    if (!selectedTopicId || isLoading) return
+    void ipcApi.request('navigation.focus_or_open_conversation', {
+      target: { conversationType: 'assistant', conversationId: selectedTopicId },
+      title: selectedTopic?.name ?? initialRequestTextRef.current
+    })
+  }, [isLoading, selectedTopic?.name, selectedTopicId])
+
+  useEffect(() => {
+    if (!draggable || !historyEnabled) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.altKey || event.shiftKey || !(event.metaKey || event.ctrlKey)) return
+      if (event.code === 'BracketLeft') {
+        event.preventDefault()
+        goToOlderConversation()
+      } else if (event.code === 'BracketRight') {
+        event.preventDefault()
+        goToNewerConversation()
+      } else if (event.code === 'KeyJ') {
+        event.preventDefault()
+        openCurrentConversation()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [draggable, goToNewerConversation, goToOlderConversation, historyEnabled, openCurrentConversation])
 
   const handleEsc = useCallback(() => {
     if (isLoading) {
@@ -402,7 +622,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     switch (e.code) {
       case 'Enter':
       case 'NumpadEnter':
-        if (isLoading) return
+        if (isLoading || isResolvingSavedAssistant) return
         e.preventDefault()
         if (requestText) {
           setRoute('chat')
@@ -451,9 +671,9 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
       return t('quickAssistant.input.placeholder.title')
     }
     return t('quickAssistant.input.placeholder.empty', {
-      model: quickAssistantId ? (currentAssistant?.name ?? '') : (currentModel?.name ?? '')
+      model: isAssistantMode ? (currentAssistant?.name ?? '') : (currentModel?.name ?? '')
     })
-  }, [clipboardText, route, t, quickAssistantId, currentAssistant, currentModel])
+  }, [clipboardText, route, t, isAssistantMode, currentAssistant, currentModel])
 
   const handleSwitchAssistant = useCallback(() => {
     inputBarRef.current?.querySelector<HTMLButtonElement>('[data-assistant-switcher-trigger]')?.click()
@@ -472,6 +692,29 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     [route, isLoading, handleEsc, currentAssistant, handleSwitchAssistant, setIsPinned, isPinned]
   )
 
+  const currentHistoryIndex = selectedTopicId ? history.topics.findIndex((topic) => topic.id === selectedTopicId) : -1
+  const hasFailedScratchSave = failedPersistenceTopicId === temporaryTopicId
+  const conversationNavigation = historyEnabled ? (
+    <ConversationNavigationBar
+      title={selectedTopic?.name ?? t('quickAssistant.history.new_conversation')}
+      disabled={
+        isLoading || history.isLoading || history.isRefreshing || Boolean(pendingOlderTopicId) || hasFailedScratchSave
+      }
+      canGoOlder={
+        selectedTopicId
+          ? currentHistoryIndex >= 0 && (currentHistoryIndex < history.topics.length - 1 || history.hasNext)
+          : history.topics.length > 0
+      }
+      canGoNewer={Boolean(
+        selectedTopicId && (currentHistoryIndex > 0 || (currentHistoryIndex === 0 && hasRetainedScratch))
+      )}
+      canOpen={Boolean(selectedTopicId)}
+      onGoOlder={goToOlderConversation}
+      onGoNewer={goToNewerConversation}
+      onOpen={openCurrentConversation}
+    />
+  ) : null
+
   switch (route) {
     case 'chat':
       return (
@@ -485,6 +728,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
                 placeholder={inputPlaceholder}
                 onAssistantChange={handleAssistantChange}
                 assistantSelectionDisabled={isLoading}
+                actions={conversationNavigation}
                 handleKeyDown={handleKeyDown}
                 handleChange={handleChange}
                 ref={inputBarRef}
@@ -506,7 +750,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               {flowError}
             </div>
           )}
-          {failedPersistenceTopicId === temporaryTopicId && (
+          {historyEnabled && failedPersistenceTopicId === temporaryTopicId && (
             <div className="mb-3 flex items-center gap-2 rounded border border-error-border bg-error-subtle px-3 py-2 text-[13px] text-error-subtle-foreground">
               <span className="min-w-0 flex-1">{t('quickAssistant.errors.save_conversation_failed')}</span>
               <Button
@@ -538,6 +782,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               placeholder={inputPlaceholder}
               onAssistantChange={handleAssistantChange}
               assistantSelectionDisabled={isLoading}
+              actions={conversationNavigation}
               handleKeyDown={handleKeyDown}
               handleChange={handleChange}
               ref={inputBarRef}

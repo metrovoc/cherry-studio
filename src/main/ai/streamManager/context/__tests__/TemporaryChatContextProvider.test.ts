@@ -196,6 +196,13 @@ describe('TemporaryChatContextProvider', () => {
     expect(topicId).toBe('1')
     expect(userInput.role).toBe('user')
     expect(userInput.id).toBeUndefined()
+    expect(prepared.reservedMessages).toEqual([
+      expect.objectContaining({
+        id: 'service-generated-id',
+        role: 'user',
+        parts: [{ type: 'text', text: 'hi' }]
+      })
+    ])
 
     expect(prepared.models).toHaveLength(1)
     expect(prepared.models[0].modelId).toBe('openai::gpt-4o')

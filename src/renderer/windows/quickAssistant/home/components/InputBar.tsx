@@ -16,7 +16,7 @@ import { useAssistantsApi } from '@renderer/hooks/useAssistant'
 import type { Assistant } from '@renderer/types/assistant'
 import type { Model } from '@shared/data/types/model'
 import { Check, Loader2 } from 'lucide-react'
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface InputBarProps {
@@ -26,6 +26,7 @@ interface InputBarProps {
   placeholder: string
   onAssistantChange?: (assistantId: string) => void
   assistantSelectionDisabled?: boolean
+  actions?: ReactNode
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
   handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
@@ -38,6 +39,7 @@ const InputBar = ({
   placeholder,
   onAssistantChange,
   assistantSelectionDisabled,
+  actions,
   handleKeyDown,
   handleChange
 }: InputBarProps & { ref?: React.RefObject<HTMLDivElement | null> }) => {
@@ -77,6 +79,7 @@ const InputBar = ({
         onChange={handleChange}
         className="h-auto rounded-none border-0 bg-transparent px-0 py-0 text-lg shadow-none [-webkit-app-region:no-drag] placeholder:text-muted-foreground focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
       />
+      {actions}
     </div>
   )
 }

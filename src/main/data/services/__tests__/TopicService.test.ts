@@ -132,6 +132,7 @@ describe('TopicService', () => {
       { endpoint: '/topics', kind: 'projection', entityIds: ['topic-name-only'] },
       { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-name-only'] },
       { endpoint: '/topics/:id', entityIds: ['topic-name-only'] },
+      { endpoint: '/assistants/:assistantId/topics', kind: 'projection', entityIds: ['topic-name-only'] },
       { endpoint: '/topics/latest' }
     ])
   })
@@ -472,6 +473,68 @@ describe('TopicService', () => {
     })
   })
 
+  describe('listByAssistantActivityCursor', () => {
+    it('returns only the assistant topics in stable newest-first pages', async () => {
+      const service = new TopicService()
+      await dbh.db.insert(assistantTable).values([
+        {
+          id: 'history-assistant',
+          name: 'History',
+          emoji: '🌟',
+          settings: DEFAULT_ASSISTANT_SETTINGS,
+          orderKey: 'a0'
+        },
+        {
+          id: 'other-assistant',
+          name: 'Other',
+          emoji: '🌟',
+          settings: DEFAULT_ASSISTANT_SETTINGS,
+          orderKey: 'a1'
+        }
+      ])
+      await dbh.db.insert(topicTable).values([
+        {
+          id: 'newer-a',
+          name: 'Newer A',
+          assistantId: 'history-assistant',
+          orderKey: 'a0',
+          lastActivityAt: 300
+        },
+        {
+          id: 'newer-b',
+          name: 'Newer B',
+          assistantId: 'history-assistant',
+          orderKey: 'a1',
+          lastActivityAt: 300
+        },
+        {
+          id: 'older',
+          name: 'Older',
+          assistantId: 'history-assistant',
+          orderKey: 'a2',
+          lastActivityAt: 100
+        },
+        {
+          id: 'other',
+          name: 'Other',
+          assistantId: 'other-assistant',
+          orderKey: 'a3',
+          lastActivityAt: 400
+        }
+      ])
+
+      const first = service.listByAssistantActivityCursor('history-assistant', { limit: 2 })
+      const second = service.listByAssistantActivityCursor('history-assistant', {
+        limit: 2,
+        cursor: first.nextCursor
+      })
+
+      expect(first.items.map((topic) => topic.id)).toEqual(['newer-a', 'newer-b'])
+      expect(second.items.map((topic) => topic.id)).toEqual(['older'])
+      expect(second.nextCursor).toBeUndefined()
+    })
+  })
+
   describe('delete', () => {
     it('should remove topic messages and entity tags in one delete flow', async () => {
       await dbh.db
@@ -510,6 +573,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-1'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-1'] },
         { endpoint: '/topics/:id', routeParams: { id: 'topic-1' }, entityIds: ['topic-1'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-1'] },
         { endpoint: '/topics/latest' }
       ])
       expect(notifyDataApiDataChangeMock).toHaveBeenNthCalledWith(2, [{ endpoint: '/pins', kind: 'membership' }])
@@ -528,6 +592,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics/:id', entityIds: ['topic-1', 'topic-2'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics/latest' }
       ])
 
@@ -540,6 +605,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-3'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-3'] },
         { endpoint: '/topics/:id', routeParams: { id: 'topic-3' }, entityIds: ['topic-3'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-3'] },
         { endpoint: '/topics/latest' }
       ])
     })
@@ -1041,6 +1107,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: [result.id] },
         { endpoint: '/topics/:id', entityIds: [result.id] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics/latest' }
       ])
       expect(result.activeNodeId).toBeUndefined()
@@ -1183,6 +1250,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: [result.id] },
         { endpoint: '/topics/:id', entityIds: [result.id] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics/latest' }
       ])
       expect(result.id).not.toBe('src-t')

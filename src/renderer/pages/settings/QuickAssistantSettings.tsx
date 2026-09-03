@@ -58,6 +58,7 @@ const QuickAssistantSettings: FC = () => {
   const { defaultModel } = useDefaultModel()
   const navigate = useNavigate()
   const [assistantSelectOpen, setAssistantSelectOpen] = useState(false)
+  const conversationModeTitleId = useId()
   const usageMethodTitleId = useId()
   const configurationTitleId = useId()
 
@@ -67,10 +68,23 @@ const QuickAssistantSettings: FC = () => {
   const isAssistantMode = Boolean(quickAssistantId && (!haveAssistantsLoaded || selectedAssistant))
 
   useEffect(() => {
-    if (haveAssistantsLoaded && quickAssistantId && !selectedAssistant) {
+    if (!haveAssistantsLoaded || selectedAssistant) return
+    if (saveConversations && firstAssistantId) {
+      void setQuickAssistantId(firstAssistantId)
+    } else if (saveConversations) {
+      void setSaveConversations(false)
+    } else if (quickAssistantId) {
       void setQuickAssistantId('')
     }
-  }, [haveAssistantsLoaded, quickAssistantId, selectedAssistant, setQuickAssistantId])
+  }, [
+    firstAssistantId,
+    haveAssistantsLoaded,
+    quickAssistantId,
+    saveConversations,
+    selectedAssistant,
+    setQuickAssistantId,
+    setSaveConversations
+  ])
 
   const handleAssistantSelect = (assistantId: string) => {
     void setQuickAssistantId(assistantId)
@@ -103,6 +117,15 @@ const QuickAssistantSettings: FC = () => {
   const handleClickReadClipboardAtStartup = async (checked: boolean) => {
     await setReadClipboardAtStartup(checked)
     void ipcApi.request('quick_assistant.close')
+  }
+
+  const handleConversationModeChange = async (mode: 'saved' | 'temporary') => {
+    if (mode === 'temporary') {
+      await setSaveConversations(false)
+      return
+    }
+    if (!selectedAssistant && firstAssistantId) await setQuickAssistantId(firstAssistantId)
+    await setSaveConversations(true)
   }
 
   return (
@@ -139,35 +162,46 @@ const QuickAssistantSettings: FC = () => {
             </SettingRow>
           </>
         )}
-        {enableQuickAssistant && (
-          <>
-            <SettingDivider />
-            <SettingRow>
-              <SettingRowTitle className="flex items-center gap-1">
-                <span>{t('settings.quickAssistant.save_conversations')}</span>
-                <InfoTooltip
-                  content={t('settings.quickAssistant.save_conversations_tooltip')}
-                  placement="right"
-                  iconProps={{ className: 'cursor-pointer' }}
-                />
-              </SettingRowTitle>
-              <Switch
-                aria-label={t('settings.quickAssistant.save_conversations')}
-                checked={saveConversations}
-                disabled={!isAssistantMode}
-                onCheckedChange={setSaveConversations}
-              />
-            </SettingRow>
-          </>
-        )}
       </SettingGroup>
       {enableQuickAssistant && (
         <SettingGroup theme={theme}>
           <SettingTitle>{t('settings.models.quick_assistant_response_settings')}</SettingTitle>
           <SettingDivider />
+          <SettingRow role="group" aria-labelledby={conversationModeTitleId} className="min-h-8.5 gap-3">
+            <SettingRowTitle id={conversationModeTitleId} className="flex items-center gap-1">
+              <span>{t('settings.quickAssistant.conversation_mode')}</span>
+              <InfoTooltip
+                content={t('settings.quickAssistant.conversation_mode_tooltip')}
+                placement="right"
+                iconProps={{ className: 'cursor-pointer' }}
+              />
+            </SettingRowTitle>
+            <SegmentedControl<'saved' | 'temporary'>
+              aria-label={t('settings.quickAssistant.conversation_mode')}
+              size="sm"
+              value={saveConversations ? 'saved' : 'temporary'}
+              options={[
+                {
+                  value: 'saved',
+                  label: t('settings.quickAssistant.conversation_mode_saved'),
+                  disabled: assistantOptions.length === 0
+                },
+                { value: 'temporary', label: t('settings.quickAssistant.conversation_mode_temporary') }
+              ]}
+              onValueChange={(value) => void handleConversationModeChange(value)}
+            />
+          </SettingRow>
+          <SettingDivider />
           <SettingRow role="group" aria-labelledby={usageMethodTitleId} className="min-h-8.5 gap-3">
-            <SettingRowTitle id={usageMethodTitleId}>
-              {t('settings.models.quick_assistant_usage_method')}
+            <SettingRowTitle id={usageMethodTitleId} className="flex items-center gap-1">
+              <span>{t('settings.models.quick_assistant_usage_method')}</span>
+              {saveConversations && (
+                <InfoTooltip
+                  content={t('settings.quickAssistant.model_requires_temporary')}
+                  placement="right"
+                  iconProps={{ className: 'cursor-pointer' }}
+                />
+              )}
             </SettingRowTitle>
             <SegmentedControl<'assistant' | 'model'>
               aria-label={t('settings.models.quick_assistant_usage_method')}
@@ -179,7 +213,7 @@ const QuickAssistantSettings: FC = () => {
                   label: t('settings.models.use_assistant'),
                   disabled: assistantOptions.length === 0
                 },
-                { value: 'model', label: t('settings.models.use_model') }
+                { value: 'model', label: t('settings.models.use_model'), disabled: saveConversations }
               ]}
               onValueChange={(value) => void setQuickAssistantId(value === 'assistant' ? (firstAssistantId ?? '') : '')}
             />
