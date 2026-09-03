@@ -23,9 +23,10 @@ import SettingsActionsListHeader from './SettingsActionsListHeader'
 interface SelectionActionsListProps {
   actionItems: SelectionActionItem[] | undefined // List of all available actions
   setActionItems: (items: SelectionActionItem[]) => void // Function to update action items
+  showToolbarLogo: boolean
 }
 
-const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setActionItems }) => {
+const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setActionItems, showToolbarLogo }) => {
   const {
     enabledItems,
     disabledItems,
@@ -74,6 +75,7 @@ const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setA
           handleAction={() => {}}
           copyIconStatus="normal"
           copyIconAnimation="none"
+          showLogo={showToolbarLogo}
         />
       </div>
 

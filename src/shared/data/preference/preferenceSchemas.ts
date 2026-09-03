@@ -470,6 +470,10 @@ export interface PreferenceSchemas {
     'feature.selection.follow_toolbar': boolean
     // redux/selectionStore/isRemeberWinSize
     'feature.selection.remember_win_size': boolean
+    // target-key-definitions/complex/complex
+    'feature.selection.save_conversations': boolean
+    // target-key-definitions/complex/complex
+    'feature.selection.show_toolbar_logo': boolean
     // redux/selectionStore/triggerMode
     'feature.selection.trigger_mode': PreferenceTypes.SelectionTriggerMode
     // target-key-definitions/complex/complex
@@ -817,6 +821,8 @@ export const DefaultPreferences: PreferenceSchemas = {
     'feature.selection.filter_mode': PreferenceTypes.SelectionFilterMode.Default,
     'feature.selection.follow_toolbar': true,
     'feature.selection.remember_win_size': false,
+    'feature.selection.save_conversations': false,
+    'feature.selection.show_toolbar_logo': true,
     'feature.selection.trigger_mode': PreferenceTypes.SelectionTriggerMode.Selected,
     'feature.translate.action.alter_lang': 'en-us',
     'feature.translate.action.preferred_lang': 'zh-cn',
@@ -887,7 +893,7 @@ export const DefaultPreferences: PreferenceSchemas = {
 
 /**
  * 生成统计:
- * - 总配置项: 278
+ * - 总配置项: 280
  * - electronStore项: 2
  * - redux项: 173
  * - localStorage项: 0
