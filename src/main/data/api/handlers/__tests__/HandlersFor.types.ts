@@ -35,8 +35,9 @@ type OldTopicHandlers = {
 // path/method/param invariants, not response types, so short-circuit via cast.
 const ok = async (): Promise<any> => ({}) as any
 const auxiliaryTopicHandlers = {
+  '/assistants/:assistantId/topics': { GET: ok, DELETE: ok },
   '/topics/:id/move': { POST: ok }
-} satisfies Pick<HandlersFor<TopicSchemas>, '/topics/:id/move'>
+} satisfies Pick<HandlersFor<TopicSchemas>, '/assistants/:assistantId/topics' | '/topics/:id/move'>
 
 // ============================================================================
 // P1 — POSITIVE: a fully-covered, correctly-typed handler compiles under both

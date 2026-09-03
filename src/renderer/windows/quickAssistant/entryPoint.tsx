@@ -18,7 +18,8 @@ await prepareWindow({
     'feature.quick_assistant.model_id',
     'chat.default_model_id',
     'feature.quick_assistant.read_clipboard_at_startup',
-    'feature.quick_assistant.save_conversations'
+    'feature.quick_assistant.save_conversations',
+    'chat.message.navigation_mode'
   ]
 })
 
