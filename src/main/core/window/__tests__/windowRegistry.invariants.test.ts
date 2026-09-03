@@ -36,8 +36,11 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
     })
   })
 
-  it('keeps QuickAssistant nonactivating so showing it preserves the foreground app and Space', () => {
-    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac?.type).toBe('panel')
+  it('keeps QuickAssistant transient and nonactivating so it can join the foreground Space', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac).toMatchObject({
+      type: 'panel',
+      hiddenInMissionControl: true
+    })
   })
 })
 
