@@ -57,7 +57,8 @@ const state = vi.hoisted(() => ({
   isMac: false,
   theme: 'light',
   windowStyle: 'default',
-  persistTemporaryTopic: vi.fn()
+  persistTemporaryTopic: vi.fn(),
+  setQuickAssistantId: vi.fn()
 }))
 
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
@@ -86,7 +87,7 @@ vi.mock('@data/hooks/usePreference', () => ({
       'app.language': 'en-US',
       'ui.window_style': state.windowStyle
     }
-    return [values[key], vi.fn()]
+    return [values[key], key === 'feature.quick_assistant.assistant_id' ? state.setQuickAssistantId : vi.fn()]
   }
 }))
 
@@ -175,63 +176,40 @@ vi.mock('../components/InputBar', () => ({
   default: ({
     text,
     placeholder,
+    assistant,
+    onAssistantChange,
     handleChange,
     handleKeyDown,
     inputRef,
-    dictationTargetId
+    dictationTargetId,
+    ref
   }: {
     text: string
     placeholder: string
+    assistant?: { id: string; name: string }
+    onAssistantChange?: (assistantId: string) => void
     handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void
     handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
     inputRef?: React.RefObject<HTMLInputElement | null>
     dictationTargetId?: string
+    ref?: React.RefObject<HTMLDivElement | null>
   }) => (
-    <input
-      ref={inputRef}
-      data-testid="quick-input"
-      data-dictation-target={dictationTargetId}
-      value={text}
-      placeholder={placeholder}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-    />
-  )
-}))
-
-vi.mock('../components/FeatureMenus', () => ({
-  default: vi.fn(
-    ({
-      ref,
-      onSendMessage,
-      setRoute
-    }: {
-      onSendMessage: () => void
-      setRoute: React.Dispatch<React.SetStateAction<'translate' | 'summary' | 'chat' | 'explanation' | 'home'>>
-      ref?: React.RefObject<{ useFeature: () => void; resetSelectedIndex: () => void } | null>
-    }) => {
-      if (ref) {
-        ref.current = { useFeature: onSendMessage, resetSelectedIndex: vi.fn() }
-      }
-      return (
-        <div data-testid="feature-menus">
-          <button type="button" onClick={() => setRoute('chat')}>
-            Chat route
-          </button>
-          <button type="button" onClick={() => setRoute('translate')}>
-            Translate route
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRoute('chat')
-              onSendMessage()
-            }}>
-            Ask
-          </button>
-        </div>
-      )
-    }
+    <div ref={ref}>
+      {assistant && onAssistantChange && (
+        <button type="button" onClick={() => onAssistantChange('assistant-2')}>
+          Change assistant
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        data-dictation-target={dictationTargetId}
+        data-testid="quick-input"
+        value={text}
+        placeholder={placeholder}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+      />
+    </div>
   )
 }))
 
@@ -257,10 +235,6 @@ vi.mock('../components/ClipboardPreview', () => ({
 
 vi.mock('../../chat/ChatWindow', () => ({
   default: () => <div data-testid="chat-window" />
-}))
-
-vi.mock('../../translate/TranslateWindow', () => ({
-  default: () => <div data-testid="translate-window" />
 }))
 
 describe('finalizeLiveMessages', () => {
@@ -342,6 +316,35 @@ describe('HomeWindow', () => {
     state.theme = 'light'
     state.windowStyle = 'default'
     state.persistTemporaryTopic.mockReset().mockResolvedValue(undefined)
+    state.setQuickAssistantId.mockClear()
+  })
+
+  it('persists an assistant selected from the quick assistant home view', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+
+    render(<HomeWindow draggable={false} />)
+    await user.click(screen.getByRole('button', { name: 'Change assistant' }))
+
+    expect(state.setQuickAssistantId).toHaveBeenCalledWith('assistant-2')
+    await waitFor(() => expect(screen.getByTestId('quick-input')).toHaveFocus())
+  })
+
+  it('starts a fresh home conversation when the assistant changes after a response', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+
+    render(<HomeWindow draggable={false} />)
+    await user.type(screen.getByTestId('quick-input'), 'hello')
+    await user.keyboard('{Enter}')
+    expect(await screen.findByTestId('chat-window')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Change assistant' }))
+
+    expect(screen.getByTestId('quick-input')).toBeInTheDocument()
+    expect(state.resetTemporaryTopic).toHaveBeenCalledOnce()
+    expect(state.setQuickAssistantId).toHaveBeenCalledWith('assistant-2')
+    await waitFor(() => expect(screen.getByTestId('quick-input')).toHaveFocus())
   })
 
   it('uses an opaque floating surface for the Windows dark-mode first render', () => {
@@ -384,7 +387,7 @@ describe('HomeWindow', () => {
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'My dog is Jack')
-    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await user.keyboard('{Enter}')
     state.streamStatus = 'streaming'
     state.activeExecutions = [{}] as never[]
     rerender(<HomeWindow draggable={false} />)
@@ -459,7 +462,13 @@ describe('HomeWindow', () => {
   it('forwards a tracked chat finish to auto-read and exposes that exact result for manual playback', async () => {
     state.autoReadEnabled = true
     const view = render(<HomeWindow draggable={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Chat route' }))
+    const prompt = screen.getByTestId('quick-input')
+    fireEvent.change(prompt, { target: { value: 'Question' } })
+    fireEvent.keyDown(prompt, { key: 'Enter', code: 'Enter' })
+    state.isPending = true
+    view.rerender(<HomeWindow draggable={false} />)
+    state.isPending = false
+    view.rerender(<HomeWindow draggable={false} />)
     state.activeExecutions = [{ executionId: 'provider::model', attemptId: 7 }]
     view.rerender(<HomeWindow draggable={false} />)
     const message = {
@@ -509,7 +518,13 @@ describe('HomeWindow', () => {
   it('does not infer auto-read from an execution disappearing without a finish event', () => {
     state.autoReadEnabled = true
     const view = render(<HomeWindow draggable={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Chat route' }))
+    const prompt = screen.getByTestId('quick-input')
+    fireEvent.change(prompt, { target: { value: 'Question' } })
+    fireEvent.keyDown(prompt, { key: 'Enter', code: 'Enter' })
+    state.isPending = true
+    view.rerender(<HomeWindow draggable={false} />)
+    state.isPending = false
+    view.rerender(<HomeWindow draggable={false} />)
     state.activeExecutions = [{ executionId: 'provider::model', attemptId: 8 }]
     view.rerender(<HomeWindow draggable={false} />)
 
@@ -520,16 +535,15 @@ describe('HomeWindow', () => {
     expect(screen.queryByRole('button', { name: 'Read result aloud' })).not.toBeInTheDocument()
   })
 
-  it('marks translate finishes ineligible and never offers manual playback', () => {
+  it('marks home finishes ineligible and never offers manual playback', () => {
     state.autoReadEnabled = true
     const view = render(<HomeWindow draggable={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Translate route' }))
     state.activeExecutions = [{ executionId: 'provider::model', attemptId: 9 }]
     view.rerender(<HomeWindow draggable={false} />)
     const message = {
-      id: 'translated-result',
+      id: 'home-result',
       role: 'assistant',
-      parts: [{ type: 'text', text: 'translated clipboard text', state: 'done' }]
+      parts: [{ type: 'text', text: 'background result', state: 'done' }]
     } as CherryUIMessage
 
     act(() => {
@@ -549,7 +563,13 @@ describe('HomeWindow', () => {
   it('rejects a stale completion after the temporary topic is reset', () => {
     state.autoReadEnabled = true
     const view = render(<HomeWindow draggable={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Chat route' }))
+    const prompt = screen.getByTestId('quick-input')
+    fireEvent.change(prompt, { target: { value: 'Question' } })
+    fireEvent.keyDown(prompt, { key: 'Enter', code: 'Enter' })
+    state.isPending = true
+    view.rerender(<HomeWindow draggable={false} />)
+    state.isPending = false
+    view.rerender(<HomeWindow draggable={false} />)
     state.activeExecutions = [{ executionId: 'provider::model', attemptId: 10 }]
     view.rerender(<HomeWindow draggable={false} />)
 
@@ -594,7 +614,7 @@ describe('HomeWindow', () => {
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'Failed question')
-    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await user.keyboard('{Enter}')
 
     state.streamStatus = 'streaming'
     rerender(<HomeWindow draggable={false} />)
@@ -621,7 +641,7 @@ describe('HomeWindow', () => {
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'Important question')
-    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await user.keyboard('{Enter}')
     state.streamStatus = 'streaming'
     rerender(<HomeWindow draggable={false} />)
     state.streamStatus = 'done'
@@ -645,7 +665,7 @@ describe('HomeWindow', () => {
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'Important question')
-    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await user.keyboard('{Enter}')
     state.streamStatus = 'streaming'
     rerender(<HomeWindow draggable={false} />)
     state.streamStatus = 'done'
@@ -672,7 +692,7 @@ describe('HomeWindow', () => {
     const { rerender } = render(<HomeWindow draggable={false} />)
 
     await user.type(screen.getByTestId('quick-input'), 'Model question')
-    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await user.keyboard('{Enter}')
     state.streamStatus = 'done'
     rerender(<HomeWindow draggable={false} />)
 

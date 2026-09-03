@@ -1,12 +1,11 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { type RefObject, useRef, useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as CherryStudioUi from '@cherrystudio/ui'
 import { toast } from '@renderer/services/toast'
 import { VoiceTargetManager } from '@renderer/services/voice/VoiceTargetManager'
-
-vi.unmock('@cherrystudio/ui')
 
 const voice = vi.hoisted(() => ({
   markCurrent: vi.fn(() => true),
@@ -58,6 +57,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
+        'settings.models.quick_assistant_selection': 'Select Assistant',
+        'selector.assistant.search_placeholder': 'Search assistants',
+        'common.no_results': 'No results',
+        'common.loading': 'Loading',
         'chat.input.dictation.title': 'Dictate',
         'chat.input.dictation.action.cancel': 'Cancel dictation',
         'chat.input.dictation.action.copy_recovery': 'Copy transcript',
@@ -80,6 +83,36 @@ vi.mock('react-i18next', () => ({
 }))
 
 import InputBar from '../InputBar'
+
+vi.mock('@cherrystudio/ui', async (importOriginal) => importOriginal<typeof CherryStudioUi>())
+
+vi.mock('@renderer/components/Avatar/ModelAvatar', () => ({
+  default: () => <span data-testid="model-avatar" />
+}))
+
+vi.mock('@renderer/hooks/useAssistant', () => ({
+  useAssistantsApi: () => ({
+    assistants: [
+      { id: 'assistant-1', name: 'Writer' },
+      { id: 'assistant-2', name: 'Researcher' }
+    ],
+    isLoading: false
+  })
+}))
+
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+
+beforeAll(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+})
+
+afterAll(() => {
+  if (originalScrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  }
+})
 
 describe('InputBar', () => {
   afterEach(() => vi.useRealTimers())
@@ -369,5 +402,56 @@ describe('InputBar', () => {
 
     expect(focus).not.toHaveBeenCalled()
     focus.mockRestore()
+  })
+
+  it('lets the user change the active assistant from the prompt row', async () => {
+    const user = userEvent.setup()
+    const onAssistantChange = vi.fn()
+
+    render(
+      <InputBar
+        text=""
+        assistant={{ id: 'assistant-1', name: 'Writer' } as never}
+        model={{ id: 'provider::model', name: 'Writer model' } as never}
+        placeholder="Ask Writer"
+        loading={false}
+        onAssistantChange={onAssistantChange}
+        handleKeyDown={vi.fn()}
+        handleChange={vi.fn()}
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Select Assistant: Writer' })
+    expect(trigger).toHaveTextContent('')
+    expect(trigger.querySelector('svg')).toBeNull()
+    expect(screen.getByTestId('model-avatar')).toBeInTheDocument()
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('option', { name: 'Researcher' }))
+
+    expect(onAssistantChange).toHaveBeenCalledWith('assistant-2')
+    await waitFor(() => expect(screen.getByPlaceholderText('Ask Writer')).toHaveFocus())
+  })
+
+  it('opens the assistant switcher when Tab is pressed in the prompt', () => {
+    const handleKeyDown = vi.fn()
+
+    render(
+      <InputBar
+        text=""
+        assistant={{ id: 'assistant-1', name: 'Writer' } as never}
+        model={{ id: 'provider::model', name: 'Writer model' } as never}
+        placeholder="Ask Writer"
+        loading={false}
+        onAssistantChange={vi.fn()}
+        handleKeyDown={handleKeyDown}
+        handleChange={vi.fn()}
+      />
+    )
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Ask Writer'), { key: 'Tab', code: 'Tab' })
+
+    expect(screen.getByRole('option', { name: 'Researcher' })).toBeInTheDocument()
+    expect(handleKeyDown).not.toHaveBeenCalled()
   })
 })
