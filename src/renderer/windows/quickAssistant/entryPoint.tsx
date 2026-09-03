@@ -1,6 +1,7 @@
 import '@renderer/assets/styles/index.css'
 import '@renderer/assets/styles/tailwind.css'
 import { createRoot } from 'react-dom/client'
+import '@cherrystudio/ui/components/composites/markdown/styles.css'
 
 import { prepareWindow } from '@renderer/windows/prepareWindow'
 
