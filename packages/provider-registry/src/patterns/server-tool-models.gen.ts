@@ -287,6 +287,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-3',
         'glm-5-3-fast',
         'glm-5-3-flash',
+        'glm-5-3-promo-50',
         'glm-5-maas',
         'glm-5-turbo'
       ]
@@ -459,6 +460,17 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'claude-sonnet-4',
         'claude-sonnet-4-5',
         'claude-sonnet-4-6'
+      ]
+    },
+    'openai-codex': {
+      'web-search': [
+        'gpt-5-3-codex-spark',
+        'gpt-5-4',
+        'gpt-5-4-mini',
+        'gpt-5-5',
+        'gpt-5-6-luna',
+        'gpt-5-6-sol',
+        'gpt-5-6-terra'
       ]
     },
     openai: {
@@ -774,6 +786,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-3',
         'glm-5-3-fast',
         'glm-5-3-flash',
+        'glm-5-3-promo-50',
         'glm-5-maas',
         'glm-5-turbo',
         'kimi-k2',
@@ -986,6 +999,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-3',
         'glm-5-3-fast',
         'glm-5-3-flash',
+        'glm-5-3-promo-50',
         'glm-5-maas',
         'glm-5-turbo',
         'gpt-4-1',
