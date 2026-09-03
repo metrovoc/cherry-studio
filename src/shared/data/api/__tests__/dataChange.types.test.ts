@@ -32,6 +32,7 @@ describe('endpoint classification', () => {
       | '/browser-visits'
       | '/api-gateway/paired-devices'
       | '/diagnostic-reports'
+      | '/assistants/:assistantId/topics'
       | '/files/entries'
       | '/files/entries/by-content-hash'
       | '/files/entries/:id/refs'

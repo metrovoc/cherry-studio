@@ -1,5 +1,5 @@
 import { Check, Copy, CornerDownLeft, Loader2, LoaderCircle, Mic, RotateCcw, Square, Trash2, X } from 'lucide-react'
-import React, { useEffect, useRef, useSyncExternalStore } from 'react'
+import React, { type ReactNode, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -69,6 +69,7 @@ interface InputBarProps {
   dictationTargetId?: string
   onAssistantChange?: (assistantId: string) => void
   assistantSelectionDisabled?: boolean
+  actions?: ReactNode
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
   handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
@@ -84,6 +85,7 @@ const InputBar = ({
   assistantSelectionDisabled,
   inputRef,
   dictationTargetId,
+  actions,
   handleKeyDown,
   handleChange
 }: InputBarProps & { ref?: React.RefObject<HTMLDivElement | null> }) => {
@@ -274,6 +276,7 @@ const InputBar = ({
           </Button>
         </>
       )}
+      {actions}
     </div>
   )
 }
