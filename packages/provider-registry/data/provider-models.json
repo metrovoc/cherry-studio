@@ -20723,18 +20723,6 @@
       "reasoningContracts": {
         "openai-chat-completions": {
           "support": {
-            "controls": []
-          }
-        }
-      }
-    },
-    {
-      "endpointTypes": ["openai-chat-completions"],
-      "modelId": "hy4-preview",
-      "providerId": "opencode",
-      "reasoningContracts": {
-        "openai-chat-completions": {
-          "support": {
             "controls": [
               {
                 "kind": "effort",
@@ -21130,6 +21118,7 @@
     },
     {
       "apiModelId": "muse-spark-1.3-contributor",
+      "endpointTypes": ["openai-responses"],
       "modelId": "muse-spark-1-3-contributor",
       "pricing": {
         "cacheRead": {
@@ -21145,7 +21134,19 @@
           "perMillionTokens": 0.2
         }
       },
-      "providerId": "opencode"
+      "providerId": "opencode",
+      "reasoningContracts": {
+        "openai-responses": {
+          "support": {
+            "controls": [
+              {
+                "kind": "effort",
+                "values": ["minimal", "low", "medium", "high", "xhigh"]
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "apiModelId": "ox-alpha-free",
@@ -21510,11 +21511,6 @@
           "perMillionTokens": 0.47
         }
       },
-      "providerId": "opencode"
-    },
-    {
-      "endpointTypes": ["anthropic-messages"],
-      "modelId": "qwen3-8-flash",
       "providerId": "opencode",
       "reasoningContracts": {
         "anthropic-messages": {
@@ -39039,5 +39035,5 @@
       "providerId": "zhipu"
     }
   ],
-  "version": "5e025f94408c3292"
+  "version": "6d3f2617f3cc7fae"
 }

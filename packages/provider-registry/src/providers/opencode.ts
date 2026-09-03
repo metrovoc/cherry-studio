@@ -28,7 +28,6 @@ const qwenBudgetWire: ReasoningWireProfile = {
 const chatFixedModels = [
   'glm-5',
   'glm-5-1',
-  'hy4-preview',
   'kimi-k2-5',
   'kimi-k2-6',
   'kimi-k2-7-code',
@@ -95,7 +94,6 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
     }
   })),
   { modelId: 'longcat-2-0', endpointTypes: ['openai-chat-completions'] },
-  { modelId: 'qwen3-8-flash', endpointTypes: ['anthropic-messages'] },
   // models.dev routes Zen Go's Grok 4.5 through `@ai-sdk/openai` (Responses); the Go endpoint table
   // still prints chat/completions, so Chat stays selectable behind the Responses default (#17860).
   {
@@ -122,6 +120,13 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
   },
   {
     modelId: 'muse-spark-1-2-contributor',
+    endpointTypes: ['openai-responses' as const],
+    reasoningContracts: {
+      'openai-responses': { support: effortSupport(['minimal', 'low', 'medium', 'high', 'xhigh']) }
+    }
+  },
+  {
+    modelId: 'muse-spark-1-3-contributor',
     endpointTypes: ['openai-responses' as const],
     reasoningContracts: {
       'openai-responses': { support: effortSupport(['minimal', 'low', 'medium', 'high', 'xhigh']) }
