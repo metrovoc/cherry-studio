@@ -25,6 +25,7 @@ import type {
   UpdateAssistantDto
 } from '@shared/data/api/schemas/assistants'
 import type { EntitySearchItem } from '@shared/data/api/schemas/search'
+import type { DataApiDataChangeEffect } from '@shared/data/api/types'
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@shared/data/types/assistant'
 import type { UniqueModelId } from '@shared/data/types/model'
 
@@ -91,6 +92,19 @@ function rethrowAssistantOrderError(error: unknown): never {
   }
 
   throw error
+}
+
+function notifyAssistantReadModelChange(
+  assistantIds: readonly string[],
+  listChange: { kind: 'membership' | 'projection' } | { kind: 'order'; dimension: string }
+): void {
+  if (assistantIds.length === 0) return
+  const entityIds = [...new Set(assistantIds)]
+  const listEffect: DataApiDataChangeEffect =
+    listChange.kind === 'order'
+      ? { endpoint: '/assistants', kind: 'order', dimension: listChange.dimension, entityIds }
+      : { endpoint: '/assistants', kind: listChange.kind, entityIds }
+  notifyDataApiDataChange([listEffect, { endpoint: '/assistants/:id', entityIds }])
 }
 
 export class AssistantDataService {
@@ -416,6 +430,8 @@ export class AssistantDataService {
 
     logger.info('Created assistant', { id: row.id, name: row.name })
 
+    notifyAssistantReadModelChange([row.id], { kind: 'membership' })
+
     return rowToAssistant(
       row,
       {
@@ -489,6 +505,8 @@ export class AssistantDataService {
 
     logger.info('Imported assistant', { id: row.id, name: row.name })
     if (importedPromptIds.length > 0) promptService.notifyTargetBindingsChanged()
+
+    notifyAssistantReadModelChange([row.id], { kind: 'membership' })
 
     return rowToAssistant(row, createEmptyRelations(), modelName)
   }
@@ -580,6 +598,8 @@ export class AssistantDataService {
 
     logger.info('Updated assistant', { id, changes: Object.keys(dto) })
 
+    notifyAssistantReadModelChange([id], { kind: 'projection' })
+
     return rowToAssistant(row, nextRelations, modelName)
   }
 
@@ -592,6 +612,7 @@ export class AssistantDataService {
           scope: isNull(assistantTable.deletedAt)
         })
       })
+      notifyAssistantReadModelChange([id], { kind: 'order', dimension: 'orderKey' })
     } catch (error) {
       rethrowAssistantOrderError(error)
     }
@@ -608,6 +629,10 @@ export class AssistantDataService {
           scope: isNull(assistantTable.deletedAt)
         })
       })
+      notifyAssistantReadModelChange(
+        moves.map((move) => move.id),
+        { kind: 'order', dimension: 'orderKey' }
+      )
     } catch (error) {
       rethrowAssistantOrderError(error)
     }
@@ -661,6 +686,7 @@ export class AssistantDataService {
     topicService.notifyReadModelChange(deletedTopicIds ?? [], 'membership', { deleted: true })
     this.notifyReadModelChange([id], 'membership')
     pinService.notifyPurged()
+    notifyAssistantReadModelChange([id], { kind: 'membership' })
 
     logger.info(options.permanent === true ? 'Permanently deleted assistant' : 'Moved assistant to Recycle Bin', {
       id,
