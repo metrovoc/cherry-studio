@@ -195,7 +195,9 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
       logger.error('agent generate error', err as Error)
       if (hooks.onError) {
         try {
-          await hooks.onError({ error: err instanceof Error ? err : new Error(String(err)) })
+          await hooks.onError({
+            error: err instanceof Error ? err : new Error(serializeError(err).message ?? '', { cause: err })
+          })
         } catch (hookErr) {
           logger.error('hooks.onError threw; rethrowing original', hookErr as Error)
         }
@@ -251,7 +253,7 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
       if (!hooks.onError) return undefined
       try {
         return await hooks.onError({
-          error: err instanceof Error ? err : new Error(serializeError(err).message ?? 'Unknown AI error')
+          error: err instanceof Error ? err : new Error(serializeError(err).message ?? '', { cause: err })
         })
       } catch (hookErr) {
         logger.error('hooks.onError threw; aborting run', hookErr as Error)
@@ -318,7 +320,7 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
         sendSources: true,
         onError: (error) => {
           capturedUiErrors.push({ error })
-          return error instanceof Error ? error.message : String(error)
+          return serializeError(error).message ?? ''
         },
         generateMessageId: () => {
           if (!hasUsedProvidedMessageId && params.messageId) {
