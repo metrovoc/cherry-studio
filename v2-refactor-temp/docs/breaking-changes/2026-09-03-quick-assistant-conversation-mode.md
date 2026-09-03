@@ -2,7 +2,7 @@
 title: Quick Assistant conversations are saved by default
 category: changed
 severity: notice
-introduced_in_pr: TBD
+introduced_in_pr: 09b24a239d42523ff91840f70906a34ab3ccf8a3
 date: 2026-09-03
 ---
 
