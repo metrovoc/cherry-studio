@@ -181,6 +181,7 @@ vi.mock('../components/InputBar', () => ({
     placeholder,
     assistant,
     onAssistantChange,
+    actions,
     handleChange,
     handleKeyDown,
     ref
@@ -189,6 +190,7 @@ vi.mock('../components/InputBar', () => ({
     placeholder: string
     assistant?: { id: string; name: string }
     onAssistantChange?: (assistantId: string) => void
+    actions?: React.ReactNode
     handleChange: (event: React.ChangeEvent<HTMLInputElement>) => void
     handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
     ref?: React.RefObject<HTMLDivElement | null>
@@ -206,6 +208,7 @@ vi.mock('../components/InputBar', () => ({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
       />
+      {actions}
     </div>
   )
 }))
@@ -494,7 +497,10 @@ describe('HomeWindow', () => {
     render(<HomeWindow />)
     fireEvent.keyDown(window, { code: 'BracketLeft', metaKey: true })
 
-    expect(await screen.findByText('Saved topic')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'quickAssistant.history.open_in_main' })).toBeEnabled()
+    )
+    expect(screen.queryByText('Saved topic')).not.toBeInTheDocument()
     fireEvent.keyDown(window, { code: 'KeyJ', metaKey: true })
 
     expect(state.ipcRequest).toHaveBeenCalledWith('navigation.focus_or_open_conversation', {
@@ -566,13 +572,15 @@ describe('HomeWindow', () => {
     state.historyTopics = [{ id: 'saved-topic', name: 'Saved topic' }]
     const { rerender } = render(<HomeWindow />)
     fireEvent.keyDown(window, { code: 'BracketLeft', metaKey: true })
-    expect(screen.getByText('Saved topic')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'quickAssistant.history.open_in_main' })).toBeEnabled()
+    )
 
     state.saveConversations = false
     rerender(<HomeWindow />)
 
     await waitFor(() => expect(state.resetTemporaryTopic).toHaveBeenCalledOnce())
-    expect(screen.queryByText('Saved topic')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'quickAssistant.history.open_in_main' })).not.toBeInTheDocument()
   })
 
   it('blocks history navigation while the current scratch save has failed', async () => {

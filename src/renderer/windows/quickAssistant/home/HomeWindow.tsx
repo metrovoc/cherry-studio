@@ -728,11 +728,11 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
                 placeholder={inputPlaceholder}
                 onAssistantChange={handleAssistantChange}
                 assistantSelectionDisabled={isLoading}
+                actions={conversationNavigation}
                 handleKeyDown={handleKeyDown}
                 handleChange={handleChange}
                 ref={inputBarRef}
               />
-              {conversationNavigation}
               <Separator className="my-2.5" />
             </>
           )}
@@ -782,12 +782,12 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               placeholder={inputPlaceholder}
               onAssistantChange={handleAssistantChange}
               assistantSelectionDisabled={isLoading}
+              actions={conversationNavigation}
               handleKeyDown={handleKeyDown}
               handleChange={handleChange}
               ref={inputBarRef}
             />
           )}
-          {conversationNavigation}
           <Separator className="my-2.5" />
           <ClipboardPreview clipboardText={clipboardText} clearClipboard={clearClipboard} t={t} />
           <main className="flex-1" />

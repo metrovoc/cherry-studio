@@ -29,8 +29,7 @@ const ConversationNavigationBar: FC<Props> = ({
   const mod = isMac ? '⌘' : 'Ctrl+'
 
   return (
-    <div className="flex h-7 items-center gap-1 [-webkit-app-region:no-drag]">
-      <span className="min-w-0 flex-1 truncate px-1 text-foreground-secondary text-xs">{title}</span>
+    <div role="group" aria-label={title} className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
       <Tooltip content={`${t('quickAssistant.history.older')} (${mod}[)`} delay={500}>
         <Button
           type="button"
