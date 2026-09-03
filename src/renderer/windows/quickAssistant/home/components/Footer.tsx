@@ -1,26 +1,30 @@
 import { Tooltip } from '@cherrystudio/ui'
-import { ArrowLeft, CircleArrowLeft, Copy, Loader2, Pin } from 'lucide-react'
+import { ArrowLeft, ArrowRightToLine, CircleArrowLeft, Copy, Loader2, Pin } from 'lucide-react'
 import type { ButtonHTMLAttributes, FC } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 
 interface FooterProps {
   route: string
+  canSwitchAssistant?: boolean
   canUseBackspace?: boolean
   loading?: boolean
   setIsPinned: (isPinned: boolean) => void
   isPinned: boolean
   clearClipboard?: () => void
   onEsc: () => void
+  onSwitchAssistant?: () => void
   onCopy?: () => void
 }
 
 const Footer: FC<FooterProps> = ({
   route,
+  canSwitchAssistant,
   canUseBackspace,
   loading,
   clearClipboard,
   onEsc,
+  onSwitchAssistant,
   setIsPinned,
   isPinned,
   onCopy
@@ -57,6 +61,12 @@ const Footer: FC<FooterProps> = ({
                 : t('quickAssistant.footer.esc_back')
           })}
         </FooterAction>
+        {canSwitchAssistant && (
+          <FooterAction onClick={onSwitchAssistant}>
+            <ArrowRightToLine size={14} className="text-foreground" />
+            {t('quickAssistant.footer.tab_switch')}
+          </FooterAction>
+        )}
         {route === 'home' && !canUseBackspace && (
           <FooterAction onClick={() => clearClipboard!()}>
             <ArrowLeft size={14} />

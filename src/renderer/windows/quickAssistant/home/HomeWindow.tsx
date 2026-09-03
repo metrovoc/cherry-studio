@@ -24,17 +24,12 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 
 import ClipboardPreview from './components/ClipboardPreview'
-import type { FeatureMenusRef } from './components/FeatureMenus'
-import FeatureMenus from './components/FeatureMenus'
 import Footer from './components/Footer'
 import InputBar from './components/InputBar'
 
-// Lazy boundaries (S6b): the chat/translate branches carry the heavy message
-// rendering chain (ChatMarkdown, CodeMirror, katex, mermaid). The default
-// 'home' route never renders them, so they stay out of the first paint and
-// only load when a feature is actually invoked.
+// The chat branch carries the heavy message rendering chain (ChatMarkdown,
+// CodeMirror, katex, mermaid), so keep it out of the initial home render.
 const ChatWindow = React.lazy(() => import('../chat/ChatWindow'))
-const TranslateWindow = React.lazy(() => import('../translate/TranslateWindow'))
 
 // Size-stable fallback: the shell (input bar / footer) renders synchronously
 // around it, so the brief local-chunk load must not collapse the layout.
@@ -45,7 +40,7 @@ const logger = loggerService.withContext('HomeWindow')
 // Stable empty array — quick-assistant temp topic has no DB-backed messages.
 const EMPTY_UI_MESSAGES: CherryUIMessage[] = []
 
-type MiniRoute = 'home' | 'chat' | 'translate' | 'summary' | 'explanation'
+type MiniRoute = 'home' | 'chat'
 
 /**
  * Finalize a list of live assistant messages: turn any still-streaming text
@@ -80,7 +75,7 @@ export const finalizeLiveMessages = (messages: CherryUIMessage[]): CherryUIMessa
 
 const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const [readClipboardAtStartup] = usePreference('feature.quick_assistant.read_clipboard_at_startup')
-  const [quickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
+  const [quickAssistantId, setQuickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
   const [saveConversations] = usePreference('feature.quick_assistant.save_conversations')
   const [windowStyle] = usePreference('ui.window_style')
   const { theme } = useTheme()
@@ -107,7 +102,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const persistingTopicIdRef = useRef<string | null>(null)
   const persistedTopicIdRef = useRef<string | null>(null)
   const inputBarRef = useRef<HTMLDivElement>(null)
-  const featureMenusRef = useRef<FeatureMenusRef>(null)
 
   const { quickModel: quickApiModel } = useDefaultModel()
   const { assistant: chosenAssistant, model: chosenApiModel } = useAssistant(quickAssistantId ?? '')
@@ -389,7 +383,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     }
 
     resetConversation()
-    featureMenusRef.current?.resetSelectedIndex()
     setFlowError(null)
     setRoute('home')
     setUserInputText('')
@@ -412,30 +405,14 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         if (isLoading) return
         e.preventDefault()
         if (requestText) {
-          if (route === 'home') {
-            featureMenusRef.current?.useFeature()
-          } else {
-            setRoute('chat')
-            void handleSendMessage()
-            focusInput()
-          }
+          setRoute('chat')
+          void handleSendMessage()
+          focusInput()
         }
         break
       case 'Backspace':
         if (userInputText.length === 0) {
           void clearClipboard()
-        }
-        break
-      case 'ArrowUp':
-        if (route === 'home') {
-          e.preventDefault()
-          featureMenusRef.current?.prevFeature()
-        }
-        break
-      case 'ArrowDown':
-        if (route === 'home') {
-          e.preventDefault()
-          featureMenusRef.current?.nextFeature()
         }
         break
       case 'Escape':
@@ -447,6 +424,20 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUserInputText(e.target.value)
   }
+
+  const handleAssistantChange = useCallback(
+    (assistantId: string) => {
+      if (assistantId === quickAssistantId) return
+      if (route !== 'home') {
+        resetConversation()
+        setRoute('home')
+        setUserInputText('')
+      }
+      void setQuickAssistantId(assistantId)
+      requestAnimationFrame(focusInput)
+    },
+    [focusInput, quickAssistantId, resetConversation, route, setQuickAssistantId]
+  )
 
   const backgroundColor = useMemo(() => {
     if (isMac && windowStyle === 'transparent' && theme === ThemeMode.light) {
@@ -464,40 +455,42 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     })
   }, [clipboardText, route, t, quickAssistantId, currentAssistant, currentModel])
 
+  const handleSwitchAssistant = useCallback(() => {
+    inputBarRef.current?.querySelector<HTMLButtonElement>('[data-assistant-switcher-trigger]')?.click()
+  }, [])
+
   const baseFooterProps = useMemo(
     () => ({
       route,
       loading: isLoading,
       onEsc: handleEsc,
+      canSwitchAssistant: Boolean(currentAssistant) && !isLoading,
+      onSwitchAssistant: handleSwitchAssistant,
       setIsPinned,
       isPinned
     }),
-    [route, isLoading, handleEsc, setIsPinned, isPinned]
+    [route, isLoading, handleEsc, currentAssistant, handleSwitchAssistant, setIsPinned, isPinned]
   )
 
   switch (route) {
     case 'chat':
-    case 'summary':
-    case 'explanation':
       return (
         <div data-ui="quick-assistant.view" className={containerClassName(draggable)} style={{ backgroundColor }}>
-          {route === 'chat' && (currentAssistant || currentModel) && (
+          {(currentAssistant || currentModel) && (
             <>
               <InputBar
                 text={userInputText}
                 model={currentModel}
+                assistant={currentAssistant}
                 placeholder={inputPlaceholder}
+                onAssistantChange={handleAssistantChange}
+                assistantSelectionDisabled={isLoading}
                 handleKeyDown={handleKeyDown}
                 handleChange={handleChange}
                 ref={inputBarRef}
               />
               <Separator className="my-2.5" />
             </>
-          )}
-          {['summary', 'explanation'].includes(route) && (
-            <div className="mt-2.5">
-              <ClipboardPreview clipboardText={clipboardText} clearClipboard={clearClipboard} t={t} />
-            </div>
           )}
           <Suspense fallback={<LazyBranchFallback />}>
             <ChatWindow
@@ -534,17 +527,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         </div>
       )
 
-    case 'translate':
-      return (
-        <div data-ui="quick-assistant.view" className={containerClassName(draggable)} style={{ backgroundColor }}>
-          <Suspense fallback={<LazyBranchFallback />}>
-            <TranslateWindow text={requestText} />
-          </Suspense>
-          <Separator className="my-2.5" />
-          <Footer key="footer" {...baseFooterProps} />
-        </div>
-      )
-
     default:
       return (
         <div data-ui="quick-assistant.view" className={containerClassName(draggable)} style={{ backgroundColor }}>
@@ -552,7 +534,10 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
             <InputBar
               text={userInputText}
               model={currentModel}
+              assistant={currentAssistant}
               placeholder={inputPlaceholder}
+              onAssistantChange={handleAssistantChange}
+              assistantSelectionDisabled={isLoading}
               handleKeyDown={handleKeyDown}
               handleChange={handleChange}
               ref={inputBarRef}
@@ -560,14 +545,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
           )}
           <Separator className="my-2.5" />
           <ClipboardPreview clipboardText={clipboardText} clearClipboard={clearClipboard} t={t} />
-          <main className="flex flex-1 flex-col overflow-hidden">
-            <FeatureMenus
-              setRoute={setRoute}
-              onSendMessage={handleSendMessage}
-              text={requestText}
-              ref={featureMenusRef}
-            />
-          </main>
+          <main className="flex-1" />
           <Separator className="my-2.5" />
           <Footer
             key="footer"
