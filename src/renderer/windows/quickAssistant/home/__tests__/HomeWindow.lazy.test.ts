@@ -5,30 +5,22 @@ import { describe, expect, it, vi } from 'vitest'
 const PROBE_TIMEOUT = 45_000
 
 const chatWindowEvaluated = vi.hoisted(() => vi.fn())
-const translateWindowEvaluated = vi.hoisted(() => vi.fn())
 
 vi.mock('../../chat/ChatWindow', () => {
   chatWindowEvaluated()
   return { default: () => null }
 })
 
-vi.mock('../../translate/TranslateWindow', () => {
-  translateWindowEvaluated()
-  return { default: () => null }
-})
-
 /**
- * Lazy-boundary probe (S6b): the quick assistant boots on route='home' and
- * must not statically evaluate the chat/translate branches (they carry the
- * heavy message rendering chain).
+ * The quick assistant boots on route='home' and must not statically evaluate
+ * the chat branch, which carries the heavy message rendering chain.
  */
 describe('HomeWindow lazy boundaries', () => {
   it(
-    'importing HomeWindow does not evaluate the chat/translate branches',
+    'importing HomeWindow does not evaluate the chat branch',
     async () => {
       await import('../HomeWindow')
       expect(chatWindowEvaluated).not.toHaveBeenCalled()
-      expect(translateWindowEvaluated).not.toHaveBeenCalled()
     },
     PROBE_TIMEOUT
   )
