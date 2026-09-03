@@ -21,7 +21,8 @@ await prepareWindow({
     'feature.voice.dictation.hold_shortcut',
     'feature.voice.dictation.mouse_hold_enabled',
     'feature.voice.dictation.toggle_shortcut',
-    'feature.quick_assistant.save_conversations'
+    'feature.quick_assistant.save_conversations',
+    'chat.message.navigation_mode'
   ]
 })
 
