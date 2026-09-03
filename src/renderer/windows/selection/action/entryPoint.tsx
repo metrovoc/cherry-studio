@@ -14,6 +14,7 @@ await prepareWindow({
     'ui.theme_user.color_primary',
     'feature.selection.auto_close',
     'feature.selection.auto_pin',
+    'feature.selection.save_conversations',
     'feature.selection.action_window_opacity'
   ]
 })

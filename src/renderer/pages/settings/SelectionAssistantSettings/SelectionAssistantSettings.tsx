@@ -34,8 +34,10 @@ const SelectionAssistantSettings: FC = () => {
   const [selectionEnabled, setSelectionEnabled] = usePreference('feature.selection.enabled')
   const [triggerMode, setTriggerMode] = usePreference('feature.selection.trigger_mode')
   const [isCompact, setIsCompact] = usePreference('feature.selection.compact')
+  const [showToolbarLogo, setShowToolbarLogo] = usePreference('feature.selection.show_toolbar_logo')
   const [isAutoClose, setIsAutoClose] = usePreference('feature.selection.auto_close')
   const [isAutoPin, setIsAutoPin] = usePreference('feature.selection.auto_pin')
+  const [saveConversations, setSaveConversations] = usePreference('feature.selection.save_conversations')
   const [isFollowToolbar, setIsFollowToolbar] = usePreference('feature.selection.follow_toolbar')
   const [isRemeberWinSize, setIsRemeberWinSize] = usePreference('feature.selection.remember_win_size')
   const [actionWindowOpacity, setActionWindowOpacity] = usePreference('feature.selection.action_window_opacity')
@@ -54,6 +56,7 @@ const SelectionAssistantSettings: FC = () => {
     hasLinuxInputDeviceAccess: boolean
     isLinuxCompositorCompatible: boolean
   } | null>(null)
+  const hasAssistantAction = actionItems?.some((item) => item.id !== 'translate' && Boolean(item.assistantId)) ?? false
 
   // force disable selection assistant on non-windows systems
   useEffect(() => {
@@ -129,6 +132,7 @@ const SelectionAssistantSettings: FC = () => {
               handleAction={() => {}}
               copyIconStatus="normal"
               copyIconAnimation="none"
+              showLogo={showToolbarLogo}
             />
           </DemoContainer>
         )}
@@ -241,6 +245,18 @@ const SelectionAssistantSettings: FC = () => {
               </SettingLabel>
               <Switch checked={isCompact} onCheckedChange={setIsCompact} />
             </SettingRow>
+            <SettingDivider />
+            <SettingRow>
+              <SettingLabel>
+                <SettingRowTitle>{t('selection.settings.toolbar.show_logo.title')}</SettingRowTitle>
+                <SettingDescription>{t('selection.settings.toolbar.show_logo.description')}</SettingDescription>
+              </SettingLabel>
+              <Switch
+                aria-label={t('selection.settings.toolbar.show_logo.title')}
+                checked={showToolbarLogo}
+                onCheckedChange={setShowToolbarLogo}
+              />
+            </SettingRow>
           </SettingGroup>
 
           <SettingGroup theme={theme}>
@@ -280,6 +296,19 @@ const SelectionAssistantSettings: FC = () => {
             <SettingDivider />
             <SettingRow>
               <SettingLabel>
+                <SettingRowTitle>{t('selection.settings.window.save_conversations.title')}</SettingRowTitle>
+                <SettingDescription>{t('selection.settings.window.save_conversations.description')}</SettingDescription>
+              </SettingLabel>
+              <Switch
+                aria-label={t('selection.settings.window.save_conversations.title')}
+                checked={saveConversations}
+                disabled={!hasAssistantAction}
+                onCheckedChange={setSaveConversations}
+              />
+            </SettingRow>
+            <SettingDivider />
+            <SettingRow>
+              <SettingLabel>
                 <SettingRowTitle>{t('selection.settings.window.opacity.title')}</SettingRowTitle>
                 <SettingDescription>{t('selection.settings.window.opacity.description')}</SettingDescription>
               </SettingLabel>
@@ -295,7 +324,11 @@ const SelectionAssistantSettings: FC = () => {
             </SettingRow>
           </SettingGroup>
 
-          <SelectionActionsList actionItems={actionItems} setActionItems={setActionItems} />
+          <SelectionActionsList
+            actionItems={actionItems}
+            setActionItems={setActionItems}
+            showToolbarLogo={showToolbarLogo}
+          />
 
           <SettingGroup theme={theme}>
             <SettingTitle>{t('selection.settings.advanced.title')}</SettingTitle>

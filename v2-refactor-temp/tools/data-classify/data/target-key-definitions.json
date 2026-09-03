@@ -313,6 +313,20 @@
       "description": "Save Quick Assistant conversations to the selected assistant's history"
     },
     {
+      "targetKey": "feature.selection.save_conversations",
+      "type": "boolean",
+      "defaultValue": false,
+      "status": "classified",
+      "description": "Save Selection Assistant AI action conversations to history"
+    },
+    {
+      "targetKey": "feature.selection.show_toolbar_logo",
+      "type": "boolean",
+      "defaultValue": true,
+      "status": "classified",
+      "description": "Show the Cherry Studio logo in the Selection Assistant toolbar"
+    },
+    {
       "targetKey": "feature.translate.model_id",
       "type": "string",
       "defaultValue": null,

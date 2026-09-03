@@ -1,4 +1,5 @@
 import { useChat } from '@ai-sdk/react'
+import { Button } from '@cherrystudio/ui'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import { toMessageListItem } from '@renderer/components/chat/messages/utils/messageListItem'
@@ -14,7 +15,7 @@ import type { SelectionActionItem } from '@shared/data/preference/preferenceType
 import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { FC } from 'react'
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { getSelectionActionErrorMessage } from '../errorMessage'
@@ -39,14 +40,19 @@ interface Props {
 const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
   const { t } = useTranslation()
   const [language] = usePreference('app.language')
+  const [saveConversations] = usePreference('feature.selection.save_conversations')
   const [showOriginal, setShowOriginal] = useState(false)
 
   const { assistant: chosenAssistant } = useAssistant(action.assistantId ?? '')
   const chosenAssistantId = chosenAssistant?.id
   const waitingForConfiguredAssistant = Boolean(action.assistantId) && !chosenAssistantId
 
-  // Temporary in-memory topic — never touches SQLite, released on unmount.
-  const { topicId: temporaryTopicId, ready } = useTemporaryTopic({
+  // Lease in memory first; successful responses can be promoted to history.
+  const {
+    topicId: temporaryTopicId,
+    ready,
+    persist: persistTemporaryTopic
+  } = useTemporaryTopic({
     enabled: !waitingForConfiguredAssistant,
     assistantId: chosenAssistantId
   })
@@ -82,6 +88,10 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
   const [isPreparing, setIsPreparing] = useState(false)
   const [completionError, setCompletionError] = useState<string | null>(null)
   const [requestStartedAt, setRequestStartedAt] = useState('')
+  const [isPersisting, setIsPersisting] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const persistingTopicIdRef = useRef<string | null>(null)
+  const persistedTopicIdRef = useRef<string | null>(null)
 
   const { sendMessage, stop: stopChat } = useChat<CherryUIMessage>({
     // Once the temporary topic id arrives, the chat reinitializes with it.
@@ -97,7 +107,7 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
 
   // Temp-topic: no pre-allocated DB row, so the reader keys overlay by the
   // start-chunk id; `liveAssistants` is the streamed snapshot list.
-  const { activeExecutions, isPending } = useTopicStreamStatus(temporaryTopicId ?? 'pending-temp')
+  const { status: streamStatus, activeExecutions, isPending } = useTopicStreamStatus(temporaryTopicId ?? 'pending-temp')
   const { liveAssistants } = useExecutionOverlay(
     temporaryTopicId ?? 'pending-temp',
     activeExecutions,
@@ -141,6 +151,32 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
 
   const isStreaming = isPending
   const error = completionError
+
+  const persistConversation = useCallback(async () => {
+    const topicId = temporaryTopicId
+    if (!topicId || persistingTopicIdRef.current === topicId || persistedTopicIdRef.current === topicId) return
+
+    persistingTopicIdRef.current = topicId
+    setIsPersisting(true)
+    try {
+      await persistTemporaryTopic(action.selectedText)
+      persistedTopicIdRef.current = topicId
+      setSaveFailed(false)
+    } catch (persistError) {
+      setSaveFailed(true)
+      logger.error('Failed to save selection assistant conversation', persistError as Error)
+    } finally {
+      if (persistingTopicIdRef.current === topicId) {
+        persistingTopicIdRef.current = null
+        setIsPersisting(false)
+      }
+    }
+  }, [action.selectedText, persistTemporaryTopic, temporaryTopicId])
+
+  useEffect(() => {
+    if (!saveConversations || !chosenAssistantId || streamStatus !== 'done') return
+    void persistConversation()
+  }, [chosenAssistantId, persistConversation, saveConversations, streamStatus])
 
   const fetchResult = useCallback(() => {
     if (!ready || !temporaryTopicId || waitingForConfiguredAssistant) return
@@ -215,6 +251,14 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
         {error && (
           <div className="mt-3 mb-3 break-all rounded border border-error-border bg-error-subtle px-3 py-2 text-[13px] text-error-subtle-foreground">
             {error}
+          </div>
+        )}
+        {saveFailed && (
+          <div className="mt-3 flex w-full items-center gap-2 rounded border border-error-border bg-error-subtle px-3 py-2 text-[13px] text-error-subtle-foreground">
+            <span className="min-w-0 flex-1">{t('selection.action.window.save_conversation_failed')}</span>
+            <Button size="sm" variant="outline" disabled={isPersisting || isStreaming} onClick={persistConversation}>
+              {t('common.retry')}
+            </Button>
           </div>
         )}
       </div>
