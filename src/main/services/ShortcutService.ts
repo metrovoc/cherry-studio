@@ -1,5 +1,5 @@
 import type { BrowserWindow, WebContents } from 'electron'
-import { globalShortcut } from 'electron'
+import { app, globalShortcut } from 'electron'
 
 import { application } from '@application'
 import { loggerService } from '@logger'
@@ -67,7 +67,7 @@ const toContextValue = (value: unknown): ContextValue => {
 
 @Injectable('ShortcutService')
 @ServicePhase(Phase.WhenReady)
-@DependsOn(['MainWindowService', 'CommandService'])
+@DependsOn(['MainWindowService', 'CommandService', 'WindowManager', 'PowerService'])
 export class ShortcutService extends BaseService {
   private mainWindow: BrowserWindow | null = null
   private handlers = new Map<CommandId, ShortcutHandler>()
@@ -79,6 +79,7 @@ export class ShortcutService extends BaseService {
   protected async onInit() {
     this.registerBuiltInHandlers()
     this.subscribeToPreferenceChanges()
+    this.subscribeToLifecycleReconciliation()
     this.registerDisposable(() => {
       for (const cleanup of [...this.guestInputCleanups.values()]) {
         cleanup()
@@ -86,7 +87,12 @@ export class ShortcutService extends BaseService {
     })
 
     const windowService = application.get('MainWindowService')
-    this.registerDisposable(windowService.onMainWindowCreated((window) => this.registerForWindow(window)))
+    this.registerDisposable(windowService.onMainWindowCreated((window) => this.registerForMainWindow(window)))
+
+    const windowManager = application.get('WindowManager')
+    this.registerDisposable(
+      windowManager.onWindowCreatedByType(WindowType.QuickAssistant, ({ window }) => this.registerWindowInput(window))
+    )
   }
 
   protected async onStop() {
@@ -123,9 +129,26 @@ export class ShortcutService extends BaseService {
     }
   }
 
-  private registerForWindow(window: BrowserWindow): void {
-    this.mainWindow = window
+  private subscribeToLifecycleReconciliation(): void {
+    const reconcile = () => this.reregisterShortcuts()
+    app.on('activate', reconcile)
+    this.registerDisposable(() => app.removeListener('activate', reconcile))
 
+    const powerService = application.get('PowerService')
+    this.registerDisposable(powerService.onResume(reconcile))
+    this.registerDisposable(powerService.onUnlockScreen(reconcile))
+  }
+
+  private registerForMainWindow(window: BrowserWindow): void {
+    this.mainWindow = window
+    this.registerWindowInput(window)
+
+    if (!window.isDestroyed()) {
+      this.registerGlobalShortcuts(window)
+    }
+  }
+
+  private registerWindowInput(window: BrowserWindow): void {
     if (!this.registeredWindows.has(window)) {
       this.registeredWindows.add(window)
 
@@ -190,10 +213,6 @@ export class ShortcutService extends BaseService {
       this.registerDisposable(() => webContents.off('did-attach-webview', onDidAttachWebview))
       this.registerDisposable(() => window.off('closed', onClosed))
     }
-
-    if (!window.isDestroyed()) {
-      this.registerGlobalShortcuts(window)
-    }
   }
 
   private registerGlobalShortcuts(window: BrowserWindow): void {
@@ -252,9 +271,12 @@ export class ShortcutService extends BaseService {
     // Unregister shortcuts that are no longer needed or have a different handler
     for (const [accelerator, previous] of this.registeredAccelerators) {
       const entry = desired.get(accelerator)
-      if (!entry || entry.handler !== previous.handler || entry.window !== previous.window) {
+      const isRegistered = globalShortcut.isRegistered(accelerator)
+      if (!entry || entry.handler !== previous.handler || entry.window !== previous.window || !isRegistered) {
         try {
-          globalShortcut.unregister(accelerator)
+          if (isRegistered) {
+            globalShortcut.unregister(accelerator)
+          }
         } catch (error) {
           logger.debug(`Failed to unregister shortcut accelerator: ${accelerator}`, error as Error)
         }

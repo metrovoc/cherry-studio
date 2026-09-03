@@ -35,6 +35,10 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
       skipTransformProcessType: true
     })
   })
+
+  it('keeps QuickAssistant nonactivating so showing it preserves the foreground app and Space', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac?.type).toBe('panel')
+  })
 })
 
 // Trusted application windows retain the full preload environment.

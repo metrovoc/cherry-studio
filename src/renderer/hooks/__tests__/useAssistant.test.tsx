@@ -1,4 +1,4 @@
-import { mockUseInvalidateCache, mockUseQuery } from '@test-mocks/renderer/useDataApi'
+import { MockUseDataApiUtils, mockUseInvalidateCache, mockUseQuery } from '@test-mocks/renderer/useDataApi'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -103,6 +103,7 @@ describe('useAssistantMutations.deleteAssistant', () => {
 
 describe('useAssistants', () => {
   beforeEach(() => {
+    MockUseDataApiUtils.resetMocks()
     vi.clearAllMocks()
     resetQueryMock()
     MockUsePreferenceUtils.resetMocks()
@@ -130,6 +131,7 @@ describe('useAssistants', () => {
 
 describe('useAssistant', () => {
   beforeEach(() => {
+    MockUseDataApiUtils.resetMocks()
     vi.clearAllMocks()
     resetQueryMock()
     MockUsePreferenceUtils.resetMocks()
@@ -203,5 +205,67 @@ describe('useAssistant', () => {
 
     expect(result.current.isModelPending).toBe(true)
     expect(result.current.isModelMissing).toBe(false)
+  })
+
+  it('disables previous data for assistant identity switches', () => {
+    renderHook(() => useAssistant('assistant-new'))
+
+    expect(mockUseQuery).toHaveBeenCalledWith('/assistants/:id', {
+      params: { id: 'assistant-new' },
+      enabled: true,
+      swrOptions: { keepPreviousData: false }
+    })
+  })
+
+  it('refreshes only when the selected assistant changes in another window', () => {
+    const mutate = vi.fn().mockResolvedValue(undefined)
+    mockUseQuery.mockImplementation((path) => {
+      if (path === '/assistants/:id') {
+        return {
+          ...(queryResult({ id: 'assistant-1', modelId: null, settings: {} }) as unknown as Record<string, unknown>),
+          mutate
+        } as never
+      }
+      return queryResult()
+    })
+    renderHook(() => useAssistant('assistant-1'))
+
+    MockUseDataApiUtils.emitDataChange([
+      { endpoint: '/assistants/:id', entityIds: ['assistant-2'] },
+      { endpoint: '/assistants', kind: 'projection', entityIds: ['assistant-2'] }
+    ])
+    expect(mutate).not.toHaveBeenCalled()
+
+    MockUseDataApiUtils.emitDataChange([{ endpoint: '/assistants/:id', entityIds: ['assistant-1'] }])
+    expect(mutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps assistant mutation callbacks stable across rerenders', () => {
+    mockUseQuery.mockImplementation((path, options) => {
+      if (options?.enabled === false) return queryResult()
+      if (path === '/assistants/:id') {
+        return queryResult({
+          id: 'assistant-1',
+          name: 'Assistant 1',
+          modelId: 'provider::model-a',
+          settings: {},
+          mcpServerIds: [],
+          knowledgeBaseIds: []
+        })
+      }
+      if (path === '/models/provider::model-a') return queryResult({ id: 'provider::model-a', name: 'Model A' })
+      return queryResult()
+    })
+
+    const { rerender, result } = renderHook(() => useAssistant('assistant-1'))
+    const firstSetModel = result.current.setModel
+    const firstUpdateAssistant = result.current.updateAssistant
+    const firstUpdateAssistantSettings = result.current.updateAssistantSettings
+
+    rerender()
+
+    expect(result.current.setModel).toBe(firstSetModel)
+    expect(result.current.updateAssistant).toBe(firstUpdateAssistant)
+    expect(result.current.updateAssistantSettings).toBe(firstUpdateAssistantSettings)
   })
 })
