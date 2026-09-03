@@ -1423,6 +1423,106 @@ describe('buildAgentParams web-tool routing', () => {
     expect(result.options.providerOptions?.openai).toMatchObject({ store: false })
   })
 
+  it('delivers OpenAI Codex built-in search through the OpenAI Responses runtime', async () => {
+    resolveProviderAiSdkConfigMock.mockResolvedValue({
+      config: { providerId: 'openai', providerSettings: {} },
+      credentialReceipt: { attribution: 'oauth' }
+    })
+    const codexProvider = makeProvider({
+      id: 'openai-codex',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      endpointConfigs: { [ENDPOINT_TYPE.OPENAI_RESPONSES]: { adapterFamily: 'openai' } },
+      serverTools: [{ id: SERVER_TOOL.WEB_SEARCH, modelScope: 'model-dependent' }]
+    })
+    const codexModel = makeModel({
+      id: 'openai-codex::gpt-5-6-luna',
+      providerId: 'openai-codex',
+      apiModelId: 'gpt-5.6-luna',
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL]
+    })
+    preferenceGetMock.mockImplementation((key: string) => {
+      if (key === 'chat.web_search.client_tools_preferred') return false
+      if (key === 'chat.web_search.max_results') return 5
+      if (key === 'chat.web_search.exclude_domains') return []
+      return null
+    })
+
+    const result = await buildAgentParams({
+      request: {},
+      signal: undefined,
+      provider: codexProvider,
+      model: codexModel,
+      assistant
+    })
+
+    expect(result.plugins.some((plugin) => plugin.name === 'webSearch')).toBe(true)
+    expect(result.tools?.web_search).toBeUndefined()
+  })
+
+  it.each([
+    { endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES, runtimeProviderId: 'openai', expectedRoute: 'server' },
+    {
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      runtimeProviderId: 'deepseek',
+      expectedRoute: 'client'
+    },
+    { endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES, runtimeProviderId: 'anthropic', expectedRoute: 'client' }
+  ] as const)(
+    'routes DeepSeek Flash web search to $expectedRoute on $endpointType',
+    async ({ endpointType, runtimeProviderId, expectedRoute }) => {
+      resolveProviderAiSdkConfigMock.mockResolvedValue({
+        config: { providerId: runtimeProviderId, providerSettings: {} },
+        credentialReceipt: { attribution: 'unknown' }
+      })
+      const deepseekProvider = makeProvider({
+        id: 'deepseek',
+        presetProviderId: 'deepseek',
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: { adapterFamily: 'openai' },
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { adapterFamily: 'deepseek' },
+          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { adapterFamily: 'anthropic' }
+        },
+        serverTools: [
+          {
+            id: SERVER_TOOL.WEB_SEARCH,
+            modelScope: 'model-dependent',
+            endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES]
+          }
+        ]
+      })
+      const deepseekModel = makeModel({
+        id: 'deepseek::deepseek-flash',
+        providerId: 'deepseek',
+        apiModelId: 'deepseek-flash',
+        endpointTypes: [endpointType],
+        capabilities: [MODEL_CAPABILITY.FUNCTION_CALL]
+      })
+      const preferences = new Map<string, unknown>([
+        ['app.developer_mode.enabled', false],
+        ['chat.web_search.model_tools_preferred', true],
+        ['chat.web_search.default_search_keywords_provider', 'exa-mcp'],
+        ['chat.web_search.provider_overrides', {}],
+        ['chat.web_search.max_results', 5],
+        ['chat.web_search.exclude_domains', []]
+      ])
+      preferenceGetMock.mockImplementation((key: string) => preferences.get(key) ?? null)
+      registry.register(clientSearchEntry)
+
+      const result = await buildAgentParams({
+        request: { conversation: CONVERSATION },
+        signal: undefined,
+        provider: deepseekProvider,
+        model: deepseekModel,
+        assistant
+      })
+
+      expect(result.plugins.some((plugin) => plugin.name === 'webSearch')).toBe(expectedRoute === 'server')
+      expect(result.tools?.web_search === clientSearchEntry.tool).toBe(expectedRoute === 'client')
+    }
+  )
+
   it.each(['deepseek-v3', 'deepseek-v3.2'])(
     'keeps Bailian built-in search enabled for %s on Chat Completions',
     async (apiModelId) => {

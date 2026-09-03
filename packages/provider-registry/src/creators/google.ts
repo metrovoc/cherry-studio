@@ -72,6 +72,28 @@ export default defineCreator({
   serverToolFunctionMixing: ['gemini-3', 'gemini-4-argon', 'gemini-flash-latest', 'gemini-pro-latest'],
   models: [
     {
+      id: 'gemini-robotics-er-1-6-preview',
+      name: 'Gemini Robotics-ER 1.6 Preview',
+      family: 'gemini',
+      capabilities: [
+        'function-call',
+        'reasoning',
+        'image-recognition',
+        'audio-recognition',
+        'video-recognition',
+        'structured-output',
+        'file-input'
+      ],
+      contextWindow: 131072,
+      maxOutputTokens: 65536,
+      inputModalities: ['text', 'image', 'video', 'audio'],
+      outputModalities: ['text'],
+      pricing: {
+        input: { currency: 'USD', perMillionTokens: 1 },
+        output: { currency: 'USD', perMillionTokens: 5 }
+      }
+    },
+    {
       id: 'gemini-4-argon',
       name: 'Gemini 4 Argon',
       family: 'gemini-4',
