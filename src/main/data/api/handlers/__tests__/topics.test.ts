@@ -6,6 +6,7 @@ const {
   duplicateMock,
   getByIdMock,
   getLatestActiveMock,
+  listByAssistantActivityCursorMock,
   listByCursorMock,
   moveMock,
   reorderBatchMock,
@@ -20,6 +21,7 @@ const {
   duplicateMock: vi.fn(),
   getByIdMock: vi.fn(),
   getLatestActiveMock: vi.fn(),
+  listByAssistantActivityCursorMock: vi.fn(),
   listByCursorMock: vi.fn(),
   moveMock: vi.fn(),
   reorderBatchMock: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock('@data/services/TopicService', () => ({
     duplicate: duplicateMock,
     getById: getByIdMock,
     getLatestActive: getLatestActiveMock,
+    listByAssistantActivityCursor: listByAssistantActivityCursorMock,
     listByCursor: listByCursorMock,
     move: moveMock,
     reorder: reorderMock,
@@ -142,6 +145,39 @@ describe('topicHandlers', () => {
       ).rejects.toThrow()
 
       expect(moveMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('/assistants/:assistantId/topics', () => {
+    it('delegates assistant-scoped activity history to TopicService', async () => {
+      const result = { items: [{ id: 'topic-a' }], nextCursor: 'cursor' }
+      listByAssistantActivityCursorMock.mockReturnValueOnce(result)
+
+      await expect(
+        topicHandlers['/assistants/:assistantId/topics'].GET({
+          params: { assistantId: 'assistant-1' },
+          query: { limit: 20, cursor: 'previous' }
+        } as never)
+      ).resolves.toBe(result)
+
+      expect(listByAssistantActivityCursorMock).toHaveBeenCalledWith('assistant-1', {
+        limit: 20,
+        cursor: 'previous'
+      })
+    })
+
+    it('delegates assistant-scoped topic delete to TopicService', async () => {
+      const result = { deletedIds: ['topic-a', 'topic-b'], deletedCount: 2 }
+      deleteByAssistantIdMock.mockResolvedValueOnce(result)
+
+      await expect(
+        topicHandlers['/assistants/:assistantId/topics'].DELETE({
+          params: { assistantId: 'assistant-1' }
+        } as never)
+      ).resolves.toEqual(result)
+
+      expect(deleteByAssistantIdMock).toHaveBeenCalledWith('assistant-1')
+      expect(deleteByIdsMock).not.toHaveBeenCalled()
     })
   })
 

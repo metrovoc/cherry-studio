@@ -287,21 +287,19 @@ describe('QuickAssistantSettings', () => {
     expect(renderedModelIds).toContain('provider::model-2')
   })
 
-  it('enables history saving only when an assistant is selected', async () => {
+  it('moves model mode to an assistant when Saved is selected', async () => {
     const user = userEvent.setup()
     MockUsePreferenceUtils.setPreferenceValue('feature.quick_assistant.assistant_id', '')
     const { rerender } = render(<QuickAssistantSettings />)
-    const saveSwitch = screen.getByRole('checkbox', { name: 'settings.quickAssistant.save_conversations' })
 
-    expect(saveSwitch).toBeDisabled()
+    await user.click(screen.getByRole('radio', { name: 'settings.quickAssistant.conversation_mode_saved' }))
 
-    await user.click(screen.getByRole('radio', { name: 'settings.models.use_assistant' }))
-    rerender(<QuickAssistantSettings />)
-    expect(saveSwitch).toBeEnabled()
-
-    await user.click(saveSwitch)
     await waitFor(() => {
       expect(MockUsePreferenceUtils.getPreferenceValue('feature.quick_assistant.save_conversations')).toBe(true)
+      expect(MockUsePreferenceUtils.getPreferenceValue('feature.quick_assistant.assistant_id')).toBe('assistant-1')
     })
+
+    rerender(<QuickAssistantSettings />)
+    expect(screen.getByRole('radio', { name: 'settings.models.use_model' })).toBeDisabled()
   })
 })

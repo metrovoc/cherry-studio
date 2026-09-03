@@ -23,6 +23,7 @@ import type {
   DeleteTopicsResult,
   DuplicateTopicDto,
   LatestTopicQuery,
+  ListAssistantTopicsQuery,
   ListTopicsQuery,
   MoveTopicDto,
   ReusableTopicPlaceholderResponse,
@@ -35,6 +36,7 @@ import type { Topic } from '@shared/data/types/topic'
 import { getDataService, registerDataService } from './dataServiceRegistry'
 import { pinService } from './PinService'
 import { tagService } from './TagService'
+import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor'
 import { applyMoves, insertWithOrderKey } from './utils/orderKey'
 import {
   decodePinnedListCursor,
@@ -139,6 +141,7 @@ export class TopicService {
       { endpoint: '/topics', kind, entityIds },
       { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds },
       ...byIdEffects,
+      { endpoint: '/assistants/:assistantId/topics', kind, entityIds },
       { endpoint: '/topics/latest' }
     ])
   }
@@ -778,6 +781,38 @@ export class TopicService {
     }
 
     return { items: items.map((i) => i.topic), nextCursor }
+  }
+
+  listByAssistantActivityCursor(
+    assistantId: string,
+    query: ListAssistantTopicsQuery = {}
+  ): CursorPaginationResponse<Topic> {
+    const db = application.get('DbService').getDb()
+    assertActiveAssistantTx(db, assistantId)
+    const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT)
+    const cursor = decodeListCursor(query.cursor, asNumericKey, 'assistant-topic-history')
+    const ordering = keysetOrdering(topicTable.lastActivityAt, topicTable.id, { major: 'desc', tie: 'asc' })
+
+    const rows = db
+      .select()
+      .from(topicTable)
+      .where(
+        and(
+          eq(topicTable.assistantId, assistantId),
+          isNull(topicTable.deletedAt),
+          cursor ? ordering.where(cursor) : undefined
+        )
+      )
+      .orderBy(...ordering.orderBy)
+      .limit(limit + 1)
+      .all()
+
+    const page = rows.slice(0, limit)
+    const last = page[page.length - 1]
+    return {
+      items: page.map(rowToTopic),
+      ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.lastActivityAt, last.id) } : {})
+    }
   }
 
   search(query: { q: string; limit: number; updatedAtFrom?: number }): TopicEntitySearchItem[] {
