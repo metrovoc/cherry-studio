@@ -76,6 +76,7 @@ vi.mock('@renderer/components/resourceCatalog/dialogs/components/PromptBindingTa
 }))
 
 vi.mock('@renderer/data/hooks/useDataApi', () => ({
+  useDataChange: vi.fn(),
   useInfiniteFlatItems: (pages: Array<{ items: unknown[] }> = []) => pages.flatMap((page) => page.items),
   useInfiniteQuery: () => ({
     pages: [{ items: [], total: 0 }],

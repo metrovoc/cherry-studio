@@ -973,9 +973,14 @@ describe('AssistantDataService', () => {
   describe('update', () => {
     it('should update and return assistant', async () => {
       await seedAssistantRow({ id: 'ast-1', name: 'original' })
+      notifyDataApiDataChangeMock.mockClear()
 
       const result = assistantDataService.update('ast-1', { name: 'updated-name' })
       expect(result.name).toBe('updated-name')
+      expect(notifyDataApiDataChangeMock).toHaveBeenCalledExactlyOnceWith([
+        { endpoint: '/assistants', kind: 'projection', entityIds: ['ast-1'] },
+        { endpoint: '/assistants/:id', entityIds: ['ast-1'] }
+      ])
     })
 
     it('should persist update to database', async () => {
@@ -1366,6 +1371,10 @@ describe('AssistantDataService', () => {
       const pinRows = await dbh.db.select().from(pinTable)
       expect(pinRows).toHaveLength(0)
       expect(notifyDataApiDataChangeMock).toHaveBeenCalledWith([{ endpoint: '/pins', kind: 'membership' }])
+      expect(notifyDataApiDataChangeMock).toHaveBeenCalledWith([
+        { endpoint: '/assistants', kind: 'membership', entityIds: ['ast-1'] },
+        { endpoint: '/assistants/:id', entityIds: ['ast-1'] }
+      ])
     })
 
     it('should remove prompt bindings for the deleted assistant', async () => {

@@ -22,7 +22,9 @@ const {
   selectionServiceMock,
   quickAssistantServiceMock,
   commandServiceMock,
-  globalShortcutMock
+  globalShortcutMock,
+  appMock,
+  powerServiceMock
 } = vi.hoisted(() => ({
   windowServiceMock: {
     onMainWindowCreated: vi.fn(),
@@ -31,7 +33,8 @@ const {
   },
   windowManagerMock: {
     open: vi.fn(),
-    broadcastToType: vi.fn()
+    broadcastToType: vi.fn(),
+    onWindowCreatedByType: vi.fn()
   },
   selectionServiceMock: {
     toggleEnabled: vi.fn(),
@@ -45,7 +48,16 @@ const {
   },
   globalShortcutMock: {
     register: vi.fn(),
-    unregister: vi.fn()
+    unregister: vi.fn(),
+    isRegistered: vi.fn()
+  },
+  appMock: {
+    on: vi.fn(),
+    removeListener: vi.fn()
+  },
+  powerServiceMock: {
+    onResume: vi.fn(),
+    onUnlockScreen: vi.fn()
   }
 }))
 
@@ -56,7 +68,8 @@ vi.mock('@application', async () => {
     WindowManager: windowManagerMock,
     SelectionService: selectionServiceMock,
     QuickAssistantService: quickAssistantServiceMock,
-    CommandService: commandServiceMock
+    CommandService: commandServiceMock,
+    PowerService: powerServiceMock
   } as any)
 })
 
@@ -80,6 +93,7 @@ vi.mock('@main/core/lifecycle', () => {
 })
 
 vi.mock('electron', () => ({
+  app: appMock,
   globalShortcut: globalShortcutMock
 }))
 
@@ -153,10 +167,18 @@ describe('ShortcutService', () => {
   let service: ShortcutService
   let mainWindow: MockBrowserWindow
   let currentMainWindow: MockBrowserWindow
+  let mainWindowCreated: ((window: MockBrowserWindow) => void) | undefined
+  let quickAssistantWindowCreated: ((managed: { window: MockBrowserWindow }) => void) | undefined
+  let nativeAccelerators: Set<string>
+  let onPowerResume: (() => void) | undefined
+  let onUnlockScreen: (() => void) | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
     MockMainPreferenceServiceUtils.resetMocks()
+    nativeAccelerators = new Set()
+    onPowerResume = undefined
+    onUnlockScreen = undefined
 
     mainWindow = new MockBrowserWindow()
     currentMainWindow = mainWindow
@@ -164,11 +186,34 @@ describe('ShortcutService', () => {
     // Tests exercise the same path by firing the callback synchronously on subscribe.
     // Tests that simulate a service restart can reassign `currentMainWindow` before the second onInit.
     windowServiceMock.onMainWindowCreated.mockImplementation((callback: (window: MockBrowserWindow) => void) => {
+      mainWindowCreated = callback
       callback(currentMainWindow)
       return { dispose: vi.fn() }
     })
+    quickAssistantWindowCreated = undefined
+    windowManagerMock.onWindowCreatedByType.mockImplementation(
+      (type: WindowType, callback: (managed: { window: MockBrowserWindow }) => void) => {
+        if (type === WindowType.QuickAssistant) quickAssistantWindowCreated = callback
+        return { dispose: vi.fn() }
+      }
+    )
 
-    globalShortcutMock.register.mockReturnValue(true)
+    globalShortcutMock.register.mockImplementation((accelerator: string) => {
+      nativeAccelerators.add(accelerator)
+      return true
+    })
+    globalShortcutMock.unregister.mockImplementation((accelerator: string) => {
+      nativeAccelerators.delete(accelerator)
+    })
+    globalShortcutMock.isRegistered.mockImplementation((accelerator: string) => nativeAccelerators.has(accelerator))
+    powerServiceMock.onResume.mockImplementation((callback: () => void) => {
+      onPowerResume = callback
+      return { dispose: vi.fn() }
+    })
+    powerServiceMock.onUnlockScreen.mockImplementation((callback: () => void) => {
+      onUnlockScreen = callback
+      return { dispose: vi.fn() }
+    })
 
     service = new ShortcutService()
   })
@@ -205,6 +250,27 @@ describe('ShortcutService', () => {
 
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(commandServiceMock.execute).toHaveBeenCalledWith('app.zoom.in', mainWindow)
+  })
+
+  it('handles zoom-out from the quick assistant window', async () => {
+    await (service as any).onInit()
+    const quickAssistant = new MockBrowserWindow()
+    quickAssistantWindowCreated?.({ window: quickAssistant })
+
+    const event = { preventDefault: vi.fn() }
+    quickAssistant.emitWebContents('before-input-event', event, {
+      type: 'keyDown',
+      key: '-',
+      code: 'Minus',
+      control: process.platform !== 'darwin',
+      meta: process.platform === 'darwin',
+      alt: false,
+      shift: false,
+      isComposing: false
+    })
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(commandServiceMock.execute).toHaveBeenCalledWith('app.zoom.out', quickAssistant)
   })
 
   it.each([
@@ -306,6 +372,42 @@ describe('ShortcutService', () => {
     expect(commandServiceMock.execute).toHaveBeenCalledWith('app.window.show', mainWindow)
   })
 
+  it('restores a native shortcut registration lost while the app was inactive', async () => {
+    MockMainPreferenceServiceUtils.setPreferenceValue('shortcut.quick_assistant.toggle', {
+      binding: ['CommandOrControl', 'E'],
+      enabled: true
+    })
+    MockMainPreferenceServiceUtils.setPreferenceValue('feature.quick_assistant.enabled', true)
+    await (service as any).onInit()
+
+    nativeAccelerators.delete('CommandOrControl+E')
+    globalShortcutMock.register.mockClear()
+
+    const onActivate = appMock.on.mock.calls.find(([event]) => event === 'activate')?.[1] as (() => void) | undefined
+    onActivate?.()
+
+    expect(globalShortcutMock.register).toHaveBeenCalledWith('CommandOrControl+E', expect.any(Function))
+    expect(globalShortcutMock.isRegistered).toHaveBeenCalledWith('CommandOrControl+E')
+  })
+
+  it.each([
+    ['power resume', () => onPowerResume?.()],
+    ['screen unlock', () => onUnlockScreen?.()]
+  ])('reconciles native shortcut registrations after %s', async (_event, emitEvent) => {
+    MockMainPreferenceServiceUtils.setPreferenceValue('shortcut.quick_assistant.toggle', {
+      binding: ['CommandOrControl', 'E'],
+      enabled: true
+    })
+    MockMainPreferenceServiceUtils.setPreferenceValue('feature.quick_assistant.enabled', true)
+    await (service as any).onInit()
+
+    nativeAccelerators.delete('CommandOrControl+E')
+    globalShortcutMock.register.mockClear()
+    emitEvent()
+
+    expect(globalShortcutMock.register).toHaveBeenCalledWith('CommandOrControl+E', expect.any(Function))
+  })
+
   it('executes the settings command through CommandService', async () => {
     await (service as any).onInit()
 
@@ -393,7 +495,7 @@ describe('ShortcutService', () => {
     globalShortcutMock.register.mockClear()
     globalShortcutMock.unregister.mockClear()
 
-    ;(service as any).registerForWindow(nextWindow)
+    mainWindowCreated?.(nextWindow)
 
     expect(globalShortcutMock.unregister).toHaveBeenCalledWith('CommandOrControl+M')
 
@@ -459,6 +561,33 @@ describe('ShortcutService', () => {
         key: 'shortcut.app.window.show',
         hasConflict: true
       })
+    )
+  })
+
+  it('clears a shortcut conflict when activation reconciliation succeeds', async () => {
+    MockMainPreferenceServiceUtils.setPreferenceValue('shortcut.app.window.show', {
+      binding: ['CommandOrControl', '0'],
+      enabled: true
+    })
+    globalShortcutMock.register.mockReturnValue(false)
+    await (service as any).onInit()
+
+    windowManagerMock.broadcastToType.mockClear()
+    globalShortcutMock.register.mockImplementation((accelerator: string) => {
+      nativeAccelerators.add(accelerator)
+      return true
+    })
+
+    const onActivate = appMock.on.mock.calls.find(([event]) => event === 'activate')?.[1] as (() => void) | undefined
+    onActivate?.()
+
+    expect(windowManagerMock.broadcastToType).toHaveBeenCalledWith(
+      WindowType.Main,
+      IpcChannel.Shortcut_RegistrationConflict,
+      {
+        key: 'shortcut.app.window.show',
+        hasConflict: false
+      }
     )
   })
 })

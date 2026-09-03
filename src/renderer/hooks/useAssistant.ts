@@ -16,7 +16,7 @@
  *  - {@link import('./useKnowledgeBase').useKnowledgeBases} for KBs
  */
 
-import { useMutation, useQuery } from '@data/hooks/useDataApi'
+import { useDataChange, useMutation, useQuery } from '@data/hooks/useDataApi'
 import { usePreference } from '@data/hooks/usePreference'
 import { loggerService } from '@logger'
 import { useModelById } from '@renderer/hooks/useModel'
@@ -73,6 +73,15 @@ export function useAssistantApiById(id: string | undefined) {
     enabled: !!id,
     swrOptions: { keepPreviousData: false }
   })
+  useDataChange(
+    '/assistants/:id',
+    (effects) => {
+      if (id && effects.some((effect) => !effect.entityIds || effect.entityIds.includes(id))) {
+        void mutate()
+      }
+    },
+    { routeParams: id ? { id } : undefined }
+  )
 
   return {
     assistant: data,

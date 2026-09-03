@@ -33,7 +33,6 @@ import { toast } from '@renderer/services/toast'
 import type { Assistant } from '@renderer/types/assistant'
 import { cn } from '@renderer/utils/style'
 import HomeWindow from '@renderer/windows/quickAssistant/home/HomeWindow'
-import type { Model } from '@shared/data/types/model'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, ChevronDown, Info } from 'lucide-react'
 import type React from 'react'
@@ -210,11 +209,7 @@ const QuickAssistantSettings: FC = () => {
                         variant="outline"
                         className="h-8.5 w-75 justify-between px-2 shadow-none"
                         aria-expanded={assistantSelectOpen}>
-                        <AssistantOption
-                          assistant={selectedAssistant}
-                          firstAssistantId={firstAssistantId}
-                          defaultModel={defaultModel}
-                        />
+                        <AssistantOption assistant={selectedAssistant} firstAssistantId={firstAssistantId} />
                         <ChevronDown size={16} className="shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -238,11 +233,7 @@ const QuickAssistantSettings: FC = () => {
                                 onSelect={() => {
                                   handleAssistantSelect(assistant.id)
                                 }}>
-                                <AssistantOption
-                                  assistant={assistant}
-                                  firstAssistantId={firstAssistantId}
-                                  defaultModel={defaultModel}
-                                />
+                                <AssistantOption assistant={assistant} firstAssistantId={firstAssistantId} />
                                 {assistant.id === quickAssistantId && (
                                   <Check size={14} className="ml-auto text-primary" />
                                 )}
@@ -273,21 +264,16 @@ const QuickAssistantSettings: FC = () => {
   )
 }
 
-const AssistantOption = ({
-  assistant,
-  firstAssistantId,
-  defaultModel
-}: {
-  assistant: Assistant
-  firstAssistantId?: string
-  defaultModel: Model | undefined
-}) => {
+const AssistantOption = ({ assistant, firstAssistantId }: { assistant: Assistant; firstAssistantId?: string }) => {
   const { t } = useTranslation()
   const isDefault = !!firstAssistantId && assistant.id === firstAssistantId
+  const assistantModel = assistant.modelId
+    ? { id: assistant.modelId, name: assistant.modelName ?? assistant.modelId }
+    : undefined
 
   return (
     <AssistantItem>
-      <ModelAvatar model={defaultModel} size={18} />
+      <ModelAvatar model={assistantModel} size={18} />
       <AssistantName>{assistant.name}</AssistantName>
       <Spacer />
       {isDefault && <DefaultTag isCurrent={true}>{t('settings.models.quick_assistant_default_tag')}</DefaultTag>}
