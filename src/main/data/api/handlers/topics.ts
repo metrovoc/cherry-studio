@@ -16,6 +16,7 @@ import {
   DeleteTopicQuerySchema,
   DuplicateTopicSchema,
   LatestTopicQuerySchema,
+  ListAssistantTopicsQuerySchema,
   ListTopicsQuerySchema,
   MoveTopicSchema,
   ReuseOrCreateTopicSchema,
@@ -93,6 +94,18 @@ export const topicHandlers: HandlersFor<TopicSchemas> = {
       return topicService.duplicate(params.id, parsed)
     }
   },
+
+  '/assistants/:assistantId/topics': {
+    GET: async ({ params, query }) => {
+      const parsed = ListAssistantTopicsQuerySchema.parse(query ?? {})
+      return topicService.listByAssistantActivityCursor(params.assistantId, parsed)
+    },
+
+    DELETE: async ({ params }) => {
+      return topicService.deleteByAssistantId(params.assistantId)
+    }
+  },
+
   '/topics/:id/order': {
     PATCH: async ({ params, body }) => {
       const parsed = OrderRequestSchema.parse(body)
