@@ -12,6 +12,7 @@ await prepareWindow({
     'ui.theme_mode',
     'ui.theme_user.color_primary',
     'feature.selection.compact',
+    'feature.selection.show_toolbar_logo',
     'feature.selection.action_items'
   ]
 })
