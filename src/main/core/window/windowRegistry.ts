@@ -292,8 +292,9 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       fullscreenable: false,
       platformOverrides: {
         mac: {
-          // Preserve the foreground app's Space and Stage Manager group when taking keyboard focus.
+          // A floating launcher must be transient when ordered so WindowServer assigns it to the active Spaces.
           type: 'panel',
+          hiddenInMissionControl: true,
           transparent: true,
           vibrancy: 'under-window',
           visualEffectState: 'followWindow'
