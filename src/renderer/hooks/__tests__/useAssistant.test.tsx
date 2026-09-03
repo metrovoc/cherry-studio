@@ -1,4 +1,4 @@
-import { mockUseQuery } from '@test-mocks/renderer/useDataApi'
+import { MockUseDataApiUtils, mockUseQuery } from '@test-mocks/renderer/useDataApi'
 import { MockUsePreferenceUtils } from '@test-mocks/renderer/usePreference'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ function resetQueryMock() {
 
 describe('useAssistants', () => {
   beforeEach(() => {
+    MockUseDataApiUtils.resetMocks()
     vi.clearAllMocks()
     resetQueryMock()
     MockUsePreferenceUtils.resetMocks()
@@ -53,6 +54,7 @@ describe('useAssistants', () => {
 
 describe('useAssistant', () => {
   beforeEach(() => {
+    MockUseDataApiUtils.resetMocks()
     vi.clearAllMocks()
     resetQueryMock()
     MockUsePreferenceUtils.resetMocks()
@@ -173,6 +175,29 @@ describe('useAssistant', () => {
       enabled: true,
       swrOptions: { keepPreviousData: false }
     })
+  })
+
+  it('refreshes only when the selected assistant changes in another window', () => {
+    const mutate = vi.fn().mockResolvedValue(undefined)
+    mockUseQuery.mockImplementation((path) => {
+      if (path === '/assistants/:id') {
+        return {
+          ...(queryResult({ id: 'assistant-1', modelId: null, settings: {} }) as unknown as Record<string, unknown>),
+          mutate
+        } as never
+      }
+      return queryResult()
+    })
+    renderHook(() => useAssistant('assistant-1'))
+
+    MockUseDataApiUtils.emitDataChange([
+      { endpoint: '/assistants/:id', entityIds: ['assistant-2'] },
+      { endpoint: '/assistants', kind: 'projection', entityIds: ['assistant-2'] }
+    ])
+    expect(mutate).not.toHaveBeenCalled()
+
+    MockUseDataApiUtils.emitDataChange([{ endpoint: '/assistants/:id', entityIds: ['assistant-1'] }])
+    expect(mutate).toHaveBeenCalledTimes(1)
   })
 
   it('keeps assistant mutation callbacks stable across rerenders', () => {

@@ -11,8 +11,8 @@ import QuickAssistantSettings from '../QuickAssistantSettings'
 
 const assistantState = vi.hoisted(() => ({
   assistants: [
-    { id: 'assistant-1', name: 'Assistant 1' },
-    { id: 'assistant-2', name: 'Assistant 2' }
+    { id: 'assistant-1', name: 'Assistant 1', modelId: 'provider::model-1', modelName: 'Model 1' },
+    { id: 'assistant-2', name: 'Assistant 2', modelId: 'provider::model-2', modelName: 'Model 2' }
   ],
   hasLoaded: true
 }))
@@ -28,6 +28,10 @@ const defaultModelFixture = {
   isEnabled: true,
   isHidden: false
 } satisfies Model
+
+const modelAvatarMock = vi.hoisted(() =>
+  vi.fn(({ model }: { model?: { id: string; name: string }; size: number }) => <span data-model-id={model?.id} />)
+)
 
 vi.mock('@cherrystudio/ui', async () => {
   const React = await import('react')
@@ -147,7 +151,7 @@ vi.mock('@renderer/services/toast', () => ({
 }))
 
 vi.mock('@renderer/components/Avatar/ModelAvatar', () => ({
-  default: () => null
+  default: modelAvatarMock
 }))
 
 vi.mock('@renderer/windows/quickAssistant/home/HomeWindow', () => ({
@@ -166,12 +170,13 @@ describe('QuickAssistantSettings', () => {
     MockUsePreferenceUtils.setPreferenceValue('feature.quick_assistant.enabled', true)
     MockUsePreferenceUtils.setPreferenceValue('feature.quick_assistant.save_conversations', false)
     assistantState.assistants = [
-      { id: 'assistant-1', name: 'Assistant 1' },
-      { id: 'assistant-2', name: 'Assistant 2' }
+      { id: 'assistant-1', name: 'Assistant 1', modelId: 'provider::model-1', modelName: 'Model 1' },
+      { id: 'assistant-2', name: 'Assistant 2', modelId: 'provider::model-2', modelName: 'Model 2' }
     ]
     assistantState.hasLoaded = true
     modelState.defaultModel = undefined
     navigateMock.mockClear()
+    modelAvatarMock.mockClear()
   })
 
   it('separates default-model mode from its model configuration', async () => {
@@ -227,7 +232,9 @@ describe('QuickAssistantSettings', () => {
 
     expect(screen.getByRole('radio', { name: 'settings.models.use_assistant' })).toHaveAttribute('aria-checked', 'true')
 
-    assistantState.assistants = [{ id: 'assistant-2', name: 'Assistant 2' }]
+    assistantState.assistants = [
+      { id: 'assistant-2', name: 'Assistant 2', modelId: 'provider::model-2', modelName: 'Model 2' }
+    ]
     rerender(<QuickAssistantSettings />)
 
     expect(screen.getByRole('radio', { name: 'settings.models.use_model' })).toHaveAttribute('aria-checked', 'true')
@@ -267,6 +274,17 @@ describe('QuickAssistantSettings', () => {
       expect(MockUsePreferenceUtils.getPreferenceValue('feature.quick_assistant.assistant_id')).toBe('assistant-2')
     })
     expect(screen.queryByTestId('assistant-popover')).not.toBeInTheDocument()
+  })
+
+  it('renders each assistant with its own model avatar', () => {
+    MockUsePreferenceUtils.setPreferenceValue('feature.quick_assistant.assistant_id', 'assistant-1')
+    render(<QuickAssistantSettings />)
+
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    const renderedModelIds = modelAvatarMock.mock.calls.map(([props]) => props.model?.id)
+    expect(renderedModelIds).toContain('provider::model-1')
+    expect(renderedModelIds).toContain('provider::model-2')
   })
 
   it('enables history saving only when an assistant is selected', async () => {
