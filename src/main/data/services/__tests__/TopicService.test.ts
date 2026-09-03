@@ -472,6 +472,68 @@ describe('TopicService', () => {
     })
   })
 
+  describe('listByAssistantActivityCursor', () => {
+    it('returns only the assistant topics in stable newest-first pages', async () => {
+      const service = new TopicService()
+      await dbh.db.insert(assistantTable).values([
+        {
+          id: 'history-assistant',
+          name: 'History',
+          emoji: '🌟',
+          settings: DEFAULT_ASSISTANT_SETTINGS,
+          orderKey: 'a0'
+        },
+        {
+          id: 'other-assistant',
+          name: 'Other',
+          emoji: '🌟',
+          settings: DEFAULT_ASSISTANT_SETTINGS,
+          orderKey: 'a1'
+        }
+      ])
+      await dbh.db.insert(topicTable).values([
+        {
+          id: 'newer-a',
+          name: 'Newer A',
+          assistantId: 'history-assistant',
+          orderKey: 'a0',
+          lastActivityAt: 300
+        },
+        {
+          id: 'newer-b',
+          name: 'Newer B',
+          assistantId: 'history-assistant',
+          orderKey: 'a1',
+          lastActivityAt: 300
+        },
+        {
+          id: 'older',
+          name: 'Older',
+          assistantId: 'history-assistant',
+          orderKey: 'a2',
+          lastActivityAt: 100
+        },
+        {
+          id: 'other',
+          name: 'Other',
+          assistantId: 'other-assistant',
+          orderKey: 'a3',
+          lastActivityAt: 400
+        }
+      ])
+
+      const first = service.listByAssistantActivityCursor('history-assistant', { limit: 2 })
+      const second = service.listByAssistantActivityCursor('history-assistant', {
+        limit: 2,
+        cursor: first.nextCursor
+      })
+
+      expect(first.items.map((topic) => topic.id)).toEqual(['newer-a', 'newer-b'])
+      expect(second.items.map((topic) => topic.id)).toEqual(['older'])
+      expect(second.nextCursor).toBeUndefined()
+    })
+  })
+
   describe('delete', () => {
     it('should remove topic messages and entity tags in one delete flow', async () => {
       await dbh.db

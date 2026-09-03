@@ -308,9 +308,9 @@
     {
       "targetKey": "feature.quick_assistant.save_conversations",
       "type": "boolean",
-      "defaultValue": false,
+      "defaultValue": true,
       "status": "classified",
-      "description": "Save Quick Assistant conversations to the selected assistant's history"
+      "description": "Keep Quick Assistant conversations in assistant history and enable conversation navigation"
     },
     {
       "targetKey": "feature.selection.save_conversations",

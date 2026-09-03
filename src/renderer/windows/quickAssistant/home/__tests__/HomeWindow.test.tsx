@@ -43,13 +43,15 @@ const state = vi.hoisted(() => ({
   clearExecutionMessages: vi.fn(),
   resetTemporaryTopic: vi.fn(),
   persistTemporaryTopic: vi.fn(),
-  setQuickAssistantId: vi.fn()
+  setQuickAssistantId: vi.fn(),
+  ipcRequest: vi.fn(),
+  historyTopics: [] as Array<{ id: string; name: string }>
 }))
 
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
 
 vi.mock('@renderer/ipc', () => ({
-  ipcApi: { request: vi.fn(), on: vi.fn(() => () => {}) },
+  ipcApi: { request: state.ipcRequest, on: vi.fn(() => () => {}) },
   useIpcOn: vi.fn()
 }))
 
@@ -112,6 +114,20 @@ vi.mock('@renderer/hooks/useExecutionOverlay', () => ({
     liveAssistants: state.liveAssistants,
     reset: state.resetExecutionMessages,
     clear: state.clearExecutionMessages
+  })
+}))
+
+vi.mock('@renderer/hooks/useTopicMessages', () => ({
+  useTopicMessages: () => ({ uiMessages: [], activeNodeId: null, isLoading: false })
+}))
+
+vi.mock('../hooks/useQuickAssistantHistory', () => ({
+  useQuickAssistantHistory: () => ({
+    topics: state.historyTopics,
+    isLoading: false,
+    isRefreshing: false,
+    hasNext: false,
+    loadNext: vi.fn()
   })
 }))
 
@@ -241,6 +257,8 @@ describe('HomeWindow', () => {
     state.resetTemporaryTopic.mockClear()
     state.persistTemporaryTopic.mockReset().mockResolvedValue(undefined)
     state.setQuickAssistantId.mockClear()
+    state.ipcRequest.mockClear()
+    state.historyTopics = []
   })
 
   it('persists an assistant selected from the quick assistant home view', async () => {
@@ -421,5 +439,34 @@ describe('HomeWindow', () => {
     await waitFor(() => {
       expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
     })
+  })
+
+  it('navigates saved assistant history and opens the exact topic in the main app', async () => {
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    state.historyTopics = [{ id: 'saved-topic', name: 'Saved topic' }]
+
+    render(<HomeWindow draggable={false} />)
+    fireEvent.keyDown(window, { code: 'BracketLeft', metaKey: true })
+
+    expect(await screen.findByText('Saved topic')).toBeInTheDocument()
+    fireEvent.keyDown(window, { code: 'KeyJ', metaKey: true })
+
+    expect(state.ipcRequest).toHaveBeenCalledWith('navigation.focus_or_open_conversation', {
+      target: { conversationType: 'assistant', conversationId: 'saved-topic' },
+      title: 'Saved topic'
+    })
+  })
+
+  it('does not expose conversation navigation in Temporary mode', () => {
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = false
+    state.historyTopics = [{ id: 'saved-topic', name: 'Saved topic' }]
+
+    render(<HomeWindow draggable={false} />)
+    fireEvent.keyDown(window, { code: 'BracketLeft', metaKey: true })
+
+    expect(screen.queryByRole('button', { name: 'quickAssistant.history.older' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Saved topic')).not.toBeInTheDocument()
   })
 })
