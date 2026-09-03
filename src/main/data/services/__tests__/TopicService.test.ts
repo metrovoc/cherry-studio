@@ -132,6 +132,7 @@ describe('TopicService', () => {
       { endpoint: '/topics', kind: 'projection', entityIds: ['topic-name-only'] },
       { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-name-only'] },
       { endpoint: '/topics/:id', entityIds: ['topic-name-only'] },
+      { endpoint: '/assistants/:assistantId/topics', kind: 'projection', entityIds: ['topic-name-only'] },
       { endpoint: '/topics/latest' }
     ])
   })
@@ -572,6 +573,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-1'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-1'] },
         { endpoint: '/topics/:id', routeParams: { id: 'topic-1' }, entityIds: ['topic-1'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-1'] },
         { endpoint: '/topics/latest' }
       ])
       expect(notifyDataApiDataChangeMock).toHaveBeenNthCalledWith(2, [{ endpoint: '/pins', kind: 'membership' }])
@@ -590,6 +592,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics/:id', entityIds: ['topic-1', 'topic-2'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-1', 'topic-2'] },
         { endpoint: '/topics/latest' }
       ])
 
@@ -602,6 +605,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: ['topic-3'] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: ['topic-3'] },
         { endpoint: '/topics/:id', routeParams: { id: 'topic-3' }, entityIds: ['topic-3'] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: ['topic-3'] },
         { endpoint: '/topics/latest' }
       ])
     })
@@ -1103,6 +1107,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: [result.id] },
         { endpoint: '/topics/:id', entityIds: [result.id] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics/latest' }
       ])
       expect(result.activeNodeId).toBeUndefined()
@@ -1245,6 +1250,7 @@ describe('TopicService', () => {
         { endpoint: '/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics', kind: 'order', dimension: 'lastActivityAt', entityIds: [result.id] },
         { endpoint: '/topics/:id', entityIds: [result.id] },
+        { endpoint: '/assistants/:assistantId/topics', kind: 'membership', entityIds: [result.id] },
         { endpoint: '/topics/latest' }
       ])
       expect(result.id).not.toBe('src-t')

@@ -89,7 +89,7 @@ export class TemporaryChatContextProvider implements ChatContextProvider {
       : undefined
 
     // Append user first so `history` (listMessages) includes it. User rows carry only `modelId`.
-    temporaryChatService.appendMessage(req.topicId, {
+    const userMessage = temporaryChatService.appendMessage(req.topicId, {
       role: 'user',
       data: { parts: req.userMessageParts },
       status: 'success',
@@ -138,7 +138,19 @@ export class TemporaryChatContextProvider implements ChatContextProvider {
     return {
       topicId: req.topicId,
       models: [{ modelId: model.id, request: streamRequest }],
-      listeners
+      listeners,
+      reservedMessages: [
+        {
+          id: userMessage.id,
+          role: 'user',
+          parts: userMessage.data.parts ?? [],
+          metadata: {
+            modelId: userMessage.modelId ?? undefined,
+            status: userMessage.status,
+            createdAt: userMessage.createdAt
+          }
+        }
+      ]
     }
   }
 }

@@ -11,10 +11,11 @@ export function useQuickAssistantHistory(assistantId: string | undefined, enable
   const { refresh } = query
 
   useDataChange(
-    '/topics',
+    '/assistants/:assistantId/topics',
     useCallback(() => {
       if (enabled && assistantId) void refresh()
-    }, [assistantId, enabled, refresh])
+    }, [assistantId, enabled, refresh]),
+    { routeParams: { assistantId: assistantId ?? '' } }
   )
 
   return { ...query, topics }

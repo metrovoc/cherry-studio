@@ -8,12 +8,12 @@ date: 2026-09-03
 
 ## What changed
 
-Quick Assistant now defaults to Saved conversation mode, which uses an assistant and supports browsing recent conversations or opening the current one in the main app. Temporary mode keeps conversations disposable and allows direct model use.
+Quick Assistant defaults to Saved conversation mode for fresh profiles and profiles without a stored conversation-mode preference. Saved mode uses an assistant and supports browsing recent conversations or opening the current one in the main app. Existing profiles keep their stored choice. Temporary mode keeps conversations disposable and allows direct model use.
 
 ## Why this matters to the user
 
-New Quick Assistant conversations remain available by default. Users who prefer disposable conversations can select Temporary in Quick Assistant settings.
+New profiles save Quick Assistant conversations by default. Existing profiles retain their current setting, and users who prefer disposable conversations can select Temporary in Quick Assistant settings.
 
 ## What the user should do
 
-Nothing — automatic. Select Temporary only when conversation history is not wanted.
+No action is required. Select Temporary when conversation history is not wanted.
