@@ -28,7 +28,6 @@ const qwenBudgetWire: ReasoningWireProfile = {
 const chatFixedModels = [
   'glm-5',
   'glm-5-1',
-  'hy4-preview',
   'kimi-k2-5',
   'kimi-k2-6',
   'kimi-k2-7-code',
@@ -60,6 +59,7 @@ const chatEffortModels: Array<{
     }
   },
   { modelId: 'hy3', values: ['none', 'low', 'high'] },
+  { modelId: 'hy4-preview', values: ['none', 'high'] },
   { modelId: 'kimi-k3', values: ['max'] },
   // Stealth model, no creator entry: models.dev routes it through `@ai-sdk/openai-compatible`
   // and prints an effort ladder, so pin chat/completions rather than let it fall back unpinned.
@@ -120,6 +120,13 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
   },
   {
     modelId: 'muse-spark-1-2-contributor',
+    endpointTypes: ['openai-responses' as const],
+    reasoningContracts: {
+      'openai-responses': { support: effortSupport(['minimal', 'low', 'medium', 'high', 'xhigh']) }
+    }
+  },
+  {
+    modelId: 'muse-spark-1-3-contributor',
     endpointTypes: ['openai-responses' as const],
     reasoningContracts: {
       'openai-responses': { support: effortSupport(['minimal', 'low', 'medium', 'high', 'xhigh']) }

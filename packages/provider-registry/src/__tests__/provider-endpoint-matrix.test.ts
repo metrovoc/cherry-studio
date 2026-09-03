@@ -120,6 +120,12 @@ describe('MiniMax endpoint matrix', () => {
   )
 })
 
+describe('openrouter server tools', () => {
+  it('advertises web search without coupling it to URL fetching', () => {
+    expect(provider('openrouter').serverTools).toEqual([{ id: 'web-search', modelScope: 'all-chat-models' }])
+  })
+})
+
 /**
  * OpenCode Go multiplexes three wire protocols over one base URL, and the protocol per model is
  * published as models.dev's per-model `provider.npm` (`@ai-sdk/openai` → Responses, `@ai-sdk/anthropic`
@@ -157,7 +163,7 @@ describe('opencode (Zen Go) endpoint matrix', () => {
     }
   )
 
-  it.each(['hy4-preview', 'hy3', 'kimi-k3', 'glm-5-2'])('pins %s to Chat Completions', (modelId) => {
+  it.each(['hy3', 'hy4-preview', 'kimi-k3', 'glm-5-2', 'longcat-2-0'])('pins %s to Chat Completions', (modelId) => {
     expect(endpointsOf('opencode', modelId)).toEqual(['openai-chat-completions'])
   })
 })
