@@ -262,7 +262,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
 
   // Quick Assistant window — singleton floating panel.
   // Managed by QuickAssistantService: visibility is driven by showQuickAssistant()
-  // (cursor-follow, Windows opacity dance, macOS app.hide). Window position/size are
+  // (cursor-follow and Windows opacity dance). Window position/size are
   // restored by WindowManager via `rememberBounds`.
   [WindowType.QuickAssistant]: {
     type: WindowType.QuickAssistant,
@@ -292,6 +292,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       fullscreenable: false,
       platformOverrides: {
         mac: {
+          // Preserve the foreground app's Space and Stage Manager group when taking keyboard focus.
           type: 'panel',
           transparent: true,
           vibrancy: 'under-window',
@@ -307,13 +308,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       }
     },
     behavior: {
-      // NOTE: QuickAssistant intentionally does NOT declare `hideOnBlur` here.
-      // Its blur handler calls `hideQuickAssistant()`, which is platform-specific
-      // business policy (Windows uses minimize + setOpacity(0) to avoid flicker;
-      // macOS <26 additionally calls `app.hide()` to return focus to the previous
-      // app). `behavior.hideOnBlur` would only invoke `window.hide()` — losing
-      // both behaviors on those platforms. QuickAssistantService keeps its
-      // blur handler and its internal `isPinnedQuickAssistant` flag.
+      // QuickAssistantService owns auto-hide: Cocoa key focus on macOS, minimize + opacity on Windows.
       // `new BrowserWindow({ alwaysOnTop: true })` cannot accept a level — the
       // floating level is applied by applyWindowBehavior on create, and kept
       // across show cycles by the reapplyAlwaysOnTop quirk below.
