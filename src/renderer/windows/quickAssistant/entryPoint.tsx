@@ -19,7 +19,8 @@ await prepareWindow({
     'feature.quick_assistant.read_clipboard_at_startup',
     'feature.voice.dictation.hold_shortcut',
     'feature.voice.dictation.mouse_hold_enabled',
-    'feature.voice.dictation.toggle_shortcut'
+    'feature.voice.dictation.toggle_shortcut',
+    'feature.quick_assistant.save_conversations'
   ]
 })
 
