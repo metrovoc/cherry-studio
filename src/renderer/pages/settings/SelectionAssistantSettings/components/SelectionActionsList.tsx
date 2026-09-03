@@ -31,11 +31,12 @@ import SettingsActionsListHeader from './SettingsActionsListHeader'
 interface SelectionActionsListProps {
   actionItems: SelectionAction[] // List of all available actions
   setActionItems: (items: SelectionActionItem[]) => void // Function to update action items
+  showToolbarLogo: boolean
 }
 
 const getActionRowId = (row: ActionRow) => (row === ACTIONS_DIVIDER ? ACTIONS_DIVIDER : row.id)
 
-const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setActionItems }) => {
+const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setActionItems, showToolbarLogo }) => {
   const {
     enabledItems,
     customItemsCount,
@@ -89,6 +90,7 @@ const SelectionActionsList: FC<SelectionActionsListProps> = ({ actionItems, setA
           handleAction={() => {}}
           copyIconStatus="normal"
           copyIconAnimation="none"
+          showLogo={showToolbarLogo}
         />
       </div>
 

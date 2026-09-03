@@ -57,6 +57,7 @@ const updateWindowSize = (contentElement?: HTMLElement | null) => {
 
 const SelectionToolbar: FC = () => {
   const [isCompact] = usePreference('feature.selection.compact')
+  const [showLogo] = usePreference('feature.selection.show_toolbar_logo')
   const [actionItems] = usePreference('feature.selection.action_items')
   const [copyIconStatus, setCopyIconStatus] = useState<'normal' | 'success' | 'fail'>('normal')
   const [copyIconAnimation, setCopyIconAnimation] = useState<'none' | 'enter' | 'exit'>('none')
@@ -110,7 +111,7 @@ const SelectionToolbar: FC = () => {
   //make sure the toolbar size is updated when the compact mode/actionItems/availability is changed
   useEffect(() => {
     updateWindowSize(toolbarRef.current)
-  }, [isCompact, actionItems, unavailableReasons])
+  }, [isCompact, showLogo, actionItems, unavailableReasons])
 
   /**
    * Check if text is a valid URI or file path
@@ -222,6 +223,7 @@ const SelectionToolbar: FC = () => {
       copyIconStatus={copyIconStatus}
       copyIconAnimation={copyIconAnimation}
       unavailableReasons={unavailableReasons}
+      showLogo={showLogo}
       draggable
     />
   )

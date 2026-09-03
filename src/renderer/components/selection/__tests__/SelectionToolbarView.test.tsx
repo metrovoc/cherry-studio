@@ -23,6 +23,7 @@ describe('SelectionToolbarView unavailable actions', () => {
         copyIconStatus="normal"
         copyIconAnimation="none"
         unavailableReasons={{ 'ask-agent': 'No model set' }}
+        showLogo
       />
     )
 
@@ -34,5 +35,24 @@ describe('SelectionToolbarView unavailable actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Summary' }))
     expect(handleAction).toHaveBeenCalledWith(ACTIONS[1])
+  })
+
+  it('gives the action surface complete rounded corners when the logo is hidden', () => {
+    const { container } = render(
+      <SelectionToolbarView
+        actionItems={[{ id: 'copy', name: 'selection.action.builtin.copy', enabled: true, isBuiltIn: true }]}
+        isCompact
+        handleAction={vi.fn()}
+        copyIconStatus="normal"
+        copyIconAnimation="none"
+        showLogo={false}
+      />
+    )
+
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    const actionSurface = container.firstElementChild?.firstElementChild
+    // These classes are the frameless-window corner and border contract.
+    expect(actionSurface).toHaveClass('rounded-[10px]', '[border-width:0.5px]')
+    expect(actionSurface?.className).toContain('[&>button:first-child]:rounded-l-[10px]')
   })
 })
