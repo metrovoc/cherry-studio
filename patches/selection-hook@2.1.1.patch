@@ -1,0 +1,68 @@
+diff --git a/src/mac/selection_hook.mm b/src/mac/selection_hook.mm
+index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa696c0336 100644
+--- a/src/mac/selection_hook.mm
++++ b/src/mac/selection_hook.mm
+@@ -167,7 +167,8 @@ class SelectionHook : public Napi::ObjectWrap<SelectionHook>
+     Napi::Object CreateSelectionResultObject(Napi::Env env, const TextSelectionInfo &selectionInfo);
+ 
+     // Core functionality methods
+-    bool GetSelectedText(NSRunningApplication *frontApp, TextSelectionInfo &selectionInfo);
++    bool GetSelectedText(NSRunningApplication *frontApp, TextSelectionInfo &selectionInfo,
++                         bool allowClipboardFallback = true);
+     SelectionConfigSnapshot BuildSelectionConfigSnapshot() const;
+ 
+     // Mouse and keyboard event handling methods
+@@ -844,7 +845,8 @@ Napi::Value SelectionHook::GetCurrentSelection(const Napi::CallbackInfo &info)
+  * locked, after which every gesture and getCurrentSelection() silently returns nothing
+  * for the rest of the process.
+  */
+-bool SelectionHook::GetSelectedText(NSRunningApplication *frontApp, TextSelectionInfo &selectionInfo)
++bool SelectionHook::GetSelectedText(NSRunningApplication *frontApp, TextSelectionInfo &selectionInfo,
++                                    bool allowClipboardFallback)
+ {
+     if (!frontApp)
+         return false;
+@@ -861,6 +863,7 @@ bool SelectionHook::GetSelectedText(NSRunningApplication *frontApp, TextSelectio
+     } gateGuard{is_processing};
+ 
+     SelectionConfigSnapshot config = BuildSelectionConfigSnapshot();
++    config.clipboardEnabled = config.clipboardEnabled && allowClipboardFallback;
+     SelectionEngine engine;
+     int64_t endingClipboardSequence = config.clipboardSequence;
+     bool result = engine.GetSelectedText(frontApp, selectionInfo, config, &endingClipboardSequence);
+@@ -1120,6 +1123,7 @@ void SelectionHook::ProcessMouseEvent(Napi::Env env, Napi::Function function, Mo
+     auto mouseFlag = pMouseEvent->flag;
+ 
+     bool shouldDetectSelection = false;
++    bool allowClipboardFallback = true;
+ 
+     auto detectionType = SelectionDetectType::None;  // 0=not set, 1=drag, 2=double click, 3=shift click
+     std::string mouseTypeStr = "";
+@@ -1169,12 +1173,11 @@ void SelectionHook::ProcessMouseEvent(Napi::Env env, Napi::Function function, Mo
+                 // Check for drag selection
+                 else if (distance >= MIN_DRAG_DISTANCE)
+                 {
+-                    // Only support IBeamCursor for now
+-                    if (isValidDragCursor)
+-                    {
+-                        shouldDetectSelection = true;
+-                        detectionType = SelectionDetectType::Drag;
+-                    }
++                    // Cursor updates can lag or remain arrow-shaped over selectable web UI.
++                    // AX reads are side-effect free; only the Cmd+C fallback stays cursor-gated.
++                    shouldDetectSelection = true;
++                    allowClipboardFallback = isValidDragCursor;
++                    detectionType = SelectionDetectType::Drag;
+                 }
+                 // Check for double-click selection
+                 else if (currentInstance->is_last_valid_click && isCurrentValidClick &&
+@@ -1264,7 +1267,8 @@ void SelectionHook::ProcessMouseEvent(Napi::Env env, Napi::Function function, Mo
+         TextSelectionInfo selectionInfo;
+         NSRunningApplication *frontApp = GetFrontApp();
+ 
+-        if (currentInstance->GetSelectedText(frontApp, selectionInfo) && !IsTrimmedEmpty(selectionInfo.text))
++        if (currentInstance->GetSelectedText(frontApp, selectionInfo, allowClipboardFallback) &&
++            !IsTrimmedEmpty(selectionInfo.text))
+         {
+             switch (detectionType)
+             {
