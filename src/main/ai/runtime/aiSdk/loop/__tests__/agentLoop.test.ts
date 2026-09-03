@@ -55,6 +55,25 @@ describe('Agent', () => {
   })
 
   describe('generate', () => {
+    it('reports a structured provider failure to hooks without changing the thrown payload', async () => {
+      const failure = { error: { code: 'server_is_overloaded', message: 'Search service unavailable' } }
+      mockCreateAgent.mockResolvedValue({ generate: vi.fn().mockRejectedValue(failure) })
+      let reported: Error | undefined
+      const agent = await makeAgent({
+        hookParts: [
+          {
+            onError: ({ error }) => {
+              reported = error
+              return 'abort'
+            }
+          }
+        ]
+      })
+
+      await expect(agent.generate({ prompt: 'Search the web' })).rejects.toBe(failure)
+      expect(reported?.message).toBe('Search service unavailable')
+      expect(reported?.cause).toBe(failure)
+    })
     it('routes a trusted terminal tool failure through onError without calling onFinish', async () => {
       const output = markTrustedLocalToolTerminalFailure({
         error: 'terminal failure',
@@ -168,6 +187,38 @@ describe('Agent', () => {
       expect(onError).not.toHaveBeenCalled()
       expect(calls).toEqual(['abort'])
     })
+  })
+
+  it('keeps structured stream errors readable while preserving the original failure', async () => {
+    const failure = { type: 'error', error: { code: 'server_is_overloaded', message: 'Search service unavailable' } }
+    let errorText: string | undefined
+    let reported: Error | undefined
+    mockCreateAgent.mockResolvedValue({
+      stream: vi.fn().mockResolvedValue({
+        toUIMessageStream: (options: { onError: (error: unknown) => string }) =>
+          new ReadableStream({
+            start(controller) {
+              errorText = options.onError(failure)
+              controller.enqueue({ type: 'error', errorText })
+            }
+          })
+      })
+    })
+    const agent = await makeAgent({
+      hookParts: [
+        {
+          onError: ({ error }) => {
+            reported = error
+            return 'abort'
+          }
+        }
+      ]
+    })
+
+    await expect(agent.stream([], new AbortController().signal).getReader().read()).rejects.toBe(failure)
+    expect(errorText).toBe('Search service unavailable')
+    expect(reported?.message).toBe('Search service unavailable')
+    expect(reported?.cause).toBe(failure)
   })
 
   it('pairs a terminal API error with its original after an earlier tool error', async () => {

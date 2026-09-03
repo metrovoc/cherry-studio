@@ -601,7 +601,8 @@ export class ExecutionStreamOverlayService {
             if (!cancelled) logger.warn('readUIMessageStream error', { topicId, executionId, err })
           }
         })) {
-          if (cancelled) break
+          // cancelBranch already stops the input; drain the SDK reader so its producer can finish closing.
+          if (cancelled) continue
           const sharedParts = shareSettledPartReferences(
             last?.parts as CherryMessagePart[] | undefined,
             snapshot.parts as CherryMessagePart[]

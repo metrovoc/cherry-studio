@@ -1,7 +1,7 @@
 /**
  * Builds the `wrapModel` closure that wraps a resolved chat model with
- * ai-retry: same-model transient retry on retryable API errors (429/503/529
- * and other `isRetryable` `APICallError`s, with backoff) first, then
+ * ai-retry: same-model transient retry on retryable API errors and structured
+ * service-unavailable errors (with backoff) first, then
  * cross-model fallback to the user-configured retry models.
  *
  * Fallbacks are built by the caller (`buildFallbackModels`) through
@@ -11,9 +11,7 @@
  * ai-retry policy — it does not load providers/models itself.
  *
  * Strategy is a fixed internal policy (not user-configurable): same-model retry
- * on retryable errors, then cross-model fallback. The retry conditions use
- * ai-retry's condition-based API (`error.isRetryable(true).retry(...)`). The
- * `error.isRetryable(true)` condition matches retryable API errors only; it does
+ * on retryable errors, then cross-model fallback. The retry condition does
  * not handle `AbortSignal.timeout()` style `TimeoutError`s — Cherry's abort
  * signal is the user's cancel/request scope, so timeouts are deliberately not
  * retried here.
@@ -35,6 +33,7 @@ import {
 } from 'ai-retry'
 import { createRetryableModel, error } from 'ai-retry/language-model'
 
+import { serializeError } from '../../../utils/serializeError'
 import type { RetryPolicy } from './retryPolicy'
 
 const logger = loggerService.withContext('ModelRetry')
@@ -89,6 +88,9 @@ function describeAttempt(context: RetryContext<LanguageModelV3>): Extract<RetryP
           : `${error.name}: ${error.message}`
     } else if (error instanceof Error) {
       reason = `${error.name}: ${error.message}`
+    } else {
+      const details = serializeError(error)
+      reason = `${details.code ?? details.name ?? 'Error'}: ${details.message}`
     }
   } else {
     reason = 'result rejected'
@@ -112,13 +114,15 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
     // Same-model transient retry on retryable errors: honors Retry-After headers,
     // otherwise delay + backoff. (`.retry()` requires maxAttempts >= 2, which
     // holds since retryCount >= 1.)
-    error
-      .isRetryable(true)
-      .retry({
-        maxAttempts: retryCount + 1,
-        delay: RETRY_BASE_DELAY_MS,
-        ...(backoffEnabled && { backoffFactor: 2 })
-      }),
+    error((failure) => {
+      if (APICallError.isInstance(failure)) return failure.isRetryable
+      const details = serializeError(failure)
+      return details.code === 'server_is_overloaded' || details.type === 'service_unavailable_error'
+    }).retry({
+      maxAttempts: retryCount + 1,
+      delay: RETRY_BASE_DELAY_MS,
+      ...(backoffEnabled && { backoffFactor: 2 })
+    }),
     // Cross-model fallback, tried in user-configured order (one attempt each).
     // Resolved lazily on first failure (memoized) so the happy path pays nothing;
     // each fallback carries its own middleware + params (a per-retry override).
@@ -170,7 +174,10 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
       },
       onSuccess: settleRetryStatus,
       onFailure: (context) => {
-        const failure = context.error instanceof Error ? context.error : new Error(String(context.error))
+        const failure =
+          context.error instanceof Error
+            ? context.error
+            : new Error(serializeError(context.error).message ?? '', { cause: context.error })
         logger.error('model call failed after retries', failure, {
           ...options.diagnosticContext,
           attempts: context.attempts.length,
@@ -181,7 +188,9 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
                   {
                     modelId: attempt.model.modelId,
                     reason:
-                      attempt.error instanceof Error ? `${attempt.error.name}: ${attempt.error.message}` : 'unknown'
+                      attempt.error instanceof Error
+                        ? `${attempt.error.name}: ${attempt.error.message}`
+                        : serializeError(attempt.error).message
                   }
                 ]
               : []

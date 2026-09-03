@@ -2817,6 +2817,41 @@ describe('AiStreamManager', () => {
   // chunk text translated via `errorFromStreamChunk` (name: 'StreamError').
 
   describe('stream errors', () => {
+    it('delivers structured provider failures to persistence listeners without losing their message or code', async () => {
+      vi.useRealTimers()
+      const failure = {
+        type: 'error',
+        error: {
+          type: 'service_unavailable_error',
+          code: 'server_is_overloaded',
+          message: 'Search service unavailable'
+        }
+      }
+      mockStreamText.mockResolvedValueOnce(
+        new ReadableStream({
+          start(controller) {
+            controller.error(failure)
+          }
+        })
+      )
+      const listener = new FakeListener('l:a')
+      startSingle(mgr, {
+        topicId: 'a',
+        modelId: 'provider-a::model-a',
+        request: req('a'),
+        listeners: [listener]
+      })
+
+      await vi.waitFor(() => expect(listener.errorResults).toHaveLength(1))
+      expect(listener.errorResults[0].error).toMatchObject({
+        name: 'service_unavailable_error',
+        message: 'Search service unavailable',
+        code: 'server_is_overloaded',
+        data: failure
+      })
+      expect(listener.doneResults).toHaveLength(0)
+    })
+
     it.each([
       { statusCode: 400, isRetryable: false, message: 'Maximum context length exceeded' },
       { statusCode: 503, isRetryable: true, message: 'Upstream unavailable' }
