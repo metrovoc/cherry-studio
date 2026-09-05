@@ -3414,6 +3414,7 @@
   "selection.action.translate.smart_translate_tips": "Traducción inteligente: el contenido se traducirá primero al idioma de destino; si el contenido ya está en el idioma de destino, se traducirá al idioma alternativo",
   "selection.action.voice.read_result": "Leer resultado en voz alta",
   "selection.action.window.c_copy": "C Copiar",
+  "selection.action.window.close_all": "Cerrar todas las ventanas de selección",
   "selection.action.window.esc_close": "Esc Cerrar",
   "selection.action.window.esc_stop": "Esc Detener",
   "selection.action.window.opacity": "Transparencia de la ventana",

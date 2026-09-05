@@ -3414,6 +3414,7 @@
   "selection.action.translate.smart_translate_tips": "スマート翻訳: 内容を優先的に対象言語へ翻訳します。すでに対象言語の場合は、予備の言語へ翻訳します。",
   "selection.action.voice.read_result": "結果を読み上げる",
   "selection.action.window.c_copy": "Cでコピー",
+  "selection.action.window.close_all": "選択アシスタントのウィンドウをすべて閉じる",
   "selection.action.window.esc_close": "Escで閉じる",
   "selection.action.window.esc_stop": "Escで停止",
   "selection.action.window.opacity": "ウィンドウの透過度",

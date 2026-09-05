@@ -3414,6 +3414,7 @@
   "selection.action.translate.smart_translate_tips": "Smart Translation: Content will be translated to the target language first; content already in the target language will be translated to the alternative language",
   "selection.action.voice.read_result": "Read result aloud",
   "selection.action.window.c_copy": "C: Copy",
+  "selection.action.window.close_all": "Close all selection windows",
   "selection.action.window.esc_close": "Esc: Close",
   "selection.action.window.esc_stop": "Esc: Stop",
   "selection.action.window.opacity": "Window Opacity",
