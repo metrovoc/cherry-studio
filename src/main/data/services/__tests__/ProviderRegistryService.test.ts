@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockMainLoggerService } from '../../../../../tests/__mocks__/MainLoggerService'
+import * as registryDataPaths from '../utils/registryDataPaths'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -199,6 +200,66 @@ describe('ProviderRegistryService', () => {
     vi.clearAllMocks()
     clearServiceCache()
     MockMainDbServiceUtils.setDb(dbh.db)
+  })
+
+  it('keeps curated models available when a remote catalog lacks them, while enriching API providers', () => {
+    const paths = vi.spyOn(registryDataPaths, 'resolveRegistryPaths').mockImplementation((options) => {
+      const directory = options?.bundledOnly ? '/bundled' : '/remote'
+      return {
+        models: `${directory}/models.json`,
+        providerModels: `${directory}/provider-models.json`,
+        providers: '/bundled/providers.json'
+      }
+    })
+    mockReadProviders.mockReturnValue({
+      version: '1',
+      providers: [
+        {
+          id: 'openai-codex',
+          name: 'OpenAI Codex',
+          modelListSource: 'registry',
+          defaultChatEndpoint: 'openai-responses'
+        },
+        { id: 'openai', name: 'OpenAI', modelListSource: 'api', defaultChatEndpoint: 'openai-responses' }
+      ]
+    } as ReturnType<typeof readProviderRegistry>)
+    mockReadModels.mockImplementation(
+      (path) =>
+        ({
+          version: '1',
+          models: path.startsWith('/bundled')
+            ? [{ id: 'gpt-6-astra', name: 'GPT-6 Astra', capabilities: ['reasoning'], contextWindow: 1050000 }]
+            : [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000 }]
+        }) as ReturnType<typeof readModelRegistry>
+    )
+    mockReadProviderModels.mockImplementation(
+      (path) =>
+        ({
+          version: '1',
+          overrides: path.startsWith('/bundled')
+            ? [
+                {
+                  providerId: 'openai-codex',
+                  modelId: 'gpt-6-astra',
+                  apiModelId: 'gpt-6-astra',
+                  limits: { contextWindow: 272000 }
+                }
+              ]
+            : [{ providerId: 'openai', modelId: 'gpt-4o', apiModelId: 'gpt-4o' }]
+        }) as ReturnType<typeof readProviderModelRegistry>
+    )
+    try {
+      expect(providerRegistryService.listProviderRegistryModels({ providerId: 'openai-codex' })).toMatchObject([
+        { id: 'openai-codex::gpt-6-astra', contextWindow: 272000 }
+      ])
+      expect(providerRegistryService.lookupModel('openai-codex', 'gpt-6-astra').presetModel?.name).toBe('GPT-6 Astra')
+      const allModels = providerRegistryService.listProviderRegistryModels()
+      expect(allModels.find((model) => model.id === 'openai-codex::gpt-6-astra')?.contextWindow).toBe(272000)
+      expect(allModels.find((model) => model.id === 'openai::gpt-4o')?.contextWindow).toBe(128000)
+    } finally {
+      paths.mockRestore()
+      clearServiceCache()
+    }
   })
 
   describe('createCustomModel', () => {
