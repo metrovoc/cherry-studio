@@ -185,9 +185,7 @@ const ActionGeneral: FC<Props> = React.memo(({ action, sourceEntityId, scrollToB
     fetchResult()
   }, [fetchResult])
 
-  const handlePause = () => {
-    void stopChat()
-  }
+  const handlePause = () => stopChat()
 
   const handleRegenerate = () => {
     fetchResult()
