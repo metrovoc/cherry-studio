@@ -89,15 +89,6 @@ const WindowFooter: FC<FooterProps> = ({
     handleEsc()
   })
 
-  useHotkeys(
-    'meta+esc',
-    (event) => {
-      if (event.repeat || event.isComposing) return
-      void ipcApi.request('selection.close_action_windows')
-    },
-    { enabled: isMac, enableOnFormTags: true, enableOnContentEditable: true, preventDefault: true }
-  )
-
   useIpcOn('selection.close_action_window', async () => {
     await onPause?.()
     void ipcApi.request('window.close')

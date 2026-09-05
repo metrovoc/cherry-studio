@@ -19,4 +19,5 @@ export const quickAssistantRequestSchemas = {
 // Directed (per-window) event: fired on every quick-window 'show', empty payload.
 export type QuickAssistantEventSchemas = {
   'quick_assistant.shown': void
+  'quick_assistant.dismiss': void
 }
