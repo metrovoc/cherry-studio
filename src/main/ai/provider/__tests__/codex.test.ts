@@ -44,7 +44,11 @@ describe('buildCodexRequestHeaders', () => {
   })
 
   it('omits the account id header when none is known', () => {
-    const headers = buildCodexRequestHeaders(undefined, { accessToken: 'tok', accountId: null })
+    const headers = buildCodexRequestHeaders(
+      { Authorization: 'Bearer old-token', 'ChatGPT-Account-Id': 'old-account' },
+      { accessToken: 'tok', accountId: null }
+    )
+    expect(headers.get('Authorization')).toBe('Bearer tok')
     expect(headers.has('chatgpt-account-id')).toBe(false)
   })
 })
