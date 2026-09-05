@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@logger', () => ({
   loggerService: {
@@ -24,7 +24,9 @@ const {
   commandServiceMock,
   globalShortcutMock,
   appMock,
-  powerServiceMock
+  powerServiceMock,
+  ipcApiMock,
+  systemPreferencesMock
 } = vi.hoisted(() => ({
   windowServiceMock: {
     onMainWindowCreated: vi.fn(),
@@ -34,7 +36,10 @@ const {
   windowManagerMock: {
     open: vi.fn(),
     broadcastToType: vi.fn(),
-    onWindowCreatedByType: vi.fn()
+    onWindowCreatedByType: vi.fn(),
+    getWindowInfosByType: vi.fn(
+      (_type: WindowType): Array<{ id: string; type: WindowType; isVisible: boolean; isFocused: boolean }> => []
+    )
   },
   selectionServiceMock: {
     toggleEnabled: vi.fn(),
@@ -55,6 +60,8 @@ const {
     on: vi.fn(),
     removeListener: vi.fn()
   },
+  ipcApiMock: { send: vi.fn(), broadcastToType: vi.fn() },
+  systemPreferencesMock: { subscribeLocalNotification: vi.fn(), unsubscribeLocalNotification: vi.fn() },
   powerServiceMock: {
     onResume: vi.fn(),
     onUnlockScreen: vi.fn()
@@ -69,7 +76,8 @@ vi.mock('@application', async () => {
     SelectionService: selectionServiceMock,
     QuickAssistantService: quickAssistantServiceMock,
     CommandService: commandServiceMock,
-    PowerService: powerServiceMock
+    PowerService: powerServiceMock,
+    IpcApiService: ipcApiMock
   } as any)
 })
 
@@ -94,7 +102,8 @@ vi.mock('@main/core/lifecycle', () => {
 
 vi.mock('electron', () => ({
   app: appMock,
-  globalShortcut: globalShortcutMock
+  globalShortcut: globalShortcutMock,
+  systemPreferences: systemPreferencesMock
 }))
 
 import { WindowType } from '@main/core/window/types'
@@ -179,6 +188,7 @@ describe('ShortcutService', () => {
     vi.clearAllMocks()
     MockMainPreferenceServiceUtils.resetMocks()
     nativeAccelerators = new Set()
+    windowManagerMock.getWindowInfosByType.mockReturnValue([])
     onPowerResume = undefined
     onUnlockScreen = undefined
 
@@ -222,6 +232,67 @@ describe('ShortcutService', () => {
 
     service = new ShortcutService()
   })
+
+  afterEach(async () => {
+    await (service as any).onStop()
+    for (const disposable of (service as any)._disposables) {
+      if (typeof disposable === 'function') disposable()
+      else disposable.dispose()
+    }
+  })
+
+  it.skipIf(process.platform !== 'darwin')(
+    'owns Command-Escape only while an assistant is the native key window',
+    async () => {
+      await (service as any).onInit()
+      const focusChanged = systemPreferencesMock.subscribeLocalNotification.mock.calls.find(
+        ([name]) => name === 'NSWindowDidBecomeKeyNotification'
+      )![1]
+      const flushFocus = async () => {
+        focusChanged()
+        await new Promise(setImmediate)
+      }
+      await flushFocus()
+      expect(nativeAccelerators.has('Command+Escape')).toBe(false)
+
+      let focused: { id: string; type: WindowType; isVisible: boolean; isFocused: boolean } | null = {
+        id: 'selection',
+        type: WindowType.SelectionAction,
+        isVisible: true,
+        isFocused: true
+      }
+      windowManagerMock.getWindowInfosByType.mockImplementation((type) => (focused?.type === type ? [focused] : []))
+      await flushFocus()
+      expect(nativeAccelerators.has('Command+Escape')).toBe(true)
+      const dismiss = globalShortcutMock.register.mock.calls.find(([key]) => key === 'Command+Escape')![1]
+      dismiss()
+      expect(ipcApiMock.broadcastToType).toHaveBeenCalledWith(
+        WindowType.SelectionAction,
+        'selection.close_action_window',
+        undefined
+      )
+      expect(ipcApiMock.send).not.toHaveBeenCalled()
+
+      focused = { ...focused, id: 'quick', type: WindowType.QuickAssistant }
+      await flushFocus()
+      dismiss()
+      expect(ipcApiMock.send).toHaveBeenCalledWith('quick', 'quick_assistant.dismiss', undefined)
+
+      ipcApiMock.send.mockClear()
+      ipcApiMock.broadcastToType.mockClear()
+      focused = null
+      dismiss()
+      expect(ipcApiMock.send).not.toHaveBeenCalled()
+      expect(ipcApiMock.broadcastToType).not.toHaveBeenCalled()
+      await flushFocus()
+      expect(nativeAccelerators.has('Command+Escape')).toBe(false)
+
+      focused = { id: 'quick', type: WindowType.QuickAssistant, isVisible: true, isFocused: true }
+      await flushFocus()
+      await (service as any).onStop()
+      expect(nativeAccelerators.has('Command+Escape')).toBe(false)
+    }
+  )
 
   it('registers only explicitly global shortcuts with Electron globalShortcut', async () => {
     MockMainPreferenceServiceUtils.setPreferenceValue('shortcut.app.window.show', {
