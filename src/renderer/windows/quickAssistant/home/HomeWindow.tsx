@@ -568,11 +568,12 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   const openCurrentConversation = useCallback(() => {
     if (!selectedTopicId || isLoading) return
+    if (draggable) void handleCloseWindow()
     void ipcApi.request('navigation.focus_or_open_conversation', {
       target: { conversationType: 'assistant', conversationId: selectedTopicId },
       title: selectedTopic?.name ?? initialRequestTextRef.current
     })
-  }, [isLoading, selectedTopic?.name, selectedTopicId])
+  }, [draggable, handleCloseWindow, isLoading, selectedTopic?.name, selectedTopicId])
 
   useEffect(() => {
     if (!draggable || !historyEnabled) return

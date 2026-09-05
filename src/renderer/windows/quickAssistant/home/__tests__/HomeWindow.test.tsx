@@ -605,6 +605,7 @@ describe('HomeWindow', () => {
     expect(screen.queryByText('Saved topic')).not.toBeInTheDocument()
     fireEvent.keyDown(window, { code: 'KeyJ', metaKey: true })
 
+    expect(state.ipcRequest).toHaveBeenCalledWith('quick_assistant.hide')
     expect(state.ipcRequest).toHaveBeenCalledWith('navigation.focus_or_open_conversation', {
       target: { conversationType: 'assistant', conversationId: 'saved-topic' },
       title: 'Saved topic'

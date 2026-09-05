@@ -309,7 +309,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       }
     },
     behavior: {
-      // QuickAssistantService owns auto-hide: Cocoa key focus on macOS, minimize + opacity on Windows.
+      // QuickAssistantService owns dismissal: outside clicks on macOS, minimize + opacity on Windows.
       // `new BrowserWindow({ alwaysOnTop: true })` cannot accept a level — the
       // floating level is applied by applyWindowBehavior on create, and kept
       // across show cycles by the reapplyAlwaysOnTop quirk below.

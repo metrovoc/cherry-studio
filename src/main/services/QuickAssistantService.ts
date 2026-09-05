@@ -7,31 +7,29 @@
  * business policy:
  *
  *   - feature flag gate (`feature.quick_assistant.enabled`)
- *   - pin / blur auto-hide
+ *   - pin / outside-click dismissal on macOS, blur auto-hide elsewhere
  *   - cursor-aware repositioning across displays
  *   - platform-specific hide branch (Windows minimize+opacity)
- *   - mainWindow lifecycle coupling (auto-hide when main window appears)
  *   - strict navigation safety (block navigation outside the renderer origin)
  *   - bounds persistence (via WindowManager's rememberBounds capability)
  */
 import { application } from '@application'
+import { watchOutsideClicks } from '@cherrystudio/macos-panel'
 import { loggerService } from '@logger'
 import { type Activatable, BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
 import type { BrowserWindow } from 'electron'
-import { screen, shell, systemPreferences } from 'electron'
+import { screen, shell } from 'electron'
 
 import { isSafeExternalUrl } from '../utils/externalUrlSafety'
-
-const MACOS_WINDOW_RESIGNED_KEY_NOTIFICATION = 'NSWindowDidResignKeyNotification'
 
 const logger = loggerService.withContext('QuickAssistantService')
 
 @Injectable('QuickAssistantService')
 @ServicePhase(Phase.WhenReady)
-@DependsOn(['MainWindowService', 'WindowManager'])
+@DependsOn(['WindowManager'])
 export class QuickAssistantService extends BaseService implements Activatable {
   private windowId: string | null = null
   private isPinnedQuickAssistant = false
@@ -39,7 +37,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
   protected async onInit() {
     this.registerDisposable(() => this.disposeWindowListeners?.())
-    this.subscribeMainWindowLifecycle()
 
     // Attach per-instance behavior to each fresh QuickAssistant window. Fires exactly
     // once per BrowserWindow creation (never on singleton reopen) — pairs with
@@ -103,32 +100,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
       this.windowId = null
     }
     this.isPinnedQuickAssistant = false
-  }
-
-  /**
-   * Subscribe to mainWindow lifecycle through MainWindowService's event API (loose coupling).
-   *   - Hide quickWindow when mainWindow becomes visible ('show') or is restored from
-   *     minimized ('restore'). Both are required: MainWindowService.showMainWindow calls
-   *     mainWindow.restore() for the minimized branch, which does NOT fire 'show'.
-   */
-  private subscribeMainWindowLifecycle() {
-    const windowService = application.get('MainWindowService')
-
-    const attach = (mainWindow: BrowserWindow) => {
-      const onMainVisible = () => {
-        const window = this.getQuickAssistant()
-        if (window) window.hide()
-      }
-
-      mainWindow.on('show', onMainVisible)
-      mainWindow.on('restore', onMainVisible)
-      this.registerDisposable(() => {
-        mainWindow.removeListener('show', onMainVisible)
-        mainWindow.removeListener('restore', onMainVisible)
-      })
-    }
-
-    this.registerDisposable(windowService.onMainWindowCreated((w) => attach(w)))
   }
 
   /**
@@ -199,7 +170,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
     // macOS level reapply across show cycles) is owned by WindowManager via the
     // `WindowType.QuickAssistant` registry entry (`behavior` + `quirks`).
 
-    // Windows needs minimize + opacity; macOS panels need Cocoa key-window events.
+    // Focus can move to another launcher without dismissing a macOS panel.
     const onBlur = () => {
       if (!isMac && !this.isPinnedQuickAssistant) {
         this.hideQuickAssistant()
@@ -211,25 +182,12 @@ export class QuickAssistantService extends BaseService implements Activatable {
         application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
       }
     }
-    let keyWindowSubscription: number | null = null
-    let focusCheck: ReturnType<typeof setImmediate> | null = null
-    const cancelFocusCheck = () => {
-      if (focusCheck) {
-        clearImmediate(focusCheck)
-        focusCheck = null
-      }
-    }
     const dispose = () => {
-      cancelFocusCheck()
-      if (keyWindowSubscription !== null) {
-        systemPreferences.unsubscribeLocalNotification(keyWindowSubscription)
-        keyWindowSubscription = null
-      }
+      disposeOutsideClicks?.()
       this.disposeWindowListeners = null
       if (window.isDestroyed()) return
       window.removeListener('blur', onBlur)
       window.removeListener('show', onShow)
-      window.removeListener('hide', cancelFocusCheck)
       window.removeListener('closed', onClosed)
     }
     const onClosed = () => {
@@ -239,25 +197,13 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
     window.on('blur', onBlur)
     window.on('show', onShow)
-    window.on('hide', cancelFocusCheck)
     window.once('closed', onClosed)
 
-    if (isMac) {
-      // Electron's blur follows the main window, while a panel can lose key focus independently.
-      keyWindowSubscription = systemPreferences.subscribeLocalNotification(
-        MACOS_WINDOW_RESIGNED_KEY_NOTIFICATION,
-        () => {
-          cancelFocusCheck()
-          // Cocoa resigns the old key window before assigning the new one during show().
-          focusCheck = setImmediate(() => {
-            focusCheck = null
-            if (!window.isDestroyed() && window.isVisible() && !window.isFocused() && !this.isPinnedQuickAssistant) {
-              this.hideQuickAssistant()
-            }
-          })
-        }
-      )
-    }
+    const disposeOutsideClicks = isMac
+      ? watchOutsideClicks(window.getNativeWindowHandle(), () => {
+          if (!this.isPinnedQuickAssistant) this.hideQuickAssistant()
+        })
+      : undefined
 
     this.disposeWindowListeners = dispose
   }
