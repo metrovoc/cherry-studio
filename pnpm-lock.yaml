@@ -252,7 +252,7 @@ patchedDependencies:
   ollama-ai-provider-v2@3.3.1: d2b640ac5475c802eee5f983bcad08fb4e5cec7615c57aac188850c3f531743b
   onnxruntime-node@1.25.1: 7a18bfdf39cbd83c60197c06e5f5c5b2b46d265d7483ed3d80ec3ad499d99cef
   ppu-paddle-ocr@6.0.0: 462a2a1d24fd9bdf645bed35f34c90d24b40389443b802018f77b85911f08096
-  selection-hook@2.1.1: 102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285
+  selection-hook@2.1.1: 20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3
   sherpa-onnx-node@1.13.6: 63432398c7e4f08be86944fdaf2b39cc5a8ce719db9ae38913d794d8bdcbcf0e
   streamdown@2.5.0: e7275804eb3d9c069a4b2f193c03553501f4db2d37dac35230551a7ab14444df
   tesseract.js@6.0.1: a131c9f36e950911e9fc548408131145a3e5e53977d67abe5196f6b23b32bb6e
@@ -279,6 +279,9 @@ importers:
       '@cherrystudio/system-speech':
         specifier: workspace:*
         version: link:packages/system-speech
+      '@cherrystudio/macos-panel':
+        specifier: workspace:*
+        version: link:packages/macos-panel
       '@earendil-works/pi-ai':
         specifier: 1.0.0
         version: 1.0.0(patch_hash=5efd52ee4fcf7309c209fa6135c915d0e138b2d4f8517af46e8222763e938ae0)(@modelcontextprotocol/sdk@1.32.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@4.4.3))(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
@@ -383,7 +386,7 @@ importers:
         version: 1.16.1
       selection-hook:
         specifier: 2.1.1
-        version: 2.1.1(patch_hash=102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285)
+        version: 2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3)
       sharp:
         specifier: 0.35.3
         version: 0.35.3(@types/node@24.10.4)
@@ -1817,6 +1820,12 @@ importers:
       vite:
         specifier: 8.2.2
         version: 8.2.2(@types/node@24.10.4)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/macos-panel:
+    dependencies:
+      node-gyp-build:
+        specifier: 4.8.4
+        version: 4.8.4
 
   packages/provider-registry:
     dependencies:
@@ -29488,7 +29497,7 @@ snapshots:
     dependencies:
       parseley: 0.12.1
 
-  selection-hook@2.1.1(patch_hash=102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285):
+  selection-hook@2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3):
     dependencies:
       node-addon-api: 8.5.0
       node-gyp-build: 4.8.4

@@ -56,15 +56,6 @@ type RelativeOrientation =
 @ServicePhase(Phase.WhenReady)
 export class SelectionService extends BaseService implements Activatable {
   private selectionHook: SelectionHookInstance | null = null
-  private nativePanel?: {
-    configurePanel(handle: Buffer): void
-    moveToActiveSpace(handle: Buffer): void
-  }
-
-  private getNativePanel(): NonNullable<SelectionService['nativePanel']> {
-    return (this.nativePanel ??= require(application.getPath('feature.selection.native_panel_file')))
-  }
-
   /** Latest desired running state — mirrors the `feature.selection.enabled` preference. */
   private desiredEnabled = false
   /**
@@ -275,7 +266,6 @@ export class SelectionService extends BaseService implements Activatable {
     // or accumulate duplicates across reuses.
     this.registerDisposable(
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
-        if (isMac) this.getNativePanel().configurePanel(mw.window.getNativeWindowHandle())
         const onHide = () => {
           const session = wm.getInitData(mw.id) as SelectionActionSession | null
           if (session) {
@@ -303,8 +293,6 @@ export class SelectionService extends BaseService implements Activatable {
     )
 
     // Destruction: keep the cached toolbar reference in sync.
-    // The macOS focus dance on hide/close is handled by the macRestoreFocusOnHide quirk
-    // (see WindowManager.applyQuirks) — no subscription needed here.
     this.registerDisposable(
       wm.onWindowDestroyedByType(WindowType.SelectionToolbar, ({ id }) => {
         if (id === this.toolbarWindowId) {
@@ -605,7 +593,7 @@ export class SelectionService extends BaseService implements Activatable {
    * @param point Reference point for positioning, logical coordinates
    * @param orientation Preferred position relative to reference point
    */
-  private showToolbarAtPosition(point: Point, orientation: RelativeOrientation, programName: string): void {
+  private showToolbarAtPosition(point: Point, orientation: RelativeOrientation): void {
     if (!this.isToolbarAlive()) {
       // Toolbar was destroyed (e.g., crash recovery). Re-open via WindowManager — the
       // onWindowCreated handler will call setupToolbarBehavior() and update toolbarWindow.
@@ -616,7 +604,7 @@ export class SelectionService extends BaseService implements Activatable {
       const newToolbar = wm.getWindow(this.toolbarWindowId)
       if (newToolbar) {
         newToolbar.once('ready-to-show', () => {
-          this.showToolbarAtPosition(point, orientation, programName)
+          this.showToolbarAtPosition(point, orientation)
         })
       }
       return
@@ -651,44 +639,7 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
-    /************************************************
-     * [macOS] the following code is only for macOS
-     *
-     * WARNING:
-     *   DO NOT MODIFY THESE CODES, UNLESS YOU REALLY KNOW WHAT YOU ARE DOING!!!!
-     *************************************************/
-
-    // [macOS] a hacky way
-    // when set `skipTransformProcessType: true`, if the selection is in self app, it will make the selection canceled after toolbar showing
-    // so we just don't set `skipTransformProcessType: true` when in self app
-    const isSelf = ['com.github.Electron', getApplicationId()].includes(programName)
-
-    if (!isSelf) {
-      // [macOS] an ugly hacky way
-      // `focusable: true` will make mainWindow disappeared when `setVisibleOnAllWorkspaces`
-      // so we set `focusable: true` before showing, and then set false after showing
-      this.toolbarWindow!.setFocusable(false)
-
-      // [macOS]
-      // force `setVisibleOnAllWorkspaces: true` to let toolbar show in all workspaces. And we MUST not set it to false again
-      // set `skipTransformProcessType: true` to avoid dock icon spinning when `setVisibleOnAllWorkspaces`
-      this.toolbarWindow!.setVisibleOnAllWorkspaces(true, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true
-      })
-    }
-
-    // [macOS] MUST use `showInactive()` to prevent other windows bring to front together
-    // [Windows] is OK for both `show()` and `showInactive()` because of `focusable: false`
     this.toolbarWindow!.showInactive()
-
-    // [macOS] restore the focusable status
-    this.toolbarWindow!.setFocusable(true)
-
-    // Mouse-key hook start fires from window.on('show') in setupToolbarBehavior
-    // (showInactive also fires 'show').
-
-    return
   }
 
   /**
@@ -697,13 +648,7 @@ export class SelectionService extends BaseService implements Activatable {
   public hideToolbar(): void {
     if (!this.isToolbarAlive()) return
 
-    // Mouse-key hook stop is driven by window.on('hide') in setupToolbarBehavior,
-    // which covers this call site as well as the WM-driven blur → window.hide().
-    //
-    // On macOS, the toolbar's hide() call is wrapped by WindowManager's applyQuirks:
-    //   - macRestoreFocusOnHide guards focus (setFocusable(false) on all visible windows, restored after 50ms)
-    //   - macClearHoverOnHide sends a synthetic mouseMove(-1,-1) to clear any residual hover state
-    // so this call site remains a plain .hide() on every platform.
+    // The hide listener releases the mouse-key hook; WindowManager clears stale hover state.
     this.toolbarWindow!.hide()
   }
 
@@ -1037,7 +982,7 @@ export class SelectionService extends BaseService implements Activatable {
     }
 
     // [macOS] isFullscreen is only available on macOS
-    this.showToolbarAtPosition(refPoint, refOrientation, selectionData.programName)
+    this.showToolbarAtPosition(refPoint, refOrientation)
     if (this.toolbarWindowId) {
       application.get('IpcApiService').send(this.toolbarWindowId, 'selection.text_selected', selectionData)
     }
@@ -1287,9 +1232,8 @@ export class SelectionService extends BaseService implements Activatable {
   /**
    * Process action item
    * @param actionItem Action item to process
-   * @param isFullScreen [macOS] only macOS has the available isFullscreen mode
    */
-  public processAction(actionItem: SelectionActionItem, isFullScreen: boolean = false): void {
+  public processAction(actionItem: SelectionActionItem, _isFullScreen: boolean = false): void {
     const wm = application.get('WindowManager')
 
     // open({ initData }) atomically stores the action payload and, for the
@@ -1314,16 +1258,15 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
-    this.showActionWindow(actionWindow, isFullScreen)
+    this.showActionWindow(actionWindow)
   }
 
   /**
    * Show action window with proper positioning relative to toolbar
    * Ensures window stays within screen boundaries
    * @param actionWindow Window to position and show
-   * @param isFullScreen [macOS] only macOS has the available isFullscreen mode
    */
-  private showActionWindow(actionWindow: BrowserWindow, isFullScreen: boolean = false): void {
+  private showActionWindow(actionWindow: BrowserWindow): void {
     let actionWindowWidth = this.ACTION_WINDOW_WIDTH
     let actionWindowHeight = this.ACTION_WINDOW_HEIGHT
 
@@ -1392,46 +1335,7 @@ export class SelectionService extends BaseService implements Activatable {
       })
     }
 
-    if (!isMac) {
-      actionWindow.show()
-      return
-    }
-
-    /************************************************
-     * [macOS] the following code is only for macOS
-     *
-     * WARNING:
-     *   DO NOT MODIFY THESE CODES, UNLESS YOU REALLY KNOW WHAT YOU ARE DOING!!!!
-     *************************************************/
-
-    // act normally when the app is not in fullscreen mode
-    if (!isFullScreen) {
-      // Move before showing: a recycled panel may still belong to another Space.
-      this.getNativePanel().moveToActiveSpace(actionWindow.getNativeWindowHandle())
-      actionWindow.show()
-      return
-    }
-
-    // setFocusable(false) to prevent the action window hide when blur (if auto hide on blur is enabled)
-    actionWindow.setFocusable(false)
-    // No explicit level: Electron defaults to 'floating' on macOS, and
-    // SelectionAction's registry intentionally declares no alwaysOnTop.level
-    // (the pin toggle and this show sequence use the same default path).
-    actionWindow.setAlwaysOnTop(true)
-
-    this.getNativePanel().moveToActiveSpace(actionWindow.getNativeWindowHandle())
-    actionWindow.showInactive()
-
-    // unset everything
-    setTimeout(() => {
-      if (actionWindow.isDestroyed()) return
-      actionWindow.setAlwaysOnTop(false)
-
-      actionWindow.setFocusable(true)
-
-      // regain the focus when all the works done
-      actionWindow.focus()
-    }, 50)
+    actionWindow.show()
   }
 
   /**
