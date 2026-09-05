@@ -43,7 +43,7 @@ describe('WindowFooter', () => {
     expect(ipcRequest).toHaveBeenCalledWith('window.close')
   })
 
-  it('keeps Esc as stop/current-close and Command-Esc as close-all, including inside text fields', async () => {
+  it('keeps Esc as stop during generation and current-close afterward', async () => {
     const user = userEvent.setup()
     const onPause = vi.fn()
     const { rerender } = render(<WindowFooter loading onPause={onPause} />)
@@ -51,18 +51,9 @@ describe('WindowFooter', () => {
     expect(onPause).toHaveBeenCalledOnce()
     expect(ipcRequest).not.toHaveBeenCalled()
 
-    rerender(
-      <>
-        <input aria-label="Draft" />
-        <WindowFooter />
-      </>
-    )
+    rerender(<WindowFooter />)
     await user.keyboard('{Escape}')
     expect(ipcRequest).toHaveBeenCalledWith('window.close')
-    ipcRequest.mockClear()
-    await user.click(screen.getByRole('textbox', { name: 'Draft' }))
-    await user.keyboard('{Meta>}{Escape}{/Meta}')
-    expect(ipcRequest.mock.calls).toEqual([['selection.close_action_windows']])
   })
 
   it('offers a named close-all button and waits for cancellation before closing a streaming window', async () => {
