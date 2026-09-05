@@ -64,6 +64,7 @@ const state = vi.hoisted(() => ({
   setQuickAssistantId: vi.fn(),
   setSaveConversations: vi.fn(),
   ipcRequest: vi.fn(),
+  ipcListeners: new Map<string, () => void>(),
   historyTopics: [] as Array<{ id: string; name: string }>,
   dispatchListener: undefined as
     | ((
@@ -78,10 +79,20 @@ vi.mock('@renderer/utils/platform', () => ({ isMac: true }))
 
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
 
-vi.mock('@renderer/ipc', () => ({
-  ipcApi: { request: state.ipcRequest, on: vi.fn(() => () => {}) },
-  useIpcOn: vi.fn()
-}))
+vi.mock('@renderer/ipc', async () => {
+  const { useEffect } = await import('react')
+  return {
+    ipcApi: { request: state.ipcRequest, on: vi.fn(() => () => {}) },
+    useIpcOn: (event: string, handler: () => void) => {
+      useEffect(() => {
+        state.ipcListeners.set(event, handler)
+        return () => {
+          state.ipcListeners.delete(event)
+        }
+      }, [event, handler])
+    }
+  }
+})
 
 vi.mock('@ai-sdk/react', () => ({
   useChat: () => ({
@@ -1002,7 +1013,7 @@ describe('HomeWindow', () => {
     await user.type(input, 'Explain this')
     await user.keyboard('{Enter}')
     state.ipcRequest.mockClear()
-    await user.keyboard('{Meta>}{Escape}{/Meta}')
+    await act(async () => state.ipcListeners.get('quick_assistant.dismiss')!())
     expect(state.ipcRequest).toHaveBeenCalledWith('quick_assistant.hide')
     await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''))
     expect(state.resetTemporaryTopic).toHaveBeenCalled()
@@ -1014,7 +1025,7 @@ describe('HomeWindow', () => {
     render(<HomeWindow draggable={false} />)
     const input = screen.getByRole('textbox')
     await user.type(input, 'Keep this draft')
-    await user.keyboard('{Meta>}{Escape}{/Meta}')
+    await act(async () => state.ipcListeners.get('quick_assistant.dismiss')!())
     expect(input).toHaveValue('Keep this draft')
     expect(state.ipcRequest).not.toHaveBeenCalledWith('quick_assistant.hide')
     expect(state.resetTemporaryTopic).not.toHaveBeenCalled()
