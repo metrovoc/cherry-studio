@@ -325,6 +325,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       macShowInDock: false
     },
     quirks: {
+      macAttachAuxiliaryPanels: true,
       // Re-assert topmost after every show/showInactive — macOS silently demotes the
       // level across cycles, Windows lets later topmost windows stack above.
       // The actual level is read from `behavior.alwaysOnTop`.
@@ -367,25 +368,13 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       // explicit false — omitting it would fall back to the OS rounding.
       roundedCorners: false,
 
-      // Platform specific settings
-      //   [macOS] DO NOT set focusable to false — it causes other windows to bring to front together.
-      //           type 'panel' conflicts with some settings and triggers the warning
-      //           `NSWindow does not support nonactivating panel styleMask 0x80`,
-      //           but it still works correctly on fullscreen apps, so we keep it.
-      //   [Windows/Linux X11] focusable: false prevents toolbar from stealing focus.
-      //           On Linux X11 this also makes the window stop interacting with WM (stays on top).
-      //   [Linux Wayland] focusable: true enables blur events for outside-click hiding.
-      //           With focusable: false on XWayland, blur never fires and there is no reliable
-      //           way to detect outside clicks (selection-hook coordinates use a different
-      //           coordinate space than Electron's getBounds on Wayland).
-      // The real focusable value on Wayland is set at runtime by SelectionService
-      // via setFocusable(isLinuxWaylandDisplay) inside the onWindowCreated callback,
-      // because the Wayland detection is only available after the native module loads.
+      // The toolbar accepts mouse actions without taking keyboard focus from the selection owner.
       platformOverrides: {
         mac: {
           type: 'panel',
-          hiddenInMissionControl: true, // [macOS only]
-          acceptFirstMouse: true // [macOS only]
+          focusable: false,
+          hiddenInMissionControl: true,
+          acceptFirstMouse: true
         },
         win: {
           type: 'toolbar',
@@ -411,15 +400,6 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       // included) triggers the cleanup.
       hideOnBlur: true,
       alwaysOnTop: { level: 'screen-saver' },
-      // Baseline declaration, re-applied on every (re-)create. `skipTransformProcessType`
-      // MUST be true: without it, Electron runs TransformProcessType(UIElement) inside
-      // this call on macOS, which deactivates the whole app (every window drops behind
-      // the frontmost app) and removes the Dock icon — user-visible each time the
-      // selection assistant is toggled on (the toolbar is destroyed on disable and
-      // re-created on enable). SelectionService.showToolbarAtPosition still has its
-      // per-show `!isSelf` branch re-applying the same flags; it MUST stay there,
-      // because self-app shows must skip that call entirely or the active text
-      // selection gets canceled.
       visibleOnAllWorkspaces: { enabled: true, visibleOnFullScreen: true, skipTransformProcessType: true },
       macShowInDock: false
     },
@@ -427,7 +407,6 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
     // so that business calls to window.hide() / window.showInactive() / window.close()
     // transparently invoke the required pre/post hooks. See WindowQuirks in types.ts.
     quirks: {
-      macRestoreFocusOnHide: true,
       macClearHoverOnHide: true,
       reapplyAlwaysOnTop: true
     }
@@ -454,9 +433,9 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       thickFrame: false,
       platformOverrides: {
         mac: {
-          // Native selection-panel binding limits this panel to the invoking Space.
           type: 'panel',
           fullscreenable: false,
+          hiddenInMissionControl: true,
           titleBarStyle: 'hidden', // [macOS]
           trafficLightPosition: { x: 12, y: 11 } // [macOS]
         }
@@ -469,21 +448,11 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       }
     },
     behavior: {
-      // SelectionAction intentionally declares no hideOnBlur / alwaysOnTop.level /
-      // visibleOnAllWorkspaces:
-      //   - hideOnBlur is driven per-instance by the renderer's `isAutoClose && !isPinned`
-      //     logic (see ActionWindow.tsx) — too case-specific for a WM default.
-      //   - alwaysOnTop is toggled at runtime by the `selection.pin_action_window`
-      //     IpcApi handler via wm.behavior.setAlwaysOnTop; passing no level lets
-      //     Electron use its default ('floating' on macOS).
+      // Auto-close and pinning are controlled by the action renderer.
+      visibleOnAllWorkspaces: { enabled: true, visibleOnFullScreen: true, skipTransformProcessType: true },
       macShowInDock: false
     },
-    // Only restoreFocusOnHide applies — action windows show via the fullscreen-aware
-    // sequence in SelectionService.showActionWindow (C-layer), not through window.show(),
-    // so clearHover / reapplyAlwaysOnTop do not participate in its lifecycle.
-    quirks: {
-      macRestoreFocusOnHide: true
-    },
+    quirks: { macAttachAuxiliaryPanels: true },
     poolConfig: {
       // Producer axis: always keep one pre-warmed idle window. On every open(),
       // an async setImmediate replacement is scheduled so the next action recycles

@@ -1,18 +1,9 @@
-import { screen } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // @application, electron, and @logger are globally mocked in tests/main.setup.ts.
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { WindowType } from '@main/core/window/types'
-
-const { getApplicationIdMock } = vi.hoisted(() => ({
-  getApplicationIdMock: vi.fn(() => 'com.kangfenmao.CherryStudio')
-}))
-
-vi.mock('@main/utils/appEdition', () => ({
-  getApplicationId: getApplicationIdMock
-}))
 
 vi.mock('@main/core/platform', () => ({
   isDev: false,
@@ -229,7 +220,7 @@ describe('SelectionService macOS toolbar', () => {
       toolbarWindow: typeof toolbarWindow
       calculateToolbarPosition: () => { x: number; y: number }
       getToolbarRealSize: () => { toolbarWidth: number; toolbarHeight: number }
-      showToolbarAtPosition: (point: { x: number; y: number }, orientation: string, programName: string) => void
+      showToolbarAtPosition: (point: { x: number; y: number }, orientation: string) => void
     }
     access.toolbarWindow = toolbarWindow
     vi.spyOn(access, 'calculateToolbarPosition').mockReturnValue({ x: 10, y: 20 })
@@ -248,92 +239,11 @@ describe('SelectionService macOS toolbar', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    ['global', 'com.kangfenmao.CherryStudio'],
-    ['China', 'com.cherryai.cherrystudio.cn']
-  ])('preserves selection inside the %s edition', (_edition, applicationId) => {
-    getApplicationIdMock.mockReturnValue(applicationId)
+  it('shows without changing keyboard focus or the selected app’s workspace state', () => {
     const { access, toolbarWindow } = createToolbarHarness()
-
-    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft', applicationId)
-
+    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft')
+    expect(toolbarWindow.setFocusable).not.toHaveBeenCalled()
     expect(toolbarWindow.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
     expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
-  })
-
-  it('treats the other edition as an external app', () => {
-    getApplicationIdMock.mockReturnValue('com.kangfenmao.CherryStudio')
-    const { access, toolbarWindow } = createToolbarHarness()
-
-    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft', 'com.cherryai.cherrystudio.cn')
-
-    expect(toolbarWindow.setFocusable).toHaveBeenCalledWith(false)
-    expect(toolbarWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
-      visibleOnFullScreen: true,
-      skipTransformProcessType: true
-    })
-    expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
-  })
-})
-
-describe('SelectionService macOS action window', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    BaseService.resetInstances()
-    Object.assign(screen, {
-      getDisplayNearestPoint: vi.fn(() => ({
-        workArea: { x: 0, y: 0, width: 1440, height: 900 }
-      })),
-      getCursorScreenPoint: vi.fn(() => ({ x: 500, y: 400 }))
-    })
-  })
-
-  afterEach(() => {
-    BaseService.resetInstances()
-    vi.restoreAllMocks()
-  })
-
-  it.each([false, true])('keeps the invoking Space when showing a recycled panel (fullscreen=%s)', (fullScreen) => {
-    vi.useFakeTimers()
-    try {
-      let activeSpace = 'invoking-space'
-      let panelSpace = 'previous-space'
-      let visible = false
-      const handle = Buffer.alloc(8)
-      const svc = new SelectionService() as unknown as {
-        nativePanel: { moveToActiveSpace(handle: Buffer): void }
-        showActionWindow(actionWindow: unknown, isFullScreen: boolean): void
-      }
-      svc.nativePanel = {
-        moveToActiveSpace: (actualHandle) => {
-          expect(actualHandle).toBe(handle)
-          panelSpace = activeSpace
-        }
-      }
-      const show = () => {
-        activeSpace = panelSpace
-        visible = true
-      }
-      const actionWindow = {
-        getNativeWindowHandle: () => handle,
-        setPosition: vi.fn(),
-        setBounds: vi.fn(),
-        setFocusable: vi.fn(),
-        setAlwaysOnTop: vi.fn(),
-        show,
-        showInactive: show,
-        isDestroyed: () => false,
-        focus: vi.fn()
-      }
-
-      svc.showActionWindow(actionWindow, fullScreen)
-      vi.runAllTimers()
-
-      expect(visible).toBe(true)
-      expect(activeSpace).toBe('invoking-space')
-      expect(panelSpace).toBe('invoking-space')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

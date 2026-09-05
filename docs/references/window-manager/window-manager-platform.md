@@ -14,17 +14,17 @@ WindowManager splits per-window configuration into three orthogonal layers:
 - **`behavior`** — cross-platform declarative WM behavior that Electron's constructor cannot express (blur-auto-hide, `setAlwaysOnTop` level, `setVisibleOnAllWorkspaces` options, Dock visibility). See [README → Configuration Layers](./README.md#configuration-layers-windowoptions--behavior--quirks).
 - **`quirks`** — OS-specific hacks / workarounds applied via method-slot monkey-patches around `hide()` / `show()` / `close()`.
 
-Naming rule: any field effective on only one platform carries a `mac` / `win` / `linux` prefix, irrespective of layer (e.g. `behavior.macShowInDock`, `quirks.macRestoreFocusOnHide`).
+Naming rule: any field effective on only one platform carries a `mac` / `win` / `linux` prefix, irrespective of layer (e.g. `behavior.macShowInDock`, `quirks.macClearHoverOnHide`).
 
 ## OS Quirks
 
-Some OS-specific behaviors are tedious to hand-roll at every call site (e.g. the macOS focus dance around `hide()`). WindowManager ships these as **declarative opt-in flags** under `WindowTypeMetadata.quirks`. When set, the manager transparently monkey-patches the corresponding `BrowserWindow` instance methods so business code continues calling `window.hide()` / `window.show()` as usual.
+Some OS-specific behaviors are tedious to hand-roll at every call site (e.g. clearing stale hover state after `hide()`). WindowManager ships these as **declarative opt-in flags** under `WindowTypeMetadata.quirks`. When set, the manager transparently monkey-patches the corresponding `BrowserWindow` instance methods so business code continues calling `window.hide()` / `window.show()` as usual.
 
 ### Available Quirks
 
 | Quirk | Patches | Behavior |
 |---|---|---|
-| `macRestoreFocusOnHide: boolean` | `hide()`, `close()` | Before invoking the native method, iterate every visible focusable `BrowserWindow` and `setFocusable(false)`; restore them 50ms later. Prevents other windows from being brought to the front when this one disappears. |
+| `macAttachAuxiliaryPanels: boolean` | Native notifications | Attach non-key native panels (including IME candidates) to their focused editor so they inherit its Space. Release observers and restore relationships when the owner closes. |
 | `macClearHoverOnHide: boolean` | `hide()` | After invoking the native `hide()`, send `webContents.sendInputEvent({ type: 'mouseMove', x: -1, y: -1 })` to clear any residual hover state. |
 | `reapplyAlwaysOnTop: boolean` | `show()`, `showInactive()` | After invoking the native method, call `setAlwaysOnTop(true, level, relativeLevel)` with values read from `behavior.alwaysOnTop` (single source of truth). When `behavior.alwaysOnTop.level` is unset, falls back to `'floating'`. Compensates for macOS level resets between hide/show, and for Windows' last-writer-wins topmost z-order (the `level` argument is ignored there). |
 
@@ -41,11 +41,10 @@ The `mac`-prefixed quirks are macOS-only: on other platforms those methods are l
   behavior: {
     hideOnBlur: true,
     alwaysOnTop: { level: 'screen-saver' },  // level lives here, not in quirks
-    visibleOnAllWorkspaces: { enabled: true, visibleOnFullScreen: true },
+    visibleOnAllWorkspaces: { enabled: true, visibleOnFullScreen: true, skipTransformProcessType: true },
     macShowInDock: false
   },
   quirks: {
-    macRestoreFocusOnHide: true,
     macClearHoverOnHide: true,
     reapplyAlwaysOnTop: true                 // boolean switch; reads level from behavior above
   }
@@ -54,10 +53,8 @@ The `mac`-prefixed quirks are macOS-only: on other platforms those methods are l
 
 With that in place, `this.toolbarWindow.hide()` from the domain service will:
 
-1. Snapshot every visible focusable window and call `setFocusable(false)` on them.
-2. Invoke the native `hide()`.
-3. Send the synthetic `mouseMove(-1, -1)` to clear hover.
-4. Schedule `setFocusable(true)` restoration for the snapshot after 50ms.
+1. Invoke the native `hide()`.
+2. Send the synthetic `mouseMove(-1, -1)` to clear hover.
 
 The domain service carries none of this code.
 
@@ -76,7 +73,7 @@ The domain service carries none of this code.
 |---|---|---|
 | `hideOnBlur` | `boolean` | Installs a blur listener that calls `window.hide()` (with optional runtime override via `wm.behavior.setHideOnBlur(id, enabled)`). |
 | `alwaysOnTop` | `{ level?: AlwaysOnTopLevel, relativeLevel?: number }` | Supplies the `level` / `relativeLevel` to `setAlwaysOnTop` calls — the single source of truth, read by: (1) the initial application after create (when `windowOptions.alwaysOnTop` is `true`), (2) `wm.behavior.setAlwaysOnTop(id, enabled)` runtime calls, (3) the `reapplyAlwaysOnTop` quirk. |
-| `visibleOnAllWorkspaces` | `{ enabled: boolean } & VisibleOnAllWorkspacesOptions` | Runs `window.setVisibleOnAllWorkspaces(enabled, options)` once on create. Windows whose true/false options differ per call should *not* declare this (e.g. SelectionAction) — drive directly on `BrowserWindow` instead. |
+| `visibleOnAllWorkspaces` | `{ enabled: boolean } & VisibleOnAllWorkspacesOptions` | Runs `window.setVisibleOnAllWorkspaces(enabled, options)` once on create. Windows whose true/false options differ per call should *not* declare this — drive directly on `BrowserWindow` instead. |
 | `macShowInDock` | `boolean` | macOS-only default for whether a window of this type CONTRIBUTES to Dock visibility (Dock shown iff any alive window contributes). Existence-based, not visibility-based: hiding a contributing window does NOT hide the Dock (Cmd+W semantics). When omitted, defaults to `true`. `false` is for helper windows (floating panels, menu-bar style overlays) that should never affect the Dock. Runtime override via `wm.behavior.setMacShowInDockByType(type, value)` — set it to `false` before `window.hide()` to enter tray mode, `true` before `window.show()` to leave. No-op on Windows/Linux. |
 
 ### Runtime Setters
