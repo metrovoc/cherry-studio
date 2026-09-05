@@ -87,9 +87,11 @@ export class ShortcutService extends BaseService {
     this.registerDisposable(windowService.onMainWindowCreated((window) => this.registerForMainWindow(window)))
 
     const windowManager = application.get('WindowManager')
-    this.registerDisposable(
-      windowManager.onWindowCreatedByType(WindowType.QuickAssistant, ({ window }) => this.registerWindowInput(window))
-    )
+    for (const type of [WindowType.QuickAssistant, WindowType.SelectionAction]) {
+      this.registerDisposable(
+        windowManager.onWindowCreatedByType(type, ({ window }) => this.registerWindowInput(window))
+      )
+    }
   }
 
   protected async onStop() {

@@ -98,6 +98,7 @@ vi.mock('electron', () => ({
 }))
 
 import { WindowType } from '@main/core/window/types'
+import { handleZoomFactor } from '@main/utils/zoom'
 import { IpcChannel } from '@shared/IpcChannel'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 
@@ -169,6 +170,7 @@ describe('ShortcutService', () => {
   let currentMainWindow: MockBrowserWindow
   let mainWindowCreated: ((window: MockBrowserWindow) => void) | undefined
   let quickAssistantWindowCreated: ((managed: { window: MockBrowserWindow }) => void) | undefined
+  let selectionActionWindowCreated: ((managed: { window: MockBrowserWindow }) => void) | undefined
   let nativeAccelerators: Set<string>
   let onPowerResume: (() => void) | undefined
   let onUnlockScreen: (() => void) | undefined
@@ -190,10 +192,13 @@ describe('ShortcutService', () => {
       callback(currentMainWindow)
       return { dispose: vi.fn() }
     })
+    selectionActionWindowCreated = undefined
+    commandServiceMock.execute.mockReset()
     quickAssistantWindowCreated = undefined
     windowManagerMock.onWindowCreatedByType.mockImplementation(
       (type: WindowType, callback: (managed: { window: MockBrowserWindow }) => void) => {
         if (type === WindowType.QuickAssistant) quickAssistantWindowCreated = callback
+        if (type === WindowType.SelectionAction) selectionActionWindowCreated = callback
         return { dispose: vi.fn() }
       }
     )
@@ -271,6 +276,50 @@ describe('ShortcutService', () => {
 
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(commandServiceMock.execute).toHaveBeenCalledWith('app.zoom.out', quickAssistant)
+  })
+
+  it('zooms selection action windows in, out and back to default across reuse', async () => {
+    await (service as any).onInit()
+    const window = new MockBrowserWindow()
+    let zoom = 1
+    Object.assign(window.webContents, {
+      setZoomFactor: (value: number) => {
+        zoom = value
+      }
+    })
+    commandServiceMock.execute.mockImplementation((command, target) => {
+      if (command === 'app.zoom.in') handleZoomFactor([target], 0.1)
+      if (command === 'app.zoom.out') handleZoomFactor([target], -0.1)
+      if (command === 'app.zoom.reset') handleZoomFactor([target], 0, true)
+    })
+    MockMainPreferenceServiceUtils.setPreferenceValue('app.zoom_factor', 1)
+    selectionActionWindowCreated?.({ window })
+
+    for (let use = 0; use < 2; use++) {
+      for (const [key, code, expected] of [
+        ['=', 'Equal', 1.1],
+        ['-', 'Minus', 1],
+        ['-', 'Minus', 0.9],
+        ['0', 'Digit0', 1]
+      ] as const) {
+        window.emitWebContents(
+          'before-input-event',
+          { preventDefault: vi.fn() },
+          {
+            type: 'keyDown',
+            key,
+            code,
+            control: process.platform !== 'darwin',
+            meta: process.platform === 'darwin',
+            alt: false,
+            shift: false,
+            isComposing: false
+          }
+        )
+        expect(zoom).toBe(expected)
+        expect(MockMainPreferenceServiceUtils.getPreferenceValue('app.zoom_factor')).toBe(expected)
+      }
+    }
   })
 
   it.each([
