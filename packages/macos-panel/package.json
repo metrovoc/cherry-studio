@@ -1,0 +1,16 @@
+{
+  "name": "@cherrystudio/macos-panel",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Native auxiliary panel ownership for macOS assistant windows",
+  "main": "panel.cjs",
+  "types": "panel.d.ts",
+  "gypfile": true,
+  "scripts": {
+    "install": "node install.cjs",
+    "test": "node tests/run.cjs"
+  },
+  "dependencies": {
+    "node-gyp-build": "4.8.4"
+  }
+}

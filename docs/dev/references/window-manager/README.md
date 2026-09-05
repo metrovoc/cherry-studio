@@ -35,9 +35,9 @@ Per-type metadata in `windowRegistry.ts` is split into three layers. Each field 
 |---|---|---|---|
 | `windowOptions` | Arguments to `new BrowserWindow(...)` — Electron-native constructor options | Electron rejects the build or behaves wrong on construction | `width`, `alwaysOnTop: true`, `frame: false`, `platformOverrides` |
 | `behavior` | Cross-platform, non-hacky declarative behavior that Electron's constructor cannot express | WindowManager behavior diverges from intent (e.g. no auto-hide on blur) | `hideOnBlur`, `alwaysOnTop: { level, relativeLevel }`, `visibleOnAllWorkspaces`, `macShowInDock` |
-| `quirks` | OS-specific hacks / workarounds applied via monkey-patches | Sub-par UX on the specific OS (focus steal, Dock flicker, level demotion) | `macRestoreFocusOnHide`, `macClearHoverOnHide`, `reapplyAlwaysOnTop` |
+| `quirks` | OS-specific hacks / workarounds applied via monkey-patches | Sub-par UX on the specific OS (focus steal, Dock flicker, level demotion) | `macClearHoverOnHide`, `reapplyAlwaysOnTop` |
 
-**Naming rule (orthogonal to layering)**: any field that is effective only on one platform carries a `mac` / `win` / `linux` prefix — regardless of layer. `behavior.macShowInDock` is a behavior field but its `mac` prefix signals the platform scope; `quirks.macRestoreFocusOnHide` is a hack with the same prefix.
+**Naming rule (orthogonal to layering)**: any field that is effective only on one platform carries a `mac` / `win` / `linux` prefix — regardless of layer. `behavior.macShowInDock` is a behavior field but its `mac` prefix signals the platform scope; `quirks.macClearHoverOnHide` is a hack with the same prefix.
 
 ---
 
