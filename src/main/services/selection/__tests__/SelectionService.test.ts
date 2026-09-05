@@ -5,14 +5,6 @@ import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { WindowType } from '@main/core/window/types'
 
-const { getApplicationIdMock } = vi.hoisted(() => ({
-  getApplicationIdMock: vi.fn(() => 'com.kangfenmao.CherryStudio')
-}))
-
-vi.mock('@main/utils/appEdition', () => ({
-  getApplicationId: getApplicationIdMock
-}))
-
 vi.mock('@main/core/platform', () => ({
   isDev: false,
   isLinux: false,
@@ -228,7 +220,7 @@ describe('SelectionService macOS toolbar', () => {
       toolbarWindow: typeof toolbarWindow
       calculateToolbarPosition: () => { x: number; y: number }
       getToolbarRealSize: () => { toolbarWidth: number; toolbarHeight: number }
-      showToolbarAtPosition: (point: { x: number; y: number }, orientation: string, programName: string) => void
+      showToolbarAtPosition: (point: { x: number; y: number }, orientation: string) => void
     }
     access.toolbarWindow = toolbarWindow
     vi.spyOn(access, 'calculateToolbarPosition').mockReturnValue({ x: 10, y: 20 })
@@ -247,30 +239,11 @@ describe('SelectionService macOS toolbar', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    ['global', 'com.kangfenmao.CherryStudio'],
-    ['China', 'com.cherryai.cherrystudio.cn']
-  ])('preserves selection inside the %s edition', (_edition, applicationId) => {
-    getApplicationIdMock.mockReturnValue(applicationId)
+  it('shows without changing keyboard focus or the selected app’s workspace state', () => {
     const { access, toolbarWindow } = createToolbarHarness()
-
-    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft', applicationId)
-
+    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft')
+    expect(toolbarWindow.setFocusable).not.toHaveBeenCalled()
     expect(toolbarWindow.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
-    expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
-  })
-
-  it('treats the other edition as an external app', () => {
-    getApplicationIdMock.mockReturnValue('com.kangfenmao.CherryStudio')
-    const { access, toolbarWindow } = createToolbarHarness()
-
-    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft', 'com.cherryai.cherrystudio.cn')
-
-    expect(toolbarWindow.setFocusable).toHaveBeenCalledWith(false)
-    expect(toolbarWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
-      visibleOnFullScreen: true,
-      skipTransformProcessType: true
-    })
     expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
   })
 })
