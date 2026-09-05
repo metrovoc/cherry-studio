@@ -3,28 +3,22 @@ import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceServi
 import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { platform, notifications, systemPreferences, windowManager, mainWindowService } = vi.hoisted(() => {
-  const notifications = new Map<number, () => void>()
-  let subscriptionId = 0
-  return {
-    platform: { isMac: true, isWin: false },
-    notifications,
-    systemPreferences: {
-      subscribeLocalNotification: vi.fn((name: string, callback: () => void) => {
-        if (name !== 'NSWindowDidResignKeyNotification') throw new Error(`Unexpected notification: ${name}`)
-        notifications.set(++subscriptionId, callback)
-        return subscriptionId
-      }),
-      unsubscribeLocalNotification: vi.fn((id: number) => notifications.delete(id))
-    },
-    windowManager: { open: vi.fn(), close: vi.fn(), getWindow: vi.fn(), onWindowCreatedByType: vi.fn() },
-    mainWindowService: { onMainWindowCreated: vi.fn() }
+const { platform, outsideClicks, windowManager } = vi.hoisted(() => ({
+  platform: { isMac: true, isWin: false },
+  outsideClicks: new Set<() => void>(),
+  windowManager: { open: vi.fn(), close: vi.fn(), getWindow: vi.fn(), onWindowCreatedByType: vi.fn() }
+}))
+
+vi.mock('@cherrystudio/macos-panel', () => ({
+  watchOutsideClicks: (_handle: Buffer, callback: () => void) => {
+    outsideClicks.add(callback)
+    return () => outsideClicks.delete(callback)
   }
-})
+}))
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory({ WindowManager: windowManager, MainWindowService: mainWindowService })
+  return mockApplicationFactory({ WindowManager: windowManager })
 })
 
 vi.mock('@main/core/platform', () => ({
@@ -41,8 +35,7 @@ vi.mock('electron', () => ({
     getCursorScreenPoint: () => ({ x: 0, y: 0 }),
     getDisplayNearestPoint: () => ({ id: 1 })
   },
-  shell: { openExternal: vi.fn() },
-  systemPreferences
+  shell: { openExternal: vi.fn() }
 }))
 
 import { QuickAssistantService } from '../QuickAssistantService'
@@ -99,6 +92,10 @@ class TestWindow extends EventEmitter {
     this.opacity = opacity
   }
 
+  public getNativeWindowHandle() {
+    return Buffer.alloc(8)
+  }
+
   public getBounds() {
     return { x: 0, y: 0, width: 550, height: 400 }
   }
@@ -111,7 +108,7 @@ describe('QuickAssistantService window lifecycle', () => {
   const windows = new Map<string, TestWindow>()
   const createdListeners = new Set<(event: { window: TestWindow }) => void>()
 
-  const resignKey = () => notifications.forEach((callback) => callback())
+  const clickOutside = () => outsideClicks.forEach((callback) => callback())
   const start = async () => {
     service = new QuickAssistantService()
     await service._doInit()
@@ -125,15 +122,11 @@ describe('QuickAssistantService window lifecycle', () => {
     vi.useFakeTimers()
     platform.isMac = true
     platform.isWin = false
-    notifications.clear()
+    outsideClicks.clear()
     windows.clear()
     createdListeners.clear()
     mainWindow = new TestWindow()
     mainWindow.show()
-    mainWindowService.onMainWindowCreated.mockImplementation((listener) => {
-      listener(mainWindow)
-      return { dispose() {} }
-    })
     windowManager.onWindowCreatedByType.mockImplementation((_type, listener) => {
       createdListeners.add(listener)
       return { dispose: () => createdListeners.delete(listener) }
@@ -155,48 +148,35 @@ describe('QuickAssistantService window lifecycle', () => {
     vi.clearAllMocks()
   })
 
-  it('hides on native key loss even when the foreground app and Electron blur do not change', async () => {
+  it('keeps the panel open when another launcher takes keyboard focus', async () => {
     await start()
     quickWindow.focused = false
-    resignKey()
-    vi.runAllTimers()
-
-    expect(quickWindow.visible).toBe(false)
-    expect(mainWindow.visible).toBe(true)
-  })
-
-  it('lets Cocoa complete a key-window handoff before deciding to hide', async () => {
-    await start()
-    quickWindow.focused = false
-    resignKey()
-    quickWindow.focused = true
-    vi.runAllTimers()
-
-    expect(quickWindow.visible).toBe(true)
-    expect(quickWindow.focused).toBe(true)
-  })
-
-  it('keeps the panel open when an auxiliary window resigns key but the panel retains input focus', async () => {
-    await start()
-    resignKey()
     quickWindow.emit('blur')
     vi.runAllTimers()
 
     expect(quickWindow.visible).toBe(true)
-    expect(quickWindow.focused).toBe(true)
   })
 
-  it('preserves a pinned panel on key loss and restores auto-hide after unpinning', async () => {
+  it('dismisses on an outside click regardless of main-window focus', async () => {
+    await start()
+    mainWindow.focused = true
+    clickOutside()
+    expect(quickWindow.visible).toBe(false)
+
+    service.showQuickAssistant()
+    mainWindow.focused = false
+    clickOutside()
+    expect(quickWindow.visible).toBe(false)
+  })
+
+  it('preserves a pinned panel on outside clicks and restores dismissal after unpinning', async () => {
     await start()
     service.setPinQuickAssistant(true)
-    quickWindow.focused = false
-    resignKey()
-    vi.runAllTimers()
+    clickOutside()
     expect(quickWindow.visible).toBe(true)
 
     service.setPinQuickAssistant(false)
-    resignKey()
-    vi.runAllTimers()
+    clickOutside()
     expect(quickWindow.visible).toBe(false)
   })
 
@@ -220,11 +200,11 @@ describe('QuickAssistantService window lifecycle', () => {
     expect(quickWindow.destroyed).toBe(false)
   })
 
-  it('recreates a closed window on the next toggle and attaches auto-hide to the replacement', async () => {
+  it('recreates a closed window on the next toggle and attaches outside-click dismissal to the replacement', async () => {
     await start()
     const closedWindow = quickWindow
     closedWindow.destroy()
-    expect(notifications.size).toBe(0)
+    expect(outsideClicks.size).toBe(0)
 
     service.toggleQuickAssistant()
 
@@ -232,22 +212,21 @@ describe('QuickAssistantService window lifecycle', () => {
     expect(quickWindow.visible).toBe(true)
     expect(quickWindow.focused).toBe(true)
     quickWindow.focused = false
-    resignKey()
+    clickOutside()
     vi.runAllTimers()
     expect(quickWindow.visible).toBe(false)
   })
 
-  it('releases native observers and pending focus checks when disabled, without recreating on toggle', async () => {
+  it('releases the click monitor when disabled, without recreating on toggle', async () => {
     await start()
     quickWindow.focused = false
-    resignKey()
 
     await service._doDeactivate()
     service.toggleQuickAssistant()
 
     expect(quickWindow.destroyed).toBe(true)
     expect(windows.size).toBe(1)
-    expect(notifications.size).toBe(0)
+    expect(outsideClicks.size).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -256,17 +235,17 @@ describe('QuickAssistantService window lifecycle', () => {
     await service._doStop()
 
     expect(quickWindow.destroyed).toBe(true)
-    expect(notifications.size).toBe(0)
+    expect(outsideClicks.size).toBe(0)
     expect(createdListeners.size).toBe(0)
     expect(mainWindow.listenerCount('show')).toBe(0)
     expect(mainWindow.listenerCount('restore')).toBe(0)
   })
 
-  it.each(['show', 'restore'])('hides the panel when the main window emits %s', async (event) => {
+  it.each(['show', 'restore'])('keeps the panel open when the main window emits %s', async (event) => {
     await start()
     mainWindow.emit(event)
 
-    expect(quickWindow.visible).toBe(false)
+    expect(quickWindow.visible).toBe(true)
     expect(mainWindow.visible).toBe(true)
   })
 
@@ -283,6 +262,6 @@ describe('QuickAssistantService window lifecycle', () => {
     expect(quickWindow.minimized).toBe(false)
     expect(quickWindow.opacity).toBe(1)
     expect(quickWindow.focused).toBe(true)
-    expect(notifications.size).toBe(0)
+    expect(outsideClicks.size).toBe(0)
   })
 })

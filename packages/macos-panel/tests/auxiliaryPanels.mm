@@ -1,4 +1,5 @@
 #import "../src/auxiliaryPanels.h"
+#import "../src/outsideClicks.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -63,12 +64,29 @@ int main() {
     Check(candidate.parentWindow == nil, "Disposal left a child relationship");
     Update(candidate);
     Check(candidate.parentWindow == nil, "Observer survived disposal");
+    int clicks = 0;
+    owner.simulatedVisible = YES;
+    {
+      OutsideClicks monitor(owner, [&] { clicks++; });
+      monitor.Handle(owner);
+      [owner addChildWindow:candidate ordered:NSWindowAbove];
+      monitor.Handle(candidate);
+      Check(clicks == 0, "An editor or its input panel was treated as an outside click");
+      [owner removeChildWindow:candidate];
+      monitor.Handle(other);
+      Check(clicks == 1, "Clicking another app window did not dismiss");
+      monitor.Handle(nil);
+      Check(clicks == 2, "Clicking another process did not dismiss");
+      owner.simulatedVisible = NO;
+      monitor.Handle(nil);
+      Check(clicks == 2, "A hidden panel received outside clicks");
+    }
     [other removeChildWindow:foreign];
     for (TestPanel *panel in @[owner, candidate, dialog, foreign, other]) {
       panel.simulatedKey = NO;
       panel.simulatedVisible = NO;
       [panel close];
     }
-    puts("Auxiliary panel ownership and cleanup passed");
+    puts("Auxiliary panel ownership, outside clicks and cleanup passed");
   }
 }
