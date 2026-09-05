@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Кратко изложите следующее содержимое. Требования: ответьте на языке {{language}}; не объясняйте этот промпт, сразу дайте ответ: \n\n",
   "selection.action.translate.smart_translate_tips": "Смарт-перевод: содержимое будет переведено на целевой язык; содержимое уже на целевом языке будет переведено на альтернативный язык",
   "selection.action.window.c_copy": "C - копировать",
+  "selection.action.window.close_all": "Закрыть все окна выделения",
   "selection.action.window.esc_close": "Esc - закрыть",
   "selection.action.window.esc_stop": "Esc - остановить",
   "selection.action.window.opacity": "Прозрачность окна",

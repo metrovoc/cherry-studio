@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Bitte fassen Sie den folgenden Inhalt zusammen. Anforderungen: Antworten Sie auf {{language}}; erklären Sie diesen Prompt nicht, sondern geben Sie direkt die Antwort aus: \n\n",
   "selection.action.translate.smart_translate_tips": "Intelligente Übersetzung: Inhalt wird bevorzugt in Zielsprache übersetzt; wenn Inhalt bereits in Zielsprache, Übersetzung in Alternativsprache",
   "selection.action.window.c_copy": "C zum Kopieren",
+  "selection.action.window.close_all": "Alle Auswahlfenster schließen",
   "selection.action.window.esc_close": "Esc Schließen",
   "selection.action.window.esc_stop": "Esc Stoppen",
   "selection.action.window.opacity": "Fenstertransparenz",

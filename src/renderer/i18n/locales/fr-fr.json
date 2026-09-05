@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Veuillez résumer le contenu suivant. Exigences : répondez en {{language}} ; n’incluez aucune explication de cette consigne et fournissez directement la réponse : \n\n",
   "selection.action.translate.smart_translate_tips": "Traduction intelligente : le contenu sera d'abord traduit dans la langue cible ; si le contenu est déjà dans la langue cible, il sera traduit dans la langue secondaire",
   "selection.action.window.c_copy": "C Copier",
+  "selection.action.window.close_all": "Fermer toutes les fenêtres de sélection",
   "selection.action.window.esc_close": "Esc Fermer",
   "selection.action.window.esc_stop": "Esc Arrêter",
   "selection.action.window.opacity": "Opacité de la fenêtre",

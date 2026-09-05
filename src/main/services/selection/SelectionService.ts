@@ -1202,6 +1202,12 @@ export class SelectionService extends BaseService implements Activatable {
     wm.suspendPool(WindowType.SelectionAction)
   }
 
+  public closeActionWindows(): void {
+    application
+      .get('IpcApiService')
+      .broadcastToType(WindowType.SelectionAction, 'selection.close_action_window', undefined)
+  }
+
   /**
    * Process action item
    * @param actionItem Action item to process

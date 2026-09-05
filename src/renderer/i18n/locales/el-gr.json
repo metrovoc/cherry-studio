@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Συνοψίστε το ακόλουθο περιεχόμενο. Απαιτήσεις: απαντήστε στη γλώσσα {{language}}· μην εξηγήσετε αυτή την προτροπή, δώστε απευθείας την απάντηση: \n\n",
   "selection.action.translate.smart_translate_tips": "Έξυπνη μετάφραση: το περιεχόμενο θα μεταφραστεί προτεραιακά στη στόχος γλώσσα· αν το περιεχόμενο είναι ήδη στη στόχος γλώσσα, θα μεταφραστεί στην εναλλακτική γλώσσα",
   "selection.action.window.c_copy": "Αντιγραφή C",
+  "selection.action.window.close_all": "Κλείσιμο όλων των παραθύρων επιλογής",
   "selection.action.window.esc_close": "Esc Κλείσιμο",
   "selection.action.window.esc_stop": "Esc Διακοπή",
   "selection.action.window.opacity": "Διαφάνεια παραθύρου",

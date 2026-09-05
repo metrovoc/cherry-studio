@@ -10,6 +10,9 @@ import type { IpcHandlersFor } from '@shared/ipc/types'
  * to `wm.behavior`, the by-id home for alwaysOnTop.
  */
 export const selectionHandlers: IpcHandlersFor<typeof selectionRequestSchemas> = {
+  'selection.close_action_windows': async () => {
+    application.get('SelectionService').closeActionWindows()
+  },
   'selection.hide_toolbar': async () => {
     application.get('SelectionService').hideToolbar()
   },

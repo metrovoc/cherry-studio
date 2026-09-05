@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Rezumă următorul conținut. Cerințe: răspunde în {{language}}; nu include nicio explicație a acestui prompt, ci oferă direct răspunsul: \n\n",
   "selection.action.translate.smart_translate_tips": "Traducere inteligentă: Conținutul va fi tradus mai întâi în limba țintă; conținutul aflat deja în limba țintă va fi tradus în limba alternativă",
   "selection.action.window.c_copy": "C: Copiază",
+  "selection.action.window.close_all": "Închide toate ferestrele de selecție",
   "selection.action.window.esc_close": "Esc: Închide",
   "selection.action.window.esc_stop": "Esc: Oprește",
   "selection.action.window.opacity": "Opacitate fereastră",

@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "请总结下面的内容。要求：使用 {{language}} 语言进行回复；请不要包含对本提示词的任何解释，直接给出回复： \n\n",
   "selection.action.translate.smart_translate_tips": "智能翻译：内容将优先翻译为目标语言；内容已是目标语言的，将翻译为备选语言",
   "selection.action.window.c_copy": "C 复制",
+  "selection.action.window.close_all": "关闭所有划词助手窗口",
   "selection.action.window.esc_close": "Esc 关闭",
   "selection.action.window.esc_stop": "Esc 停止",
   "selection.action.window.opacity": "窗口透明度",

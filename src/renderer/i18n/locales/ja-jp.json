@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "以下の内容を要約してください。要件: {{language}} で回答してください。このプロンプト自体の説明は含めず、回答だけを直接出力してください: \n\n",
   "selection.action.translate.smart_translate_tips": "スマート翻訳: 内容を優先的に対象言語へ翻訳します。すでに対象言語の場合は、予備の言語へ翻訳します。",
   "selection.action.window.c_copy": "Cでコピー",
+  "selection.action.window.close_all": "選択アシスタントのウィンドウをすべて閉じる",
   "selection.action.window.esc_close": "Escで閉じる",
   "selection.action.window.esc_stop": "Escで停止",
   "selection.action.window.opacity": "ウィンドウの透過度",

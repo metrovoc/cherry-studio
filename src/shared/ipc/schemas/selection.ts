@@ -44,6 +44,7 @@ const linuxEnvInfoSchema = z.object({
 
 // ── Request: renderer→main calls (zod values, always parsed) ──
 export const selectionRequestSchemas = {
+  'selection.close_action_windows': defineRoute({ input: z.void(), output: z.void() }),
   'selection.hide_toolbar': defineRoute({ input: z.void(), output: z.void() }),
   'selection.write_to_clipboard': defineRoute({ input: z.string(), output: z.boolean() }),
   'selection.determine_toolbar_size': defineRoute({
@@ -61,6 +62,7 @@ export const selectionRequestSchemas = {
 
 // ── Event: main→renderer pushes (pure types, never parsed) ──
 export type SelectionEventSchemas = {
+  'selection.close_action_window': void
   'selection.text_selected': TextSelectionData
   'selection.toolbar_visibility_change': boolean
 }

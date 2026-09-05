@@ -59,6 +59,8 @@ const state = vi.hoisted(() => ({
     | undefined
 }))
 
+vi.mock('@renderer/utils/platform', () => ({ isMac: true }))
+
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
 
 vi.mock('@renderer/ipc', () => ({
@@ -712,5 +714,31 @@ describe('HomeWindow', () => {
     expect(screen.getByTestId('chat-window')).toBeInTheDocument()
     expect(state.resetTemporaryTopic).not.toHaveBeenCalled()
     expect(state.persistTemporaryTopic).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides immediately and reopens at home with an empty draft after stopping', async () => {
+    state.stopChat.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<HomeWindow />)
+    const input = screen.getByRole('textbox')
+    await user.type(input, 'Explain this')
+    await user.keyboard('{Enter}')
+    state.ipcRequest.mockClear()
+    await user.keyboard('{Meta>}{Escape}{/Meta}')
+    expect(state.ipcRequest).toHaveBeenCalledWith('quick_assistant.hide')
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''))
+    expect(state.resetTemporaryTopic).toHaveBeenCalled()
+    expect(state.stopChat).toHaveBeenCalled()
+  })
+
+  it('does not dismiss the assistant embedded in the main window', async () => {
+    const user = userEvent.setup()
+    render(<HomeWindow draggable={false} />)
+    const input = screen.getByRole('textbox')
+    await user.type(input, 'Keep this draft')
+    await user.keyboard('{Meta>}{Escape}{/Meta}')
+    expect(input).toHaveValue('Keep this draft')
+    expect(state.ipcRequest).not.toHaveBeenCalledWith('quick_assistant.hide')
+    expect(state.resetTemporaryTopic).not.toHaveBeenCalled()
   })
 })

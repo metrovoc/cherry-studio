@@ -610,6 +610,34 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setUserInputText('')
   }, [handleCloseWindow, handlePause, isLoading, resetConversation, route])
 
+  useEffect(() => {
+    if (!draggable || !isMac) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        event.isComposing ||
+        event.repeat ||
+        !event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey
+      )
+        return
+
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      void stopChat().then(() => {
+        resetConversation()
+        setFlowError(null)
+        setRoute('home')
+        setUserInputText('')
+      })
+      void handleCloseWindow()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [draggable, handleCloseWindow, resetConversation, stopChat])
+
   const handleCopy = useCallback(() => {
     if (!content) return
     void navigator.clipboard.writeText(content)
@@ -638,7 +666,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         }
         break
       case 'Escape':
-        handleEsc()
+        if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) handleEsc()
         break
     }
   }

@@ -3244,6 +3244,7 @@
   "selection.action.prompt.summary": "Vui lòng tóm tắt nội dung sau. Yêu cầu: Trả lời bằng {{language}}; không giải thích lời nhắc này, chỉ đưa ra câu trả lời trực tiếp: \n\n",
   "selection.action.translate.smart_translate_tips": "Dịch thông minh: Nội dung sẽ được dịch sang ngôn ngữ đích trước; nội dung đã ở ngôn ngữ đích sẽ được dịch sang ngôn ngữ thay thế",
   "selection.action.window.c_copy": "C: Sao chép",
+  "selection.action.window.close_all": "Đóng tất cả cửa sổ lựa chọn",
   "selection.action.window.esc_close": "Esc: Đóng",
   "selection.action.window.esc_stop": "Esc: Dừng",
   "selection.action.window.opacity": "Độ mờ cửa sổ",
