@@ -43,7 +43,7 @@ import { getBaseUrl, getExtraHeaders, routeToEndpoint } from '../utils/provider'
 import { normalizeArkResponsesResponse, stripArkUnsupportedIncludes } from './ark'
 import { generateSignature } from './cherryai'
 import { buildCherryCloudProviderConfig } from './cherryCloud'
-import { buildCodexRequestHeaders, coerceCodexRequestBody } from './codex'
+import { adaptCodexResponse, buildCodexRequestHeaders, coerceCodexRequestBody } from './codex'
 import { COPILOT_DEFAULT_HEADERS } from './constants'
 import type { ServingAuthMethod, ServingCredentialReceipt } from './credential'
 import { appendDashScopeWebExtractor } from './custom/dashscope/dashscopeWebExtractor'
@@ -468,22 +468,25 @@ function buildCodexFetch() {
   // OAuthRuntimeService.authenticatedFetch; this wrapper only shapes the codex
   // request (headers + body coercion), re-applied with the fresh token on retry.
   return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
-    application.get('OAuthRuntimeService').authenticatedFetch(
-      OPENAI_CODEX_PROVIDER_ID,
-      (creds) => ({
-        input,
-        init: {
-          ...init,
-          headers: buildCodexRequestHeaders(init?.headers, {
-            accessToken: creds.accessToken,
-            accountId: creds.accountId ?? null
-          }),
-          body: coerceCodexRequestBody(init?.body)
-        }
-      }),
-      customFetch,
-      { notSignedInMessage: 'Not signed in to OpenAI Codex. Open the provider settings and sign in again.' }
-    )
+    application
+      .get('OAuthRuntimeService')
+      .authenticatedFetch(
+        OPENAI_CODEX_PROVIDER_ID,
+        (creds) => ({
+          input,
+          init: {
+            ...init,
+            headers: buildCodexRequestHeaders(init?.headers, {
+              accessToken: creds.accessToken,
+              accountId: creds.accountId ?? null
+            }),
+            body: coerceCodexRequestBody(init?.body)
+          }
+        }),
+        customFetch,
+        { notSignedInMessage: 'Not signed in to OpenAI Codex. Open the provider settings and sign in again.' }
+      )
+      .then((response) => adaptCodexResponse(response, init?.body))
 }
 
 /**
