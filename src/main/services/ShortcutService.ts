@@ -1,5 +1,5 @@
 import type { BrowserWindow, WebContents } from 'electron'
-import { app, globalShortcut } from 'electron'
+import { app, globalShortcut, systemPreferences } from 'electron'
 
 import { application } from '@application'
 import { loggerService } from '@logger'
@@ -74,7 +74,20 @@ export class ShortcutService extends BaseService {
   private conflictedKeys = new Set<CommandShortcutPreferenceKey<CommandId>>()
   private registeredAccelerators = new Map<string, RegisteredShortcut>()
 
+  private assistantDismissRegistered = false
+  private assistantFocusCheck: ReturnType<typeof setImmediate> | null = null
+
   protected async onInit() {
+    if (isMac) {
+      for (const name of ['NSWindowDidBecomeKeyNotification', 'NSWindowDidResignKeyNotification']) {
+        const subscription = systemPreferences.subscribeLocalNotification(name, () =>
+          this.scheduleAssistantFocusCheck()
+        )
+        this.registerDisposable(() => systemPreferences.unsubscribeLocalNotification(subscription))
+      }
+      this.registerDisposable(() => this.releaseAssistantDismissShortcut())
+      this.scheduleAssistantFocusCheck()
+    }
     this.registerBuiltInHandlers()
     this.subscribeToPreferenceChanges()
     this.subscribeToLifecycleReconciliation()
@@ -96,8 +109,57 @@ export class ShortcutService extends BaseService {
   }
 
   protected async onStop() {
+    this.releaseAssistantDismissShortcut()
     this.unregisterAll()
     this.resetRuntimeState()
+  }
+
+  private getFocusedAssistantWindow() {
+    const wm = application.get('WindowManager')
+    return [WindowType.QuickAssistant, WindowType.SelectionAction]
+      .flatMap((type) => wm.getWindowInfosByType(type))
+      .find((window) => window.isVisible && window.isFocused)
+  }
+
+  private scheduleAssistantFocusCheck(): void {
+    if (this.assistantFocusCheck) clearImmediate(this.assistantFocusCheck)
+    // Cocoa resigns the old key window before assigning its replacement.
+    this.assistantFocusCheck = setImmediate(() => {
+      this.assistantFocusCheck = null
+      this.reconcileAssistantDismissShortcut()
+    })
+  }
+
+  private reconcileAssistantDismissShortcut(): void {
+    if (!this.getFocusedAssistantWindow()) {
+      this.releaseAssistantDismissShortcut()
+      return
+    }
+    if (this.assistantDismissRegistered) return
+
+    // Nonactivating macOS panels do not receive native Command-Escape key events.
+    this.assistantDismissRegistered = globalShortcut.register('Command+Escape', () => {
+      const window = this.getFocusedAssistantWindow()
+      if (!window) return
+      const ipc = application.get('IpcApiService')
+      if (window.type === WindowType.SelectionAction) {
+        ipc.broadcastToType(WindowType.SelectionAction, 'selection.close_action_window', undefined)
+      } else {
+        ipc.send(window.id, 'quick_assistant.dismiss', undefined)
+      }
+    })
+    if (!this.assistantDismissRegistered) logger.warn('Failed to register assistant dismissal shortcut')
+  }
+
+  private releaseAssistantDismissShortcut(): void {
+    if (this.assistantFocusCheck) {
+      clearImmediate(this.assistantFocusCheck)
+      this.assistantFocusCheck = null
+    }
+    if (this.assistantDismissRegistered) {
+      globalShortcut.unregister('Command+Escape')
+      this.assistantDismissRegistered = false
+    }
   }
 
   private registerBuiltInHandlers(): void {
@@ -130,7 +192,10 @@ export class ShortcutService extends BaseService {
   }
 
   private subscribeToLifecycleReconciliation(): void {
-    const reconcile = () => this.reregisterShortcuts()
+    const reconcile = () => {
+      this.reregisterShortcuts()
+      if (isMac) this.scheduleAssistantFocusCheck()
+    }
     app.on('activate', reconcile)
     this.registerDisposable(() => app.removeListener('activate', reconcile))
 
