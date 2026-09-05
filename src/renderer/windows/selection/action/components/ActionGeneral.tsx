@@ -207,9 +207,7 @@ const ActionGeneral: FC<Props> = React.memo(({ action, scrollToBottom }) => {
     fetchResult()
   }, [fetchResult])
 
-  const handlePause = () => {
-    void stopChat()
-  }
+  const handlePause = () => stopChat()
 
   const handleRegenerate = () => {
     fetchResult()
