@@ -48,6 +48,7 @@ export function buildCodexRequestHeaders(base: HeadersInit | undefined, creds: C
   const headers = new Headers(base)
   headers.set('Authorization', `Bearer ${creds.accessToken}`)
   if (creds.accountId) headers.set('chatgpt-account-id', creds.accountId)
+  else headers.delete('chatgpt-account-id')
   headers.set('OpenAI-Beta', 'responses=experimental')
   headers.set('originator', 'cherry-studio')
   return headers
