@@ -2,7 +2,7 @@
 title: Quick Assistant stays open when another launcher takes focus
 category: changed
 severity: notice
-introduced_in_pr: N/A
+introduced_in_pr: c68f4310b6
 date: 2026-09-05
 ---
 
