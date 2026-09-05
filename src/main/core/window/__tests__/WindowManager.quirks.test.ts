@@ -19,6 +19,11 @@ const platform = vi.hoisted(() => ({
 }))
 vi.mock('@main/core/platform', () => platform)
 
+const panelTracking = vi.hoisted(() => ({ track: vi.fn(), dispose: vi.fn() }))
+vi.mock('@cherrystudio/macos-panel', () => ({
+  trackAuxiliaryPanels: panelTracking.track.mockImplementation(() => panelTracking.dispose)
+}))
+
 // ─── Mock BrowserWindow with quirks-related methods ────────────────
 
 interface MockBrowserWindow {
@@ -48,6 +53,7 @@ interface MockBrowserWindow {
   setFocusable: ReturnType<typeof vi.fn>
   setVisibleOnAllWorkspaces: ReturnType<typeof vi.fn>
   center: ReturnType<typeof vi.fn>
+  getNativeWindowHandle: ReturnType<typeof vi.fn>
   getTitle: ReturnType<typeof vi.fn>
   setTitleBarOverlay: ReturnType<typeof vi.fn>
   loadURL: ReturnType<typeof vi.fn>
@@ -98,6 +104,7 @@ function createMockBrowserWindow(): MockBrowserWindow {
     setFocusable: vi.fn(),
     setVisibleOnAllWorkspaces: vi.fn(),
     center: vi.fn(),
+    getNativeWindowHandle: vi.fn(() => Buffer.alloc(8)),
     getTitle: vi.fn(() => 'Test Window'),
     setTitleBarOverlay: vi.fn(),
     loadURL: vi.fn(() => Promise.resolve()),
@@ -194,7 +201,7 @@ const basePool = {
 
 vi.mock('../windowRegistry', () => {
   const registry: Record<string, unknown> = {
-    // Singleton toolbar with all three quirks + showMode:'manual' (like SelectionToolbar)
+    // Singleton toolbar with hover and level quirks + showMode:'manual' (like SelectionToolbar)
     toolbar: {
       type: 'toolbar',
       lifecycle: 'singleton',
@@ -205,12 +212,11 @@ vi.mock('../windowRegistry', () => {
         alwaysOnTop: { level: 'screen-saver' }
       },
       quirks: {
-        macRestoreFocusOnHide: true,
         macClearHoverOnHide: true,
         reapplyAlwaysOnTop: true
       }
     },
-    // Pooled action with only restoreFocusOnHide (like SelectionAction)
+    // Pooled action (like SelectionAction)
     action: {
       type: 'action',
       lifecycle: 'pooled',
@@ -218,7 +224,7 @@ vi.mock('../windowRegistry', () => {
       htmlPath: 'action/index.html',
       windowOptions: { width: 500, height: 400 },
       poolConfig: basePool,
-      quirks: { macRestoreFocusOnHide: true }
+      quirks: { macAttachAuxiliaryPanels: true }
     },
     // Plain window with no quirks — used for identity checks
     plain: {
@@ -337,147 +343,28 @@ describe('WindowManager quirks — applyQuirks monkey-patching', () => {
     vi.clearAllMocks()
   })
 
-  // ─── macRestoreFocusOnHide ─────────────────────────────────
-
-  describe('macRestoreFocusOnHide', () => {
-    it('disables focusable on all visible focusable windows before hide, restores after 50ms', () => {
-      // Pre-create a bystander window to be affected by the guard
-      const bystanderId = wm.open('plain' as never)
-      const bystander = createdWindows[0]
-      bystander.setFocusable.mockClear()
-
-      // Open the toolbar (has macRestoreFocusOnHide quirk)
-      const toolbarId = wm.open('toolbar' as never)
-      const toolbar = createdWindows[1]
-      toolbar.setFocusable.mockClear()
-
-      // Call patched hide()
-      toolbar.hide()
-
-      // Before the 50ms timer: bystander was set to non-focusable
-      expect(bystander.setFocusable).toHaveBeenCalledWith(false)
-
-      // Advance 50ms — bystander should be restored
-      vi.advanceTimersByTime(50)
-      expect(bystander.setFocusable).toHaveBeenCalledWith(true)
-
-      // bystanderId and toolbarId are used to keep the handles alive
-      expect(bystanderId).toBeTruthy()
-      expect(toolbarId).toBeTruthy()
-    })
-
-    it('wraps close() with the same focus guard', () => {
-      const bystanderId = wm.open('plain' as never)
-      const bystander = createdWindows[0]
-      bystander.setFocusable.mockClear()
-
-      wm.open('action' as never)
-      const action = createdWindows[1]
-
-      action.close()
-
-      expect(bystander.setFocusable).toHaveBeenCalledWith(false)
-      vi.advanceTimersByTime(50)
-      expect(bystander.setFocusable).toHaveBeenCalledWith(true)
-      expect(bystanderId).toBeTruthy()
-    })
-
-    it('skips the guard for already-destroyed or invisible bystanders', () => {
-      // Bystander destroyed → skip
-      wm.open('plain' as never)
-      const destroyedBystander = createdWindows[0]
-      destroyedBystander.isDestroyed.mockReturnValue(true)
-
-      // Bystander invisible → skip
-      wm.open('plain' as never)
-      const hiddenBystander = createdWindows[1]
-      hiddenBystander.isVisible.mockReturnValue(false)
-
-      // Bystander already non-focusable → skip
-      wm.open('plain' as never)
-      const nonFocusableBystander = createdWindows[2]
-      nonFocusableBystander.isFocusable.mockReturnValue(false)
-      nonFocusableBystander.setFocusable.mockClear()
-
-      wm.open('action' as never)
-      const action = createdWindows[3]
-      action.hide()
-
-      expect(destroyedBystander.setFocusable).not.toHaveBeenCalled()
-      expect(hiddenBystander.setFocusable).not.toHaveBeenCalled()
-      expect(nonFocusableBystander.setFocusable).not.toHaveBeenCalled()
-    })
-
-    it('does NOT wrap hide/close when quirk is absent', () => {
-      wm.open('plain' as never)
-      const plain = firstWindow()
-      const originalHide = plain.hide
-      const originalClose = plain.close
-
-      // No bystanders set up. Patched method would still collect [] but identity check is what matters.
-      expect(plain.hide).toBe(originalHide)
-      expect(plain.close).toBe(originalClose)
-    })
-
-    // ─── Branch: excess-capacity path (pooled close destroys instead of releases) ─
-
-    it('fires on excess-capacity close (pool over recycleMaxSize, destroyWindow path)', () => {
-      const bystanderId = wm.open('plain' as never)
-      const bystander = createdWindows[0]
-
-      // pool recycleMaxSize=2, warmup=lazy. Open 3 — the 3rd exceeds recycleMaxSize.
-      const ids = Array.from({ length: 3 }, () => wm.open('action' as never))
-      bystander.setFocusable.mockClear()
-
-      // Close id[0] — will destroy (excess capacity), wrapped close() triggers guard
-      wm.close(ids[0])
-
-      expect(bystander.setFocusable).toHaveBeenCalledWith(false)
-      vi.advanceTimersByTime(50)
-      expect(bystander.setFocusable).toHaveBeenCalledWith(true)
-      expect(bystanderId).toBeTruthy()
-    })
-
-    // ─── Branch: pool-suspend destroying idle windows does NOT fire the guard ──
-
-    it('does NOT fire when pool suspend destroys already-hidden idle windows', () => {
-      // Idle pool windows are hidden (releaseToPool called hide() first),
-      // so destroying them cannot shift focus to bystanders. suspendPool uses
-      // raw window.destroy() (not close()), intentionally bypassing the guard.
-      const bystanderId = wm.open('plain' as never)
-      const bystander = createdWindows[0]
-
-      const id1 = wm.open('action' as never)
-      wm.close(id1) // releases to idle pool — already-fired guard on release-before-hide
-      bystander.setFocusable.mockClear()
-
-      wm.suspendPool('action' as never) // destroys idle (hidden) windows
-
-      expect(bystander.setFocusable).not.toHaveBeenCalled()
-      expect(bystanderId).toBeTruthy()
-    })
-
-    // ─── Branch: singleton show:false hide path (toolbar) ─────────────────────────
-
-    it('fires on singleton show:false direct hide path (toolbar scenario)', () => {
-      const bystanderId = wm.open('plain' as never)
-      const bystander = createdWindows[0]
-      bystander.setFocusable.mockClear()
-
-      wm.open('toolbar' as never)
-      const toolbar = createdWindows[1]
-
-      // Direct call — bypasses any WM wrapper methods; this is the P0-1 coverage
-      toolbar.hide()
-
-      expect(bystander.setFocusable).toHaveBeenCalledWith(false)
-      vi.advanceTimersByTime(50)
-      expect(bystander.setFocusable).toHaveBeenCalledWith(true)
-      expect(bystanderId).toBeTruthy()
-    })
+  it('keeps native panel ownership across pool reuse and disposes it on destruction', () => {
+    const id = wm.open('action' as never)
+    const window = firstWindow()
+    window.destroy.mockImplementation(() => window.emit('closed'))
+    expect(panelTracking.track).toHaveBeenCalledOnce()
+    wm.close(id)
+    expect(panelTracking.dispose).not.toHaveBeenCalled()
+    wm.suspendPool('action' as never)
+    expect(panelTracking.dispose).toHaveBeenCalledOnce()
   })
 
-  // ─── macClearHoverOnHide ────────────────────────────────────
+  it('preserves other windows’ keyboard eligibility when a toolbar hides or an action is recycled', () => {
+    wm.open('plain' as never)
+    const editor = createdWindows[0]
+    editor.setFocusable.mockClear()
+    wm.open('toolbar' as never)
+    createdWindows[1].hide()
+    const actionId = wm.open('action' as never)
+    wm.close(actionId)
+    vi.runOnlyPendingTimers()
+    expect(editor.setFocusable).not.toHaveBeenCalled()
+  })
 
   describe('macClearHoverOnHide', () => {
     it('sends mouseMove(-1,-1) to webContents after native hide', () => {

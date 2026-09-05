@@ -1,3 +1,53 @@
+diff --git a/package.json b/package.json
+index b51cd6185a7852c1c07144a9ad6e0f34079cec01..622ff731c8ead9ee426b2bd4896beb9125370f2c 100644
+--- a/package.json
++++ b/package.json
+@@ -17,7 +17,7 @@
+     }
+   },
+   "scripts": {
+-    "install": "node-gyp-build",
++    "install": "node scripts/install.js",
+     "rebuild": "node-gyp rebuild",
+     "prebuild": "npm run prebuild:win && npm run prebuild:mac && npm run prebuild:linux",
+     "prebuild:win": "npm run prebuild:win:x64 && npm run prebuild:win:arm64",
+diff --git a/scripts/install.js b/scripts/install.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7d7c6e8f9d5cb35af7139e0dd1eb133f3008d3cc
+--- /dev/null
++++ b/scripts/install.js
+@@ -0,0 +1,3 @@
++// macOS source patches must take precedence over the bundled prebuild.
++if (process.platform === "darwin") process.env.npm_config_build_from_source = "true";
++require("node-gyp-build/bin.js");
+diff --git a/src/mac/lib/utils.mm b/src/mac/lib/utils.mm
+index 829f0a615ae4207df5bef9cd474b905594a1804f..433639aa4c823bff45feb72c8ae9930dd5728b7c 100644
+--- a/src/mac/lib/utils.mm
++++ b/src/mac/lib/utils.mm
+@@ -21,8 +21,21 @@ NSRunningApplication *GetFrontApp()
+     // the process started. distantPast makes it a non-blocking single pass.
+     [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantPast]];
+ 
+-    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+-    return workspace.frontmostApplication;
++    // A nonactivating panel can own keyboard focus while another app remains frontmost.
++    AXUIElementRef system = AXUIElementCreateSystemWide();
++    CFTypeRef focused = nullptr;
++    AXError error = AXUIElementCopyAttributeValue(system, kAXFocusedApplicationAttribute, &focused);
++    CFRelease(system);
++    if (error == kAXErrorSuccess && focused)
++    {
++        pid_t pid = 0;
++        AXUIElementGetPid((AXUIElementRef)focused, &pid);
++        CFRelease(focused);
++        NSRunningApplication *application = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
++        if (application)
++            return application;
++    }
++    return NSWorkspace.sharedWorkspace.frontmostApplication;
+ }
+ 
+ /**
 diff --git a/src/mac/selection_hook.mm b/src/mac/selection_hook.mm
 index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa696c0336 100644
 --- a/src/mac/selection_hook.mm

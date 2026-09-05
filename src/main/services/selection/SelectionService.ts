@@ -4,7 +4,6 @@ import { createLatestReconciler, type LatestReconciler } from '@main/core/concur
 import { type Activatable, BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isDev, isLinux, isMac, isWin } from '@main/core/platform'
 import { WindowType } from '@main/core/window/types'
-import { getApplicationId } from '@main/utils/appEdition'
 import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
 import { SelectionTriggerMode } from '@shared/data/preference/preferenceTypes'
 import type { BrowserWindow } from 'electron'
@@ -270,8 +269,6 @@ export class SelectionService extends BaseService implements Activatable {
     )
 
     // Destruction: keep the cached toolbar reference in sync.
-    // The macOS focus dance on hide/close is handled by the macRestoreFocusOnHide quirk
-    // (see WindowManager.applyQuirks) — no subscription needed here.
     this.registerDisposable(
       wm.onWindowDestroyedByType(WindowType.SelectionToolbar, ({ id }) => {
         if (id === this.toolbarWindowId) {
@@ -569,7 +566,7 @@ export class SelectionService extends BaseService implements Activatable {
    * @param point Reference point for positioning, logical coordinates
    * @param orientation Preferred position relative to reference point
    */
-  private showToolbarAtPosition(point: Point, orientation: RelativeOrientation, programName: string): void {
+  private showToolbarAtPosition(point: Point, orientation: RelativeOrientation): void {
     if (!this.isToolbarAlive()) {
       // Toolbar was destroyed (e.g., crash recovery). Re-open via WindowManager — the
       // onWindowCreated handler will call setupToolbarBehavior() and update toolbarWindow.
@@ -580,7 +577,7 @@ export class SelectionService extends BaseService implements Activatable {
       const newToolbar = wm.getWindow(this.toolbarWindowId)
       if (newToolbar) {
         newToolbar.once('ready-to-show', () => {
-          this.showToolbarAtPosition(point, orientation, programName)
+          this.showToolbarAtPosition(point, orientation)
         })
       }
       return
@@ -615,44 +612,7 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
-    /************************************************
-     * [macOS] the following code is only for macOS
-     *
-     * WARNING:
-     *   DO NOT MODIFY THESE CODES, UNLESS YOU REALLY KNOW WHAT YOU ARE DOING!!!!
-     *************************************************/
-
-    // [macOS] a hacky way
-    // when set `skipTransformProcessType: true`, if the selection is in self app, it will make the selection canceled after toolbar showing
-    // so we just don't set `skipTransformProcessType: true` when in self app
-    const isSelf = ['com.github.Electron', getApplicationId()].includes(programName)
-
-    if (!isSelf) {
-      // [macOS] an ugly hacky way
-      // `focusable: true` will make mainWindow disappeared when `setVisibleOnAllWorkspaces`
-      // so we set `focusable: true` before showing, and then set false after showing
-      this.toolbarWindow!.setFocusable(false)
-
-      // [macOS]
-      // force `setVisibleOnAllWorkspaces: true` to let toolbar show in all workspaces. And we MUST not set it to false again
-      // set `skipTransformProcessType: true` to avoid dock icon spinning when `setVisibleOnAllWorkspaces`
-      this.toolbarWindow!.setVisibleOnAllWorkspaces(true, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true
-      })
-    }
-
-    // [macOS] MUST use `showInactive()` to prevent other windows bring to front together
-    // [Windows] is OK for both `show()` and `showInactive()` because of `focusable: false`
     this.toolbarWindow!.showInactive()
-
-    // [macOS] restore the focusable status
-    this.toolbarWindow!.setFocusable(true)
-
-    // Mouse-key hook start fires from window.on('show') in setupToolbarBehavior
-    // (showInactive also fires 'show').
-
-    return
   }
 
   /**
@@ -661,13 +621,7 @@ export class SelectionService extends BaseService implements Activatable {
   public hideToolbar(): void {
     if (!this.isToolbarAlive()) return
 
-    // Mouse-key hook stop is driven by window.on('hide') in setupToolbarBehavior,
-    // which covers this call site as well as the WM-driven blur → window.hide().
-    //
-    // On macOS, the toolbar's hide() call is wrapped by WindowManager's applyQuirks:
-    //   - macRestoreFocusOnHide guards focus (setFocusable(false) on all visible windows, restored after 50ms)
-    //   - macClearHoverOnHide sends a synthetic mouseMove(-1,-1) to clear any residual hover state
-    // so this call site remains a plain .hide() on every platform.
+    // The hide listener releases the mouse-key hook; WindowManager clears stale hover state.
     this.toolbarWindow!.hide()
   }
 
@@ -1001,7 +955,7 @@ export class SelectionService extends BaseService implements Activatable {
     }
 
     // [macOS] isFullscreen is only available on macOS
-    this.showToolbarAtPosition(refPoint, refOrientation, selectionData.programName)
+    this.showToolbarAtPosition(refPoint, refOrientation)
     if (this.toolbarWindowId) {
       application.get('IpcApiService').send(this.toolbarWindowId, 'selection.text_selected', selectionData)
     }
@@ -1251,9 +1205,8 @@ export class SelectionService extends BaseService implements Activatable {
   /**
    * Process action item
    * @param actionItem Action item to process
-   * @param isFullScreen [macOS] only macOS has the available isFullscreen mode
    */
-  public processAction(actionItem: SelectionActionItem, isFullScreen: boolean = false): void {
+  public processAction(actionItem: SelectionActionItem, _isFullScreen: boolean = false): void {
     const wm = application.get('WindowManager')
 
     // open({ initData }) atomically stores the action payload and, for the
@@ -1278,16 +1231,15 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
-    this.showActionWindow(actionWindow, isFullScreen)
+    this.showActionWindow(actionWindow)
   }
 
   /**
    * Show action window with proper positioning relative to toolbar
    * Ensures window stays within screen boundaries
    * @param actionWindow Window to position and show
-   * @param isFullScreen [macOS] only macOS has the available isFullscreen mode
    */
-  private showActionWindow(actionWindow: BrowserWindow, isFullScreen: boolean = false): void {
+  private showActionWindow(actionWindow: BrowserWindow): void {
     let actionWindowWidth = this.ACTION_WINDOW_WIDTH
     let actionWindowHeight = this.ACTION_WINDOW_HEIGHT
 
@@ -1356,70 +1308,7 @@ export class SelectionService extends BaseService implements Activatable {
       })
     }
 
-    if (!isMac) {
-      actionWindow.show()
-      return
-    }
-
-    /************************************************
-     * [macOS] the following code is only for macOS
-     *
-     * WARNING:
-     *   DO NOT MODIFY THESE CODES, UNLESS YOU REALLY KNOW WHAT YOU ARE DOING!!!!
-     *************************************************/
-
-    // act normally when the app is not in fullscreen mode
-    if (!isFullScreen) {
-      actionWindow.show()
-      return
-    }
-
-    // [macOS] an UGLY HACKY way for fullscreen override settings
-
-    // FIXME sometimes the dock will be shown when the action window is shown
-    // FIXME if actionWindow show on the fullscreen app, switch to other space will cause the mainWindow to be shown
-    // FIXME When setVisibleOnAllWorkspaces is true, docker icon disappeared when the first action window is shown on the fullscreen app
-    //       use app.dock.show() to show the dock again will cause the action window to be closed when auto hide on blur is enabled
-
-    // setFocusable(false) to prevent the action window hide when blur (if auto hide on blur is enabled)
-    actionWindow.setFocusable(false)
-    // No explicit level: Electron defaults to 'floating' on macOS, and
-    // SelectionAction's registry intentionally declares no alwaysOnTop.level
-    // (the pin toggle and this show sequence use the same default path).
-    actionWindow.setAlwaysOnTop(true)
-
-    // `setVisibleOnAllWorkspaces(true)` will cause the dock icon disappeared
-    // just store the dock icon status, and show it again
-    const isDockShown = app.dock?.isVisible()
-
-    // DO NOT set `skipTransformProcessType: true`,
-    // it will cause the action window to be shown on other space
-    actionWindow.setVisibleOnAllWorkspaces(true, {
-      visibleOnFullScreen: true
-    })
-
-    actionWindow.showInactive()
-
-    // show the dock again if last time it was shown
-    // do not put it after `actionWindow.focus()`, will cause the action window to be closed when auto hide on blur is enabled
-    if (!app.dock?.isVisible() && isDockShown) {
-      void app.dock?.show()
-    }
-
-    // unset everything
-    setTimeout(() => {
-      if (actionWindow.isDestroyed()) return
-      actionWindow.setVisibleOnAllWorkspaces(false, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true
-      })
-      actionWindow.setAlwaysOnTop(false)
-
-      actionWindow.setFocusable(true)
-
-      // regain the focus when all the works done
-      actionWindow.focus()
-    }, 50)
+    actionWindow.show()
   }
 
   /**

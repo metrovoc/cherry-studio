@@ -24,7 +24,7 @@ import type { BrowserWindow } from 'electron'
  *   - The initial `setAlwaysOnTop(true, level)` is free of monkey-patch overhead
  *     (first-time setup with no hide/show loop to guard against).
  *   - The blur → `window.hide()` call inherits whatever `quirks` install on
- *     `hide` (macRestoreFocusOnHide, macClearHoverOnHide), because quirks
+ *     `hide` (macClearHoverOnHide), because quirks
  *     re-assign `window.hide` after this function returns but the listener
  *     body dereferences `window.hide` at event-fire time.
  *
@@ -69,7 +69,7 @@ export function applyWindowBehavior(
 
   // ── Initial setVisibleOnAllWorkspaces ────────────────────────────────
   // One-shot on create. Windows whose true/false options differ per call
-  // (e.g. SelectionAction's full-screen show sequence) should not declare
+  // (e.g. dynamic workspace policies) should not declare
   // this — they drive both directions via direct window calls.
   if (behavior.visibleOnAllWorkspaces) {
     const { enabled, ...options } = behavior.visibleOnAllWorkspaces
@@ -79,7 +79,7 @@ export function applyWindowBehavior(
   // ── hideOnBlur listener ──────────────────────────────────────────────
   // Auto-hide on blur, with runtime override via wm.behavior.setHideOnBlur(id, enabled).
   // `window.hide()` dereferences at fire time, so it picks up any monkey-patch
-  // quirks (macRestoreFocusOnHide, macClearHoverOnHide) installed later.
+  // quirks (macClearHoverOnHide) installed later.
   if (behavior.hideOnBlur) {
     window.on('blur', () => {
       if (window.isDestroyed() || !window.isVisible()) return
