@@ -36,6 +36,7 @@ const state = vi.hoisted(() => ({
     group: 'Anthropic'
   } as TestModel | undefined,
   messages: [] as CherryUIMessage[],
+  persistedMessages: [] as CherryUIMessage[],
   activeExecutions: [] as never[],
   liveAssistants: [] as never[],
   sendMessage: vi.fn(),
@@ -145,7 +146,7 @@ vi.mock('@renderer/hooks/useExecutionOverlay', () => ({
 }))
 
 vi.mock('@renderer/hooks/useTopicMessages', () => ({
-  useTopicMessages: () => ({ uiMessages: [], activeNodeId: null, isLoading: false })
+  useTopicMessages: () => ({ uiMessages: state.persistedMessages, activeNodeId: null, isLoading: false })
 }))
 
 vi.mock('../hooks/useQuickAssistantHistory', () => ({
@@ -223,7 +224,18 @@ vi.mock('../components/ClipboardPreview', () => ({
 }))
 
 vi.mock('../../chat/ChatWindow', () => ({
-  default: () => <div data-testid="chat-window" />
+  default: ({ messages }: { messages: CherryUIMessage[] }) => (
+    <div data-testid="chat-window">
+      {messages.map((message) => (
+        <div key={message.id}>
+          {message.parts
+            .filter((part) => part.type === 'text')
+            .map((part) => part.text)
+            .join('')}
+        </div>
+      ))}
+    </div>
+  )
 }))
 
 describe('finalizeLiveMessages', () => {
@@ -279,6 +291,7 @@ describe('HomeWindow', () => {
     state.haveAssistantsLoaded = true
     state.streamStatus = undefined
     state.messages = []
+    state.persistedMessages = []
     state.activeExecutions = []
     state.liveAssistants = []
     state.sendMessage.mockClear()
@@ -287,7 +300,9 @@ describe('HomeWindow', () => {
     state.setMessages.mockImplementation((next) => {
       state.messages = typeof next === 'function' ? next(state.messages) : next
     })
-    state.resetExecutionMessages.mockClear()
+    state.resetExecutionMessages.mockReset().mockImplementation(() => {
+      state.liveAssistants = []
+    })
     state.clearExecutionMessages.mockClear()
     state.resetTemporaryTopic.mockClear()
     state.persistTemporaryTopic.mockReset().mockResolvedValue(undefined)
@@ -373,6 +388,55 @@ describe('HomeWindow', () => {
       { text: 'What is my dog called?' },
       { body: { parentAnchorId: 'assistant-turn-1' } }
     )
+  })
+
+  it('keeps the response mounted through completion and saved-history loading', async () => {
+    const user = userEvent.setup()
+    state.quickAssistantId = 'assistant-1'
+    state.saveConversations = true
+    const { rerender } = render(<HomeWindow />)
+    await user.type(screen.getByTestId('quick-input'), 'Explain scrolling')
+    await user.keyboard('{Enter}')
+    state.messages = [{ id: 'user-1', role: 'user', parts: [{ type: 'text', text: 'Explain scrolling' }] }]
+    state.streamStatus = 'streaming'
+    state.activeExecutions = [{}] as never[]
+    state.liveAssistants = [
+      {
+        id: 'answer-1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'A long response', state: 'streaming' }]
+      }
+    ] as never[]
+    rerender(<HomeWindow />)
+    const response = await screen.findByText('A long response')
+
+    state.streamStatus = 'done'
+    state.activeExecutions = []
+    rerender(<HomeWindow />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'quickAssistant.history.open_in_main' })).toBeEnabled()
+    )
+    expect(screen.getByText('A long response')).toBe(response)
+
+    state.persistedMessages = [
+      ...state.messages,
+      {
+        id: 'answer-1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'A long response', state: 'done' }]
+      }
+    ]
+    rerender(<HomeWindow />)
+    expect(screen.getByText('A long response')).toBe(response)
+
+    state.historyTopics = [
+      { id: 'temp-topic', name: 'Current' },
+      { id: 'older-topic', name: 'Older' }
+    ]
+    state.persistedMessages = []
+    rerender(<HomeWindow />)
+    await user.click(screen.getByRole('button', { name: 'quickAssistant.history.older' }))
+    expect(screen.queryByText('A long response')).not.toBeInTheDocument()
   })
 
   it('keeps typed input out of the clipboard preview', () => {

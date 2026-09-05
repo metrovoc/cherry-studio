@@ -317,8 +317,10 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
   const displayMessages = useMemo(
     () =>
-      selectedTopicId ? mergeMessagesById(persistedMessages, chatMessages, liveAssistants) : temporaryDisplayMessages,
-    [chatMessages, liveAssistants, persistedMessages, selectedTopicId, temporaryDisplayMessages]
+      selectedTopicId
+        ? mergeMessagesById(persistedMessages, temporaryDisplayMessages, liveAssistants)
+        : temporaryDisplayMessages,
+    [liveAssistants, persistedMessages, selectedTopicId, temporaryDisplayMessages]
   )
 
   const partsByMessageId = useMemo<Record<string, CherryMessagePart[]>>(() => {
