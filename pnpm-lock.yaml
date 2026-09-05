@@ -191,7 +191,7 @@ patchedDependencies:
   ollama-ai-provider-v2@3.3.1: d2b640ac5475c802eee5f983bcad08fb4e5cec7615c57aac188850c3f531743b
   onnxruntime-node@1.25.1: 7a18bfdf39cbd83c60197c06e5f5c5b2b46d265d7483ed3d80ec3ad499d99cef
   ppu-paddle-ocr@6.0.0: 462a2a1d24fd9bdf645bed35f34c90d24b40389443b802018f77b85911f08096
-  selection-hook@2.1.1: 102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285
+  selection-hook@2.1.1: 20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3
   streamdown@2.5.0: e7275804eb3d9c069a4b2f193c03553501f4db2d37dac35230551a7ab14444df
   tesseract.js@6.0.1: a131c9f36e950911e9fc548408131145a3e5e53977d67abe5196f6b23b32bb6e
 
@@ -205,6 +205,9 @@ importers:
       '@cherrystudio/dsh-bridge':
         specifier: workspace:*
         version: link:packages/dsh-bridge
+      '@cherrystudio/macos-panel':
+        specifier: workspace:*
+        version: link:packages/macos-panel
       '@deepseek-ai/dsh-sdk-client':
         specifier: 0.1.2-rc.1
         version: 0.1.2-rc.1(patch_hash=0792ce2f52077468c6f897dccce0d4e4823f1f0e99cc276b6aaae4b80a4ba337)(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-llm@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2))(@deepseek-ai/dsh-sdk-protocol@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-llm@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2))(@deepseek-ai/dsh-session@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-scope@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-invariants@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2))))(@deepseek-ai/dsh-subagent@0.1.2-rc.1(ef8f5be8d28808b6fc4c5cf6fc321af2)))(@deepseek-ai/dsh-session@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-scope@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-invariants@0.1.2-rc.1(@deepseek-ai/cordis@4.0.2))))
@@ -303,7 +306,7 @@ importers:
         version: 1.16.1
       selection-hook:
         specifier: 2.1.1
-        version: 2.1.1(patch_hash=102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285)
+        version: 2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3)
       sharp:
         specifier: 0.35.3
         version: 0.35.3(@types/node@24.10.4)
@@ -1941,6 +1944,12 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  packages/macos-panel:
+    dependencies:
+      node-gyp-build:
+        specifier: 4.8.4
+        version: 4.8.4
 
   packages/provider-registry:
     dependencies:
@@ -31335,7 +31344,7 @@ snapshots:
     dependencies:
       parseley: 0.12.1
 
-  selection-hook@2.1.1(patch_hash=102bb3d52552ff84151b515206ba0706047c5734ac9e907a989f7acfad8e6285):
+  selection-hook@2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3):
     dependencies:
       node-addon-api: 8.5.0
       node-gyp-build: 4.8.4
