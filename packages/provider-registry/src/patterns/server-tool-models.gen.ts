@@ -275,6 +275,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-2',
         'glm-5-2-fast',
         'glm-5-3',
+        'glm-5-3-fast',
         'glm-5-3-flash',
         'glm-5-3-promo-50',
         'glm-5-maas',
@@ -459,7 +460,8 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'gpt-5-5',
         'gpt-5-6-luna',
         'gpt-5-6-sol',
-        'gpt-5-6-terra'
+        'gpt-5-6-terra',
+        'gpt-6-astra'
       ]
     },
     openai: {
@@ -762,6 +764,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-2',
         'glm-5-2-fast',
         'glm-5-3',
+        'glm-5-3-fast',
         'glm-5-3-flash',
         'glm-5-3-promo-50',
         'glm-5-maas',
@@ -978,6 +981,7 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'glm-5-2',
         'glm-5-2-fast',
         'glm-5-3',
+        'glm-5-3-fast',
         'glm-5-3-flash',
         'glm-5-3-promo-50',
         'glm-5-maas',

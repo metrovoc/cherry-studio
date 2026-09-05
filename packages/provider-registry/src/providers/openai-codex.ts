@@ -1,12 +1,80 @@
+import type { ReasoningEffort } from '../schemas/enums'
 import { defineProvider } from './types'
 import { openaiResponsesSummaryWire } from './wires'
 
-/**
- * Login-based provider that drives the ChatGPT Plus/Pro Codex backend via an
- * app-managed OAuth session (`authMethods: ['oauth']`); model list served from
- * this registry (`modelListSource: 'registry'`). OAuth runtime lives in
- * `src/main/services/oauth/`.
- */
+// Codex defaults and effort levels come from openai/codex's models-manager/models.json.
+const models: Array<{
+  modelId: string
+  apiModelId: string
+  defaultEffort: ReasoningEffort
+  efforts: ReasoningEffort[]
+  contextWindow: number
+  supportsFastMode?: boolean
+}> = [
+  {
+    modelId: 'gpt-6-astra',
+    apiModelId: 'gpt-6-astra',
+    defaultEffort: 'low',
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-6-sol',
+    apiModelId: 'gpt-5.6-sol',
+    defaultEffort: 'low',
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-6-terra',
+    apiModelId: 'gpt-5.6-terra',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-6-luna',
+    apiModelId: 'gpt-5.6-luna',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-5',
+    apiModelId: 'gpt-5.5',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-4',
+    apiModelId: 'gpt-5.4',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    contextWindow: 272000,
+    supportsFastMode: true
+  },
+  {
+    modelId: 'gpt-5-4-mini',
+    apiModelId: 'gpt-5.4-mini',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    contextWindow: 272000
+  },
+  {
+    modelId: 'gpt-5-3-codex-spark',
+    apiModelId: 'gpt-5.3-codex-spark',
+    defaultEffort: 'medium',
+    efforts: ['low', 'medium', 'high', 'xhigh'],
+    contextWindow: 128000
+  }
+]
+
 export default defineProvider({
   id: 'openai-codex',
   name: 'OpenAI Codex',
@@ -26,61 +94,29 @@ export default defineProvider({
     {
       id: 'web-search',
       modelScope: 'model-dependent',
-      modelIds: [
-        'gpt-5-3-codex-spark',
-        'gpt-5-4',
-        'gpt-5-4-mini',
-        'gpt-5-5',
-        'gpt-5-6-sol',
-        'gpt-5-6-terra',
-        'gpt-5-6-luna'
-      ]
+      modelIds: models.map(({ modelId }) => modelId),
+      endpointTypes: ['openai-responses']
     }
   ],
   metadata: {
     website: {
       official: 'https://openai.com/codex',
-      docs: 'https://platform.openai.com/docs/codex'
+      docs: 'https://developers.openai.com/codex/models'
     }
   },
-  overrides: [
-    // Codex backend serves the gpt-5.6 family with a 372k context window
-    // (per upstream `codex-rs/models-manager/models.json`), smaller than the
-    // platform-API figure the base catalog carries.
-    {
-      modelId: 'gpt-5-6-sol',
-      apiModelId: 'gpt-5.6-sol',
-      supportsFastMode: true,
-      limits: { contextWindow: 372000 },
-      endpointTypes: ['openai-responses']
-    },
-    {
-      modelId: 'gpt-5-6-terra',
-      apiModelId: 'gpt-5.6-terra',
-      supportsFastMode: true,
-      limits: { contextWindow: 372000 },
-      endpointTypes: ['openai-responses']
-    },
-    {
-      modelId: 'gpt-5-6-luna',
-      apiModelId: 'gpt-5.6-luna',
-      supportsFastMode: true,
-      limits: { contextWindow: 372000 },
-      endpointTypes: ['openai-responses']
-    },
-    {
-      modelId: 'gpt-5-5',
-      apiModelId: 'gpt-5.5',
-      supportsFastMode: true,
-      endpointTypes: ['openai-responses']
-    },
-    {
-      modelId: 'gpt-5-4',
-      apiModelId: 'gpt-5.4',
-      supportsFastMode: true,
-      endpointTypes: ['openai-responses']
-    },
-    { modelId: 'gpt-5-4-mini', apiModelId: 'gpt-5.4-mini', endpointTypes: ['openai-responses'] },
-    { modelId: 'gpt-5-3-codex-spark', apiModelId: 'gpt-5.3-codex-spark', endpointTypes: ['openai-responses'] }
-  ]
+  overrides: models.map(({ modelId, apiModelId, defaultEffort, efforts, contextWindow, supportsFastMode }) => ({
+    modelId,
+    apiModelId,
+    ...(supportsFastMode ? { supportsFastMode } : {}),
+    limits: { contextWindow },
+    endpointTypes: ['openai-responses'],
+    reasoningContracts: {
+      'openai-responses': {
+        support: {
+          controls: [{ kind: 'effort', values: efforts, default: defaultEffort }],
+          defaultEffort
+        }
+      }
+    }
+  }))
 })

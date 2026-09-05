@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * That restriction is a fact about OpenAI's own models, so it stays keyed on
  * the model id.
  */
-async function capture(modelId: string) {
+async function capture(modelId: string, forceReasoning = true) {
   let body: any
   const model = createOpenAI({
     apiKey: 'sk-test',
@@ -36,7 +36,14 @@ async function capture(modelId: string) {
     prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
     temperature: 0.7,
     topP: 0.9,
-    providerOptions: { openai: { reasoningEffort: 'low', forceReasoning: true, store: false } }
+    providerOptions: {
+      openai: {
+        reasoningEffort: 'low',
+        ...(forceReasoning ? { forceReasoning: true } : {}),
+        store: false,
+        serviceTier: 'priority'
+      }
+    }
   })
 
   return body
@@ -57,5 +64,15 @@ describe('patched @ai-sdk/openai sampling parameters', () => {
     expect(body.reasoning).toEqual({ effort: 'low' })
     expect(body.temperature).toBeUndefined()
     expect(body.top_p).toBeUndefined()
+  })
+
+  it('sends GPT-6 reasoning and Fast mode without unsupported sampling parameters', async () => {
+    const body = await capture('gpt-6-astra', false)
+
+    expect(body.reasoning).toEqual({ effort: 'low' })
+    expect(body.service_tier).toBe('priority')
+    expect(body.temperature).toBeUndefined()
+    expect(body.top_p).toBeUndefined()
+    expect(body.include).toContain('reasoning.encrypted_content')
   })
 })

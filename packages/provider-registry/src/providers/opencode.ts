@@ -60,6 +60,7 @@ const chatEffortModels: Array<{
   },
   { modelId: 'hy3', values: ['none', 'low', 'high'] },
   { modelId: 'hy4-preview', values: ['none', 'high'] },
+  { modelId: 'omen-alpha', values: ['low', 'high'] },
   { modelId: 'kimi-k3', values: ['max'] },
   // Stealth model, no creator entry: models.dev routes it through `@ai-sdk/openai-compatible`
   // and prints an effort ladder, so pin chat/completions rather than let it fall back unpinned.

@@ -929,7 +929,7 @@
       "id": "openai-codex",
       "metadata": {
         "website": {
-          "docs": "https://platform.openai.com/docs/codex",
+          "docs": "https://developers.openai.com/codex/models",
           "official": "https://openai.com/codex"
         }
       },
@@ -937,6 +937,7 @@
       "name": "OpenAI Codex",
       "serverTools": [
         {
+          "endpointTypes": ["openai-responses"],
           "id": "web-search",
           "modelScope": "model-dependent"
         }
@@ -2485,5 +2486,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "75df9ea487e86c16"
+  "version": "1cf22e000e913453"
 }

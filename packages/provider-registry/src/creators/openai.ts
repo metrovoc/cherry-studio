@@ -27,6 +27,7 @@ export default defineCreator({
   fetchModels: openaiCompatible('openai', 'OPENAI_API_KEY'),
   modelsDevProviders: ['openai'],
   reasoningFamilies: [
+    { pattern: '^gpt-6-astra(?:-|$)', effort: ['low', 'medium', 'high', 'xhigh', 'max'] },
     { pattern: '^(?:o\\d|gpt).*deep[-_]?research', effort: ['medium'] },
     { pattern: '^gpt-5[.-]1-codex-max', effort: ['medium', 'high', 'xhigh'] },
     { pattern: '^gpt-5[.-]1-codex', effort: ['medium', 'high'] },
@@ -68,6 +69,16 @@ export default defineCreator({
   // web-search limitations); gpt-5.x sub-versions use the `none` tier and are fine.
   webSearchUnsupportedEfforts: [{ pattern: '^gpt-5(?![.-]\\d)(?!.*chat)', efforts: ['minimal'] }],
   models: [
+    {
+      id: 'gpt-6-astra',
+      name: 'GPT-6 Astra',
+      family: 'gpt-astra',
+      capabilities: ['function-call', 'reasoning', 'image-recognition', 'structured-output', 'file-input'],
+      contextWindow: 1050000,
+      maxOutputTokens: 128000,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text']
+    },
     {
       id: 'gpt-image-1-mini',
       name: 'GPT-Image-1-Mini',
