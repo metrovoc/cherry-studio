@@ -56,6 +56,11 @@ function readCompleteOverride(pathname: string): string {
 }
 
 describe('registryDataPaths.resolveRegistryPaths', () => {
+  it('keeps curated provider catalogs bundled even with a compatible remote snapshot', () => {
+    existsSyncMock.mockImplementation(completeOverride)
+    readFileSyncMock.mockImplementation(readCompleteOverride)
+    expect(resolveRegistryPaths({ bundledOnly: true })).toEqual(bundledPaths)
+  })
   beforeEach(() => {
     existsSyncMock.mockReset()
     readFileSyncMock.mockReset()
