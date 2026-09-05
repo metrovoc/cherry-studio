@@ -216,7 +216,7 @@ export interface WindowBehavior {
    * equivalent option, WM invokes the setter on create.
    *
    * Intentionally no runtime WM setter — windows whose true/false options
-   * differ across calls (e.g. SelectionAction's full-screen show sequence)
+   * differ across calls (e.g. a window that changes workspace policy)
    * should drive both directions directly on the `BrowserWindow` instance.
    *
    * Reuses Electron's named type `VisibleOnAllWorkspacesOptions` directly,
@@ -244,14 +244,8 @@ export interface WindowBehavior {
  * bugs; pure-semantic declarative config lives in `behavior`.
  */
 export interface WindowQuirks {
-  /**
-   * [macOS] a HACKY way
-   * make sure other windows do not bring to front when the window is hidden or closed.
-   *
-   * Before invoking the native `hide()`/`close()`, iterates every visible focusable
-   * window and calls `setFocusable(false)` on it, then restores them 50ms later.
-   */
-  macRestoreFocusOnHide?: boolean
+  /** Keep native non-key panels, including IME candidates, on their focused editor's Space. */
+  macAttachAuxiliaryPanels?: boolean
 
   /**
    * [macOS] hacky way

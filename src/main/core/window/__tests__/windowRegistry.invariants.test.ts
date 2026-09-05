@@ -36,10 +36,21 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
     })
   })
 
-  it('keeps QuickAssistant transient and nonactivating so it can join the foreground Space', () => {
-    expect(WINDOW_TYPE_REGISTRY[WindowType.QuickAssistant]?.windowOptions.platformOverrides?.mac).toMatchObject({
+  it.each([WindowType.QuickAssistant, WindowType.SelectionAction])(
+    'keeps %s transient and nonactivating on the foreground Space',
+    (type) => {
+      expect(WINDOW_TYPE_REGISTRY[type]?.quirks?.macAttachAuxiliaryPanels).toBe(true)
+      expect(WINDOW_TYPE_REGISTRY[type]?.windowOptions.platformOverrides?.mac).toMatchObject({
+        type: 'panel',
+        hiddenInMissionControl: true
+      })
+    }
+  )
+
+  it('keeps the selection toolbar from taking keyboard focus', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.SelectionToolbar]?.windowOptions.platformOverrides?.mac).toMatchObject({
       type: 'panel',
-      hiddenInMissionControl: true
+      focusable: false
     })
   })
 })
