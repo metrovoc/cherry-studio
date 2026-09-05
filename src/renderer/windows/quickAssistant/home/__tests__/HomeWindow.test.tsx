@@ -429,6 +429,30 @@ describe('HomeWindow', () => {
     rerender(<HomeWindow />)
     expect(screen.getByText('A long response')).toBe(response)
 
+    await user.type(screen.getByTestId('quick-input'), 'Continue')
+    await user.keyboard('{Enter}')
+    state.messages = [...state.messages, { id: 'user-2', role: 'user', parts: [{ type: 'text', text: 'Continue' }] }]
+    state.streamStatus = 'streaming'
+    state.activeExecutions = [{}] as never[]
+    state.liveAssistants = [
+      {
+        id: 'answer-2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'The next response', state: 'streaming' }]
+      }
+    ] as never[]
+    rerender(<HomeWindow />)
+    const nextResponse = screen.getByText('The next response')
+
+    state.streamStatus = 'done'
+    state.activeExecutions = []
+    rerender(<HomeWindow />)
+    expect(screen.getByText('The next response')).toBe(nextResponse)
+    expect(screen.getByText('A long response')).toBe(response)
+    expect(screen.getByTestId('chat-window')).toHaveTextContent(
+      'Explain scrollingA long responseContinueThe next response'
+    )
+
     state.historyTopics = [
       { id: 'temp-topic', name: 'Current' },
       { id: 'older-topic', name: 'Older' }
@@ -437,6 +461,7 @@ describe('HomeWindow', () => {
     rerender(<HomeWindow />)
     await user.click(screen.getByRole('button', { name: 'quickAssistant.history.older' }))
     expect(screen.queryByText('A long response')).not.toBeInTheDocument()
+    expect(screen.queryByText('The next response')).not.toBeInTheDocument()
   })
 
   it('keeps typed input out of the clipboard preview', () => {
