@@ -71,12 +71,7 @@ import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
 import { REGISTRY_SCHEMA_VERSION } from '@cherrystudio/provider-registry/node'
 
 import { builtinEndpoints } from '../network/endpoints'
-import {
-  ProviderRegistryUpdaterService,
-  REGISTRY_URL_GITCODE,
-  resolveRegistryBaseUrl
-} from '../ProviderRegistryUpdaterService'
-import { regionService } from '../RegionService'
+import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterService'
 
 const response = (body: string, ok = true) => ({ ok, status: ok ? 200 : 404, text: async () => body })
 
@@ -293,32 +288,26 @@ describe('ProviderRegistryUpdaterService.check', () => {
     expect(netFetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/models.json'), expect.anything())
   })
 
-  it.each(['US', 'CN', null])('diagnoses the updater mirror with a cold country cache (%s)', async (country) => {
+  it.each(['US', 'CN', null])('diagnoses the downstream catalog regardless of country (%s)', async (country) => {
     mockRemote({ country })
     const endpoints = await builtinEndpoints()
     const url = endpoints.find((endpoint) => endpoint.id === 'registry')!.url
     await service.check()
     expect(netFetchMock).toHaveBeenCalledWith(url, expect.anything())
-    expect(url).toContain(country === 'US' ? 'raw.githubusercontent.com' : 'raw.gitcode.com')
+    expect(url).toBe(
+      `https://raw.githubusercontent.com/metrovoc/cherry-studio/refs/heads/x-files/downstream-provider-registry/v${REGISTRY_SCHEMA_VERSION}/manifest.json`
+    )
   })
 
-  it('uses the GitCode mirror inside China', async () => {
-    mockRemote({ dataVersion: 'v2', country: 'CN' })
+  it('downloads the downstream catalog that matches this build', async () => {
+    mockRemote({ dataVersion: 'v2' })
 
     await service.check()
 
-    expect(netFetchMock).toHaveBeenCalledWith(expect.stringContaining('raw.gitcode.com'), expect.anything())
-  })
-
-  it('uses the GitCode fallback when country detection fails without caching a guessed country', async () => {
-    mockRemote({ country: null })
-
-    await service.check()
-
-    expect(netFetchMock).toHaveBeenCalledWith(expect.stringContaining('raw.gitcode.com'), expect.anything())
-    expect(regionService.getCachedCountry()).toBeNull()
-    await expect(resolveRegistryBaseUrl()).resolves.toBe(REGISTRY_URL_GITCODE)
-    expect(writeSnapshotMock).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledWith(
+      `https://raw.githubusercontent.com/metrovoc/cherry-studio/refs/heads/x-files/downstream-provider-registry/v${REGISTRY_SCHEMA_VERSION}/models.json`,
+      expect.anything()
+    )
   })
 
   it('fetches from the schema-version dir so old apps only receive compatible data', async () => {
