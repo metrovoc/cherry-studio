@@ -14,23 +14,14 @@ import { notifyDataApiDataChange } from '@main/data/dataApiDataChange'
 import { providerRegistryService } from '@main/data/services/ProviderRegistryService'
 import { readActiveOverrideManifest } from '@main/data/services/utils/registryDataPaths'
 import { writeProviderRegistrySnapshot } from '@main/services/providerRegistrySnapshot'
-import { regionService } from '@main/services/RegionService'
 import { generateUserAgent } from '@main/utils/systemInfo'
 import type { DataApiDataChangeEffect } from '@shared/data/api/types'
 import { app, net } from 'electron'
 
 const logger = loggerService.withContext('ProviderRegistryUpdaterService')
 
-// Remote source of the regenerated catalog. Pinned to a stable branch (not a
-// moving `main`), under a schema-version dir so a structurally-breaking schema
-// change can't reach older clients: an app only ever fetches the `v{N}` its
-// bundled schema understands. Zod validation on download is the second line of
-// defence, fallback-to-bundled the third. The `x-files/*` branch matches
-// x-files/app-upgrade-config so the same GitCode repo mirror serves CN clients.
-const REMOTE_BRANCH = 'x-files/provider-registry'
-const REMOTE_SUBPATH = `v${REGISTRY_SCHEMA_VERSION}`
-const REGISTRY_URL_GITHUB = `https://raw.githubusercontent.com/CherryHQ/cherry-studio/refs/heads/${REMOTE_BRANCH}/${REMOTE_SUBPATH}`
-const REGISTRY_URL_GITCODE = `https://raw.gitcode.com/CherryHQ/cherry-studio/raw/${encodeURIComponent(REMOTE_BRANCH)}/${REMOTE_SUBPATH}`
+// The downstream app and its remotely updated catalog share the same release source.
+const REGISTRY_URL = `https://raw.githubusercontent.com/metrovoc/cherry-studio/refs/heads/x-files/downstream-provider-registry/v${REGISTRY_SCHEMA_VERSION}`
 
 const MANIFEST_FILE = 'manifest.json'
 
@@ -114,8 +105,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
     manifest: CatalogManifest
     manifestBody: string
   } | null> {
-    const inCn = (await regionService.getCountry()).toLowerCase() === 'cn'
-    const baseUrl = inCn ? REGISTRY_URL_GITCODE : REGISTRY_URL_GITHUB
     const headers = {
       'User-Agent': generateUserAgent(),
       'Cache-Control': 'no-cache',
@@ -123,7 +112,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
     const fetchText = async (name: string): Promise<string | null> => {
       try {
-        const response = await net.fetch(`${baseUrl}/${name}`, { headers })
+        const response = await net.fetch(`${REGISTRY_URL}/${name}`, { headers })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return await response.text()
       } catch (error) {

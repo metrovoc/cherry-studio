@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  netFetchMock,
-  getCatalogVersionMock,
-  getCountryMock,
-  notifyDataChangeMock,
-  readActiveManifestMock,
-  writeSnapshotMock
-} = vi.hoisted(() => ({
-  netFetchMock: vi.fn(),
-  getCatalogVersionMock: vi.fn(),
-  getCountryMock: vi.fn(),
-  notifyDataChangeMock: vi.fn(),
-  readActiveManifestMock: vi.fn(),
-  writeSnapshotMock: vi.fn()
-}))
+const { netFetchMock, getCatalogVersionMock, notifyDataChangeMock, readActiveManifestMock, writeSnapshotMock } =
+  vi.hoisted(() => ({
+    netFetchMock: vi.fn(),
+    getCatalogVersionMock: vi.fn(),
+    notifyDataChangeMock: vi.fn(),
+    readActiveManifestMock: vi.fn(),
+    writeSnapshotMock: vi.fn()
+  }))
 
 vi.mock('@logger', () => ({
   loggerService: {
@@ -29,7 +22,6 @@ vi.mock('@main/core/lifecycle', () => ({
   Phase: { WhenReady: 'whenReady' }
 }))
 
-vi.mock('@main/services/RegionService', () => ({ regionService: { getCountry: getCountryMock } }))
 vi.mock('@main/utils/systemInfo', () => ({ generateUserAgent: () => 'test-ua' }))
 vi.mock('@main/data/services/ProviderRegistryService', () => ({
   providerRegistryService: { getCatalogVersion: getCatalogVersionMock }
@@ -103,12 +95,10 @@ describe('ProviderRegistryUpdaterService.check', () => {
   beforeEach(() => {
     netFetchMock.mockReset()
     getCatalogVersionMock.mockReset()
-    getCountryMock.mockReset()
     notifyDataChangeMock.mockReset()
     readActiveManifestMock.mockReset()
     writeSnapshotMock.mockReset()
     getCatalogVersionMock.mockReturnValue('v1') // current on-disk catalog is at v1
-    getCountryMock.mockResolvedValue('US')
     readActiveManifestMock.mockReturnValue(null)
     service = new ProviderRegistryUpdaterService()
   })
@@ -273,13 +263,15 @@ describe('ProviderRegistryUpdaterService.check', () => {
     expect(netFetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/models.json'), expect.anything())
   })
 
-  it('uses the GitCode mirror inside China', async () => {
-    getCountryMock.mockResolvedValue('CN')
+  it('downloads the downstream catalog that matches this build', async () => {
     mockRemote({ dataVersion: 'v2' })
 
     await service.check()
 
-    expect(netFetchMock).toHaveBeenCalledWith(expect.stringContaining('raw.gitcode.com'), expect.anything())
+    expect(netFetchMock).toHaveBeenCalledWith(
+      `https://raw.githubusercontent.com/metrovoc/cherry-studio/refs/heads/x-files/downstream-provider-registry/v${REGISTRY_SCHEMA_VERSION}/models.json`,
+      expect.anything()
+    )
   })
 
   it('fetches from the schema-version dir so old apps only receive compatible data', async () => {
