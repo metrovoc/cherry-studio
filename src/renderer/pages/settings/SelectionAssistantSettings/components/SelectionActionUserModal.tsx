@@ -113,7 +113,7 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
       <DialogContent
         aria-describedby={undefined}
         closeOnOverlayClick={false}
-        className="max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-130">
+        className="max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-130">
         <DialogHeader>
           <DialogTitle>
             {editingAction
