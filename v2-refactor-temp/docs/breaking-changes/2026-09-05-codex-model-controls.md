@@ -10,7 +10,7 @@ date: 2026-09-05
 
 OpenAI Codex includes GPT-6 Astra with Fast mode and built-in web search. Codex model presets use subscription-specific context limits and reasoning choices, including Max for GPT-6 and GPT-5.6.
 
-Downloaded catalogs preserve the bundled subscription presets. Model checks and text-generation utilities work through Codex's required streaming transport.
+Model checks and text-generation utilities work through Codex's required streaming transport.
 
 ## Why this matters to the user
 
