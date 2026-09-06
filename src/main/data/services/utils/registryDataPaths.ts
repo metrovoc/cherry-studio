@@ -47,10 +47,9 @@ export function readActiveOverrideManifest(): CatalogManifest | null {
  * provider-model metadata switch together only after a complete compatible
  * snapshot is present; a partial snapshot falls back to bundled metadata.
  */
-export function resolveRegistryPaths(options: { bundledOnly?: boolean } = {}): RegistryPaths {
+export function resolveRegistryPaths(): RegistryPaths {
   const bundled = 'feature.provider_registry.data' as const
-  const modelData =
-    !options.bundledOnly && readActiveOverrideManifest() ? 'feature.provider_registry.override' : bundled
+  const modelData = readActiveOverrideManifest() ? 'feature.provider_registry.override' : bundled
   return {
     models: application.getPath(modelData, 'models.json'),
     providers: application.getPath(bundled, 'providers.json'),

@@ -202,15 +202,17 @@ describe('ProviderRegistryService', () => {
     MockMainDbServiceUtils.setDb(dbh.db)
   })
 
-  it('keeps curated models available when a remote catalog lacks them, while enriching API providers', () => {
-    const paths = vi.spyOn(registryDataPaths, 'resolveRegistryPaths').mockImplementation((options) => {
-      const directory = options?.bundledOnly ? '/bundled' : '/remote'
-      return {
-        models: `${directory}/models.json`,
-        providerModels: `${directory}/provider-models.json`,
-        providers: '/bundled/providers.json'
-      }
-    })
+  it('uses remote updates for registry-only providers, including new models and serving limits', () => {
+    const paths = vi
+      .spyOn(registryDataPaths, 'resolveRegistryPaths')
+      .mockImplementation((options?: { bundledOnly?: boolean }) => {
+        const directory = options?.bundledOnly ? '/bundled' : '/remote'
+        return {
+          models: `${directory}/models.json`,
+          providerModels: `${directory}/provider-models.json`,
+          providers: '/bundled/providers.json'
+        }
+      })
     mockReadProviders.mockReturnValue({
       version: '1',
       providers: [
@@ -227,7 +229,7 @@ describe('ProviderRegistryService', () => {
       (path) =>
         ({
           version: '1',
-          models: path.startsWith('/bundled')
+          models: path.startsWith('/remote')
             ? [{ id: 'gpt-6-astra', name: 'GPT-6 Astra', capabilities: ['reasoning'], contextWindow: 1050000 }]
             : [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000 }]
         }) as ReturnType<typeof readModelRegistry>
@@ -236,7 +238,7 @@ describe('ProviderRegistryService', () => {
       (path) =>
         ({
           version: '1',
-          overrides: path.startsWith('/bundled')
+          overrides: path.startsWith('/remote')
             ? [
                 {
                   providerId: 'openai-codex',
@@ -255,7 +257,6 @@ describe('ProviderRegistryService', () => {
       expect(providerRegistryService.lookupModel('openai-codex', 'gpt-6-astra').presetModel?.name).toBe('GPT-6 Astra')
       const allModels = providerRegistryService.listProviderRegistryModels()
       expect(allModels.find((model) => model.id === 'openai-codex::gpt-6-astra')?.contextWindow).toBe(272000)
-      expect(allModels.find((model) => model.id === 'openai::gpt-4o')?.contextWindow).toBe(128000)
     } finally {
       paths.mockRestore()
       clearServiceCache()
