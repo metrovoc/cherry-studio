@@ -706,20 +706,17 @@ export function projectRuntimeReasoning(
  */
 class ProviderRegistryService {
   private loader: RegistryLoader | null = null
-  private bundledLoader: RegistryLoader | null = null
 
   /** Lazily create the shared RegistryLoader instance. */
-  private getLoader(bundledOnly = false): RegistryLoader {
-    const key = bundledOnly ? 'bundledLoader' : 'loader'
-    if (!this[key]) {
-      this[key] = new RegistryLoader(resolveRegistryPaths({ bundledOnly }))
+  private getLoader(): RegistryLoader {
+    if (!this.loader) {
+      this.loader = new RegistryLoader(resolveRegistryPaths())
     }
-    return this[key]
+    return this.loader
   }
 
   clearCache(): void {
     this.loader = null
-    this.bundledLoader = null
   }
 
   /**
@@ -1094,8 +1091,8 @@ class ProviderRegistryService {
     reasoningProfile: ResolvedReasoningProfile
     serviceTierControl?: ResolvedServiceTierControl
   } {
-    const presetProvider = this.resolveProviderPreset(providerContext.id, providerContext.presetProviderId, false)
-    const loader = this.getLoader(presetProvider?.modelListSource === 'registry')
+    const loader = this.getLoader()
+    const presetProvider = this.resolveProviderPreset(providerContext.id, providerContext.presetProviderId)
     const registryOverride = presetProvider ? loader.findOverride(presetProvider.id, modelId) : null
     const presetModel =
       loader.findModel(registryOverride?.modelId ?? modelId) ??
@@ -1179,7 +1176,7 @@ class ProviderRegistryService {
     presetProvider: ProtoProviderConfig,
     includeDisabled = false
   ): Model[] {
-    const loader = this.getLoader(presetProvider.modelListSource === 'registry')
+    const loader = this.getLoader()
     const overrides = loader.getOverridesForProvider(presetProvider.id)
     const providerContext: ReasoningProviderContext = {
       id: providerId,
@@ -1233,19 +1230,7 @@ class ProviderRegistryService {
       return presetProvider ? this.listProviderPresetModels(options.providerId, presetProvider, includeDisabled) : []
     }
 
-    // Registry-only providers ship a curated list tied to their bundled transport and tool support.
-    const bundledProviderIds = new Set(
-      loader
-        .loadProviders()
-        .filter((provider) => provider.modelListSource === 'registry')
-        .map((provider) => provider.id)
-    )
-    const overrides = [
-      ...loader.loadProviderModels().filter((override) => !bundledProviderIds.has(override.providerId)),
-      ...this.getLoader(true)
-        .loadProviderModels()
-        .filter((override) => bundledProviderIds.has(override.providerId))
-    ]
+    const overrides = loader.loadProviderModels()
     const providerContextByProvider = new Map<string, ReasoningProviderContext>()
     const results: Model[] = []
 
@@ -1257,8 +1242,7 @@ class ProviderRegistryService {
       // entirely inside provider-models.json with their imageGeneration
       // block declared inline. Reduces models.json clutter from
       // single-provider entries.
-      const modelLoader = this.getLoader(bundledProviderIds.has(override.providerId))
-      const presetModel = modelLoader.findModel(override.modelId) ?? synthesizePresetFromOverride(override)
+      const presetModel = loader.findModel(override.modelId) ?? synthesizePresetFromOverride(override)
 
       let providerContext = providerContextByProvider.get(override.providerId)
       if (!providerContext) {
