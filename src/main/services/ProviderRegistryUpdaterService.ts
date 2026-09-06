@@ -16,29 +16,15 @@ import { notifyDataApiDataChange } from '@main/data/dataApiDataChange'
 import { providerRegistryService } from '@main/data/services/ProviderRegistryService'
 import { readActiveOverrideManifest } from '@main/data/services/utils/registryDataPaths'
 import { writeProviderRegistrySnapshot } from '@main/services/providerRegistrySnapshot'
-import { regionService } from '@main/services/RegionService'
 import { generateUserAgent } from '@main/utils/systemInfo'
 import type { DataApiDataChangeEffect } from '@shared/data/api/types'
 
 const logger = loggerService.withContext('ProviderRegistryUpdaterService')
 
-// Remote source of the regenerated catalog. Pinned to a stable branch (not a
-// moving `main`), under a schema-version dir so a structurally-breaking schema
-// change can't reach older clients: an app only ever fetches the `v{N}` its
-// bundled schema understands. Zod validation on download is the second line of
-// defence, fallback-to-bundled the third. The `x-files/*` branch matches
-// x-files/app-upgrade-config so the same GitCode repo mirror serves CN clients.
-const REMOTE_BRANCH = 'x-files/provider-registry'
-const REMOTE_SUBPATH = `v${REGISTRY_SCHEMA_VERSION}`
-export const REGISTRY_URL_GITHUB = `https://raw.githubusercontent.com/CherryHQ/cherry-studio/refs/heads/${REMOTE_BRANCH}/${REMOTE_SUBPATH}`
-export const REGISTRY_URL_GITCODE = `https://raw.gitcode.com/CherryHQ/cherry-studio/raw/${encodeURIComponent(REMOTE_BRANCH)}/${REMOTE_SUBPATH}`
+// The downstream app and its remotely updated catalog share the same release source.
+const REGISTRY_URL = `https://raw.githubusercontent.com/metrovoc/cherry-studio/refs/heads/x-files/downstream-provider-registry/v${REGISTRY_SCHEMA_VERSION}`
 
-/**
- * The mirror an update cycle fetches from; the network doctor probes the same one.
- * Unknown egress keeps the updater's historical GitCode fallback.
- */
-export const resolveRegistryBaseUrl = async (): Promise<string> =>
-  (await regionService.getCountry()).toLowerCase() === 'cn' ? REGISTRY_URL_GITCODE : REGISTRY_URL_GITHUB
+export const resolveRegistryBaseUrl = async (): Promise<string> => REGISTRY_URL
 
 const MANIFEST_FILE = 'manifest.json'
 
