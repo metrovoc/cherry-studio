@@ -395,7 +395,7 @@ const MainTextBlock: React.FC<Props> = ({
   const block: MarkdownSource = {
     id,
     content: role === 'user' ? userDisplayContent : smoothedContent,
-    status: isStreaming ? 'streaming' : 'success'
+    status: isStreaming || (role === 'assistant' && !isPlayoutSettled) ? 'streaming' : 'success'
   }
   // Upstream completion can precede the smooth-stream tail. Keep the iframe unmounted
   // until its first srcDoc contains the complete artifact.
