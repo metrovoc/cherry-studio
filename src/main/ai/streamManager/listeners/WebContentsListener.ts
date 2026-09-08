@@ -2,11 +2,13 @@ import type { UIMessageChunk } from 'ai'
 
 import { application } from '@application'
 import { projectStreamChunkForRenderer } from '@main/utils/messageOutputProjection'
+import type { CherryUIMessage } from '@shared/data/types/message'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { IpcEventName } from '@shared/ipc/schemas/ipcSchemas'
 import type { EventPayload } from '@shared/ipc/types'
 import { IpcChannel } from '@shared/IpcChannel'
 
+import { projectStreamMessageForRenderer } from '../rendererPayload'
 import type { StreamDoneResult, StreamErrorResult, StreamListener, StreamPausedResult } from '../types'
 
 const COALESCE_WINDOW_MS = 16
@@ -34,6 +36,7 @@ interface PendingDelta {
   anchorMessageId: string | undefined
   attemptId: number | undefined
   text: string
+  initialMessage?: CherryUIMessage | null
 }
 
 type CoalescableChunk =
@@ -52,16 +55,35 @@ export class WebContentsListener implements StreamListener {
   private pending: PendingDelta | null = null
   private pendingStartedAt = 0
   private flushTimer: NodeJS.Timeout | null = null
+  private disposed = false
 
   constructor(
     private readonly wc: Electron.WebContents,
-    private readonly topicId: string
+    private readonly topicId: string,
+    readonly subscriptionId?: string
   ) {
     this.id = `${RENDERER_LISTENER_ID_PREFIX}${wc.id}:${topicId}`
   }
 
-  onChunk(chunk: UIMessageChunk, sourceModelId?: UniqueModelId, anchorMessageId?: string, attemptId?: number): void {
-    if (this.wc.isDestroyed()) {
+  startReplay(replay: Pick<EventPayload<'ai.stream.attached'>, 'bufferedChunks' | 'terminals' | 'seeds'>): void {
+    if (this.subscriptionId) {
+      this.emit('ai.stream.attached', { topicId: this.topicId, subscriptionId: this.subscriptionId, ...replay })
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.discardPending()
+  }
+
+  onChunk(
+    chunk: UIMessageChunk,
+    sourceModelId?: UniqueModelId,
+    anchorMessageId?: string,
+    attemptId?: number,
+    initialMessage?: CherryUIMessage | null
+  ): void {
+    if (this.disposed || this.wc.isDestroyed()) {
       this.discardPending()
       return
     }
@@ -69,6 +91,7 @@ export class WebContentsListener implements StreamListener {
     const coalescable = toCoalescable(chunk)
     if (coalescable) {
       const next = normalizePending(coalescable, sourceModelId, anchorMessageId, attemptId)
+      next.initialMessage = initialMessage
       if (
         this.pending &&
         this.pending.type === next.type &&
@@ -94,11 +117,11 @@ export class WebContentsListener implements StreamListener {
     }
 
     this.flushPending()
-    this.sendChunk(chunk, sourceModelId, anchorMessageId, attemptId)
+    this.sendChunk(chunk, sourceModelId, anchorMessageId, attemptId, initialMessage)
   }
 
   onDone(result: StreamDoneResult): void {
-    if (this.wc.isDestroyed()) {
+    if (this.disposed || this.wc.isDestroyed()) {
       this.discardPending()
       return
     }
@@ -115,7 +138,7 @@ export class WebContentsListener implements StreamListener {
   }
 
   onPaused(result: StreamPausedResult): void {
-    if (this.wc.isDestroyed()) {
+    if (this.disposed || this.wc.isDestroyed()) {
       this.discardPending()
       return
     }
@@ -132,7 +155,7 @@ export class WebContentsListener implements StreamListener {
   }
 
   onError(result: StreamErrorResult): void {
-    if (this.wc.isDestroyed()) {
+    if (this.disposed || this.wc.isDestroyed()) {
       this.discardPending()
       return
     }
@@ -150,7 +173,7 @@ export class WebContentsListener implements StreamListener {
   }
 
   isAlive(): boolean {
-    const alive = !this.wc.isDestroyed()
+    const alive = !this.disposed && !this.wc.isDestroyed()
     if (!alive) this.discardPending()
     return alive
   }
@@ -163,7 +186,7 @@ export class WebContentsListener implements StreamListener {
     const p = this.pending
     if (!p) return
     this.pending = null
-    this.sendChunk(rebuildChunk(p), p.sourceModelId, p.anchorMessageId, p.attemptId)
+    this.sendChunk(rebuildChunk(p), p.sourceModelId, p.anchorMessageId, p.attemptId, p.initialMessage)
   }
 
   private discardPending(): void {
@@ -178,7 +201,8 @@ export class WebContentsListener implements StreamListener {
     chunk: UIMessageChunk,
     sourceModelId?: UniqueModelId,
     anchorMessageId?: string,
-    attemptId?: number
+    attemptId?: number,
+    initialMessage?: CherryUIMessage | null
   ): void {
     if (this.wc.isDestroyed()) return
     this.emit('ai.stream.chunk', {
@@ -186,6 +210,9 @@ export class WebContentsListener implements StreamListener {
       executionId: sourceModelId,
       ...(attemptId !== undefined ? { attemptId } : {}),
       anchorMessageId,
+      ...(initialMessage !== undefined
+        ? { initialMessage: initialMessage && projectStreamMessageForRenderer(this.topicId, initialMessage) }
+        : {}),
       chunk: projectStreamChunkForRenderer(chunk, this.topicId, anchorMessageId)
     })
   }

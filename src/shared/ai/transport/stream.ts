@@ -37,6 +37,8 @@ export interface AiChatRequestBody extends AssistantTurnOptions {
 
 /** A single chunk of a running stream. */
 export interface StreamChunkPayload {
+  /** Starting message on the first live chunk, including carried continuation executions. */
+  initialMessage?: CherryUIMessage | null
   topicId: string
   /** Multi-model: source model that produced this chunk. Frontend demuxes by this plus anchorMessageId. */
   executionId?: UniqueModelId
@@ -248,11 +250,14 @@ export interface AiToolApprovalRespondResponse {
 /** Subscribe to a topic's stream state. */
 export interface AiStreamAttachRequest {
   topicId: string
+  /** Requests an ordered replay on the event channel before subsequent live chunks. */
+  subscriptionId?: string
 }
 
 /** Unsubscribe from a topic. */
 export interface AiStreamDetachRequest {
   topicId: string
+  subscriptionId?: string
 }
 
 /** Abort the active generation on a topic. */
