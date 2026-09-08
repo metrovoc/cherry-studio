@@ -1,10 +1,11 @@
-import type { UIMessageChunk } from 'ai'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import type { StreamChunkPayload } from '@shared/ai/transport'
 import type { UniqueModelId } from '@shared/data/types/model'
+import type { EventPayload } from '@shared/ipc/types'
 import type { SerializedError } from '@shared/types/error'
+import { readUIMessageStream, type UIMessageChunk } from 'ai'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ExecutionStreamOverlayService } from '../ExecutionStreamOverlayService'
 import { TopicStreamSubscription } from '../TopicStreamSubscription'
 
 interface IpcMock {
@@ -32,6 +33,7 @@ const STREAM_ERROR: SerializedError = { name: 'Error', message: 'boom', stack: n
 // Reuse the established AI-stream mock shape (see IpcChatTransport.test.ts).
 function createMockAiApi() {
   const listeners = {
+    attached: [] as Array<(d: EventPayload<'ai.stream.attached'>) => void>,
     chunk: [] as Array<(d: StreamChunkPayload) => void>,
     done: [] as Array<
       (d: {
@@ -79,7 +81,24 @@ function createMockAiApi() {
       case 'ai.stream.open':
         return mockApi.streamOpen(input)
       case 'ai.stream.attach':
-        return mockApi.streamAttach(input)
+        return mockApi.streamAttach(input).then((response) => {
+          if (response.status !== 'not-found') {
+            for (const cb of [...listeners.attached])
+              cb({
+                ...(input as { topicId: string; subscriptionId: string }),
+                bufferedChunks: response.bufferedChunks ?? [],
+                seeds:
+                  response.seeds ??
+                  (response.bufferedChunks ?? []).map((payload: StreamChunkPayload) => ({
+                    executionId: payload.executionId,
+                    attemptId: payload.attemptId!,
+                    anchorMessageId: payload.anchorMessageId
+                  })),
+                terminals: response.terminals ?? []
+              })
+          }
+          return response
+        })
       case 'ai.stream.detach':
         return mockApi.streamDetach(input)
       case 'ai.stream.abort':
@@ -90,6 +109,11 @@ function createMockAiApi() {
   }
   const on = (event: string, cb: (p: unknown) => void): (() => void) => {
     switch (event) {
+      case 'ai.stream.attached':
+        listeners.attached.push(cb)
+        return () => {
+          listeners.attached.splice(listeners.attached.indexOf(cb) >>> 0, 1)
+        }
       case 'ai.stream.chunk':
         return mockApi.onStreamChunk(cb)
       case 'ai.stream.done':
@@ -109,9 +133,11 @@ function createMockAiApi() {
       executionId: UniqueModelId,
       chunk: UIMessageChunk,
       anchorMessageId?: string,
-      attemptId = 1
+      attemptId = 1,
+      initialMessage?: StreamChunkPayload['initialMessage']
     ) => {
-      for (const cb of [...listeners.chunk]) cb({ topicId, executionId, attemptId, anchorMessageId, chunk })
+      for (const cb of [...listeners.chunk])
+        cb({ topicId, executionId, attemptId, anchorMessageId, chunk, initialMessage })
     },
     emitDone: (
       topicId: string,
@@ -186,7 +212,7 @@ describe('TopicStreamSubscription', () => {
     sub.register(B, undefined, 1)
     await tick()
     expect(mock.mockApi.streamAttach).toHaveBeenCalledTimes(1)
-    expect(mock.mockApi.streamAttach).toHaveBeenCalledWith({ topicId: TOPIC })
+    expect(mock.mockApi.streamAttach).toHaveBeenCalledWith({ topicId: TOPIC, subscriptionId: expect.any(String) })
     sub.dispose()
   })
 
@@ -222,13 +248,106 @@ describe('TopicStreamSubscription', () => {
     const sub = new TopicStreamSubscription(TOPIC)
     sub.listen()
 
+    mock.mockApi.streamAttach.mockResolvedValueOnce({
+      status: 'attached',
+      bufferedChunks: [{ topicId: TOPIC, executionId: A, attemptId: 1, chunk: textChunk('early') }]
+    })
     mock.emitChunk(TOPIC, A, textChunk('early'))
     const sa = sub.register(A, undefined, 1)
+    await tick()
     mock.emitDone(TOPIC, A, 'success')
 
     expect(await readAll(sa)).toEqual([textChunk('early')])
     sub.dispose()
   })
+
+  it('delivers the response once when live text precedes the attach replay', async () => {
+    const prefix: UIMessageChunk[] = [
+      { type: 'start', messageId: 'answer' },
+      { type: 'text-start', id: 't' },
+      textChunk('Hello')
+    ]
+    mock.mockApi.streamAttach.mockResolvedValueOnce({
+      status: 'attached',
+      bufferedChunks: prefix.map((chunk) => ({ topicId: TOPIC, executionId: A, attemptId: 1, chunk }))
+    })
+    const sub = new TopicStreamSubscription(TOPIC)
+    sub.listen()
+    for (const chunk of prefix) mock.emitChunk(TOPIC, A, chunk)
+    const stream = sub.register(A, undefined, 1)
+    await tick()
+    mock.emitChunk(TOPIC, A, textChunk(' world'))
+    mock.emitChunk(TOPIC, A, { type: 'text-end', id: 't' })
+    mock.emitDone(TOPIC, A, 'success')
+
+    let parts: unknown
+    for await (const message of readUIMessageStream({ stream })) parts = message.parts
+    expect(parts).toEqual([{ type: 'text', text: 'Hello world', state: 'done' }])
+    sub.dispose()
+  })
+
+  it.each(['before reader registration', 'after active executions clear'])(
+    'retains a response that finishes %s while attachment is pending',
+    async (timing) => {
+      const prefix: UIMessageChunk[] = [
+        { type: 'start', messageId: 'answer' },
+        { type: 'text-start', id: 't' },
+        textChunk('Hello world'),
+        { type: 'text-end', id: 't' }
+      ]
+      let finishAttach!: (value: unknown) => void
+      mock.mockApi.streamAttach.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishAttach = resolve
+          })
+      )
+      const service = new ExecutionStreamOverlayService()
+      const consumer = {}
+      service.acquire(TOPIC)
+      for (const chunk of prefix) mock.emitChunk(TOPIC, A, chunk, 'answer')
+      if (timing === 'after active executions clear') {
+        service.syncExecutions(TOPIC, consumer, [{ executionId: A, anchorMessageId: 'answer', attemptId: 1 }], () => [
+          { id: 'answer', role: 'assistant', parts: [{ type: 'text', text: 'Hello world', state: 'done' }] }
+        ])
+        service.syncExecutions(TOPIC, consumer, [], () => [
+          { id: 'answer', role: 'assistant', parts: [{ type: 'text', text: 'Hello world', state: 'done' }] }
+        ])
+      }
+      finishAttach({
+        status: 'done',
+        bufferedChunks: prefix.map((chunk) => ({
+          topicId: TOPIC,
+          executionId: A,
+          anchorMessageId: 'answer',
+          attemptId: 1,
+          chunk
+        })),
+        terminals: [
+          {
+            topicId: TOPIC,
+            executionId: A,
+            anchorMessageId: 'answer',
+            attemptId: 1,
+            status: 'success',
+            isTopicDone: true
+          }
+        ]
+      })
+      await tick()
+      if (timing === 'before reader registration') {
+        service.syncExecutions(TOPIC, consumer, [{ executionId: A, anchorMessageId: 'answer', attemptId: 1 }], () => [
+          { id: 'answer', role: 'assistant', parts: [{ type: 'text', text: 'Hello world', state: 'done' }] }
+        ])
+      }
+      await vi.waitFor(() =>
+        expect(service.getView(TOPIC).liveAssistants).toEqual([
+          expect.objectContaining({ id: 'answer', parts: [{ type: 'text', text: 'Hello world', state: 'done' }] })
+        ])
+      )
+      service.release(TOPIC, consumer)
+    }
+  )
 
   it('keeps same-execution continuation branches distinct by anchorMessageId', async () => {
     const sub = new TopicStreamSubscription(TOPIC)
@@ -248,6 +367,40 @@ describe('TopicStreamSubscription', () => {
     expect(await readAll(second)).toEqual([textChunk('after-steer')])
     sub.dispose()
   })
+
+  it.each(['before the first chunk', 'after completion'])(
+    'uses the continuation seed when its reader mounts %s with persisted text',
+    async (timing) => {
+      const service = new ExecutionStreamOverlayService()
+      const consumer = {}
+      service.acquire(TOPIC)
+      service.syncExecutions(TOPIC, consumer, [{ executionId: A, anchorMessageId: 'first', attemptId: 1 }], () => [])
+      await tick()
+      mock.emitChunk(TOPIC, A, { type: 'start', messageId: 'first' }, 'first', 1, null)
+      mock.emitDone(TOPIC, A, 'success', false, 'first', 1)
+      await tick()
+      if (timing === 'before the first chunk') {
+        service.syncExecutions(TOPIC, consumer, [{ executionId: A, anchorMessageId: 'second', attemptId: 2 }], () => [
+          { id: 'second', role: 'assistant', parts: [{ type: 'text', text: 'complete B', state: 'done' }] }
+        ])
+        await tick()
+      }
+      mock.emitChunk(TOPIC, A, { type: 'start', messageId: 'second' }, 'second', 2, null)
+      mock.emitChunk(TOPIC, A, { type: 'text-start', id: 't' }, 'second', 2)
+      mock.emitChunk(TOPIC, A, textChunk('complete B'), 'second', 2)
+      mock.emitChunk(TOPIC, A, { type: 'text-end', id: 't' }, 'second', 2)
+      mock.emitDone(TOPIC, A, 'success', true, 'second', 2)
+      service.syncExecutions(TOPIC, consumer, [{ executionId: A, anchorMessageId: 'second', attemptId: 2 }], () => [
+        { id: 'second', role: 'assistant', parts: [{ type: 'text', text: 'complete B', state: 'done' }] }
+      ])
+      await vi.waitFor(() =>
+        expect(service.getView(TOPIC).liveAssistants).toEqual([
+          expect.objectContaining({ id: 'second', parts: [{ type: 'text', text: 'complete B', state: 'done' }] })
+        ])
+      )
+      service.release(TOPIC, consumer)
+    }
+  )
 
   it('keeps repeated attempts on the same model and anchor isolated', async () => {
     const sub = new TopicStreamSubscription(TOPIC)
@@ -338,7 +491,7 @@ describe('TopicStreamSubscription', () => {
     sub.unregister(B, undefined, 1)
     await tick()
     expect(mock.mockApi.streamDetach).toHaveBeenCalledTimes(1)
-    expect(mock.mockApi.streamDetach).toHaveBeenCalledWith({ topicId: TOPIC })
+    expect(mock.mockApi.streamDetach).toHaveBeenCalledWith({ topicId: TOPIC, subscriptionId: expect.any(String) })
     sub.dispose()
   })
 
@@ -362,7 +515,7 @@ describe('TopicStreamSubscription', () => {
     resolveAttach({ status: 'attached', bufferedChunks: [] })
     await tick()
     expect(mock.mockApi.streamDetach).toHaveBeenCalledTimes(1)
-    expect(mock.mockApi.streamDetach).toHaveBeenCalledWith({ topicId: TOPIC })
+    expect(mock.mockApi.streamDetach).toHaveBeenCalledWith({ topicId: TOPIC, subscriptionId: expect.any(String) })
     sub.dispose()
   })
 
@@ -429,7 +582,7 @@ describe('TopicStreamSubscription', () => {
     sub.dispose()
   })
 
-  it('does not reopen covered attempts when the topic terminal arrives before attach replay', async () => {
+  it('closes snapshot branches when a topic terminal precedes invoke completion', async () => {
     let resolveAttach!: (res: { status: 'attached'; bufferedChunks: StreamChunkPayload[] }) => void
     mock.mockApi.streamAttach.mockImplementationOnce(
       () =>
@@ -442,7 +595,6 @@ describe('TopicStreamSubscription', () => {
     const live = sub.register(B, 'assistant-b', 1)
     await tick()
 
-    mock.emitDone(TOPIC, B, 'success', true, 'assistant-b', 1, 2)
     resolveAttach({
       status: 'attached',
       bufferedChunks: [
@@ -451,8 +603,9 @@ describe('TopicStreamSubscription', () => {
       ]
     })
     await tick()
+    mock.emitDone(TOPIC, B, 'success', true, 'assistant-b', 1, 2)
 
-    expect(await readAll(live)).toEqual([])
+    expect(await readAll(live)).toEqual([textChunk('replayB')])
     expect(sub.hasAnyOpenBranch()).toBe(false)
     sub.dispose()
   })

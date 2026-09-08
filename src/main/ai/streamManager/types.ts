@@ -86,12 +86,19 @@ export interface StreamListener {
   /** Orders terminal persistence before notifications and cleanup work after them. */
   readonly terminalPhase?: 'persistence' | 'cleanup'
 
-  onChunk(chunk: UIMessageChunk, sourceModelId?: UniqueModelId, anchorMessageId?: string, attemptId?: number): void
+  onChunk(
+    chunk: UIMessageChunk,
+    sourceModelId?: UniqueModelId,
+    anchorMessageId?: string,
+    attemptId?: number,
+    initialMessage?: CherryUIMessage | null
+  ): void
   onDone(result: StreamDoneResult): void | Promise<void>
   onPaused(result: StreamPausedResult): void | Promise<void>
   onError(result: StreamErrorResult): void | Promise<void>
   /** Returning `false` removes the listener immediately. */
   isAlive(): boolean
+  dispose?(): void
 }
 
 // ── StreamExecution ─────────────────────────────────────────────────
@@ -110,6 +117,8 @@ export interface StreamExecution {
   anchorMessageId?: string
   /** Renderer readers must start from an empty anchor instead of cached persisted parts. */
   seedFromEmpty?: boolean
+  /** Immutable starting message for replay, before the accumulator mutates its copy. */
+  initialMessage?: CherryUIMessage
   /** Independent abort — multi-model executions don't share. */
   abortController: AbortController
   status: 'streaming' | 'done' | 'error' | 'aborted'
@@ -136,6 +145,7 @@ export interface StreamExecution {
   /** Approval ids already published during this execution. */
   publishedApprovalIds?: Set<string>
   error?: SerializedError
+  notificationError?: SerializedError
   siblingsGroupId?: number
   /** Resolves when the execution loop terminates. Awaited by `onStop` for graceful shutdown. */
   loopPromise: Promise<void>
@@ -169,6 +179,7 @@ export interface ActiveStream {
   /** Shared across all executions. Key = `listener.id`. */
   listeners: Map<string, StreamListener>
   status: TopicStreamStatus
+  notificationError?: StreamErrorResult
   isMultiModel: boolean
   lifecycle: StreamLifecycle
   /** Snapshotted at admission so temporary/internal streams never emit a conversation completion. */
