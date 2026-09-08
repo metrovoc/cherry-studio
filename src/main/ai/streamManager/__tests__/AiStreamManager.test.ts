@@ -1,5 +1,5 @@
 import { BaseService } from '@main/core/lifecycle/BaseService'
-import { aiStreamAdmissionReasons } from '@shared/ai/transport'
+import { aiStreamAdmissionReasons, type StreamChunkPayload } from '@shared/ai/transport'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { SerializedError } from '@shared/types/error'
@@ -158,6 +158,7 @@ vi.mock('@application', async () => {
 const { AiStreamManager } = await import('../AiStreamManager')
 const { TerminalPersistenceError } = await import('../listeners/PersistenceListener')
 const { TraceFlushListener } = await import('../listeners/TraceFlushListener')
+const { WebContentsListener } = await import('../listeners/WebContentsListener')
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -1734,6 +1735,135 @@ describe('AiStreamManager', () => {
   // ── grace period ────────────────────────────────────────────────
 
   describe('grace period', () => {
+    it.each(['provider-a::model-a' as UniqueModelId, undefined])(
+      'preserves a persistence error during attach for %s',
+      async (modelId) => {
+        startSingle(mgr, {
+          topicId: 'a',
+          modelId: 'provider-a::model-a',
+          request: req('a'),
+          listeners: [new FakeListener('l:a')]
+        })
+        await mgr.onExecutionDone('a', 'provider-a::model-a')
+        mgr.broadcastTopicError('a', modelId, error('Could not save response'))
+        const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+        mgr.attach(sender as unknown as Electron.WebContents, { topicId: 'a', subscriptionId: 'late' })
+        expect(sender.send.mock.calls[0][2].terminals).toEqual([
+          expect.objectContaining({ status: 'error', error: error('Could not save response'), isTopicDone: true })
+        ])
+      }
+    )
+
+    it('replays terminal identity for a finished model while its sibling remains live', async () => {
+      mgr.send({
+        topicId: 'a',
+        models: [
+          { modelId: 'provider-a::model-a', request: req('a') },
+          { modelId: 'provider-b::model-b', request: req('a') }
+        ],
+        listeners: [new FakeListener('l:a')]
+      })
+      await mgr.onExecutionDone('a', 'provider-a::model-a')
+      const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+      const response = mgr.attach(sender as unknown as Electron.WebContents, { topicId: 'a', subscriptionId: 'late' })
+      expect(response.status).toBe('attached')
+      expect(sender.send.mock.calls[0][2].terminals).toEqual([
+        expect.objectContaining({ executionId: 'provider-a::model-a', status: 'success', isTopicDone: false })
+      ])
+    })
+
+    it('keeps the replacement renderer attached during a committed continuation', async () => {
+      const topicId = 'agent-session:session-1'
+      startSingle(mgr, {
+        topicId,
+        modelId: 'provider-a::model-a',
+        request: req(topicId),
+        listeners: [new FakeListener('l:a')]
+      })
+      mockWillContinueTopic.mockReturnValue(true)
+      await mgr.onExecutionDone(topicId, 'provider-a::model-a')
+      const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+      const response = mgr.attach(sender as unknown as Electron.WebContents, { topicId, subscriptionId: 'late' })
+      expect(response.status).toBe('attached')
+      expect(sender.send.mock.calls[0][2].terminals).toEqual([
+        expect.objectContaining({ executionId: 'provider-a::model-a', status: 'success', isTopicDone: false })
+      ])
+      expect(mgr.inspect(topicId)?.listenerIds).toContain(`wc:1:${topicId}`)
+    })
+
+    it('replays once and discards the displaced renderer coalescer before live delivery resumes', async () => {
+      const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+      const wc = sender as unknown as Electron.WebContents
+      const original = new WebContentsListener(wc, 'a')
+      startSingle(mgr, {
+        topicId: 'a',
+        modelId: 'provider-a::model-a',
+        request: req('a'),
+        listeners: [original]
+      })
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'start', messageId: 'answer' })
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'text-start', id: 'p1' })
+      mgr.onChunk('a', 'provider-a::model-a', chunk('Hello'))
+      mgr.attach(wc, { topicId: 'a', subscriptionId: 'overlay' })
+      sender.send.mockClear()
+      // A primary SDK reconnect and a busy submit share the active renderer subscription.
+      mgr.attach(wc, { topicId: 'a' })
+      mgr.addListener('a', new WebContentsListener(wc, 'a'))
+      mgr.onChunk('a', 'provider-a::model-a', chunk(' world'))
+      vi.advanceTimersByTime(16)
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'text-end', id: 'p1' })
+      original.onDone({ status: 'success', isTopicDone: true })
+
+      expect(sender.send.mock.calls.map((call) => [call[1], call[2].chunk])).toEqual([
+        ['ai.stream.chunk', { type: 'text-delta', id: 'p1', delta: ' world' }],
+        ['ai.stream.chunk', { type: 'text-end', id: 'p1' }]
+      ])
+    })
+
+    it('keeps a newer renderer attachment when an older subscriber detaches', () => {
+      const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+      const wc = sender as unknown as Electron.WebContents
+      startSingle(mgr, {
+        topicId: 'a',
+        modelId: 'provider-a::model-a',
+        request: req('a'),
+        listeners: []
+      })
+      mgr.attach(wc, { topicId: 'a', subscriptionId: 'old' })
+      mgr.attach(wc, { topicId: 'a', subscriptionId: 'new' })
+      mgr.detach(wc, { topicId: 'a', subscriptionId: 'old' })
+      sender.send.mockClear()
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'text-start', id: 'p1' })
+      expect(sender.send.mock.calls.map((call) => call[2].chunk)).toEqual([{ type: 'text-start', id: 'p1' }])
+      mgr.detach(wc, { topicId: 'a', subscriptionId: 'new' })
+      sender.send.mockClear()
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'text-end', id: 'p1' })
+      expect(sender.send.mock.calls).toEqual([])
+    })
+
+    it('recovers the completed response when attachment loses the race with generation', async () => {
+      startSingle(mgr, {
+        topicId: 'a',
+        modelId: 'provider-a::model-a',
+        request: req('a'),
+        listeners: [new FakeListener('l:a')]
+      })
+      mgr.onChunk('a', 'provider-a::model-a', { type: 'text-start', id: 'p1' })
+      mgr.onChunk('a', 'provider-a::model-a', chunk('complete'))
+      await mgr.onExecutionDone('a', 'provider-a::model-a')
+      const sender = { id: 1, isDestroyed: () => false, send: vi.fn() }
+      const response = mgr.attach(sender as unknown as Electron.WebContents, { topicId: 'a', subscriptionId: 'late' })
+      expect(response.status).toBe('done')
+      const snapshot = sender.send.mock.calls[0][2]
+      expect(snapshot.bufferedChunks.map((payload: StreamChunkPayload) => payload.chunk)).toEqual([
+        { type: 'text-start', id: 'p1' },
+        chunk('complete')
+      ])
+      expect(snapshot.terminals).toEqual([
+        expect.objectContaining({ executionId: 'provider-a::model-a', status: 'success', isTopicDone: true })
+      ])
+    })
+
     it('attach returns compact replay chunks', () => {
       startSingle(mgr, {
         topicId: 'a',

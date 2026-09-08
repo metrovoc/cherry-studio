@@ -324,7 +324,7 @@ export class ExecutionStreamOverlayService {
     }
 
     for (const [key, handle] of [...entry.readers]) {
-      if (union.has(key)) continue
+      if (union.has(key) || entry.sub.isAttaching()) continue
       handle.cancel()
       handle.unregister()
       entry.readers.delete(key)
@@ -542,7 +542,7 @@ export class ExecutionStreamOverlayService {
     getSeedMessages: () => CherryUIMessage[]
   ): void {
     const branch = entry.sub.register(executionId, anchorMessageId, attemptId)
-    if (!entry.sub.hasOpenBranch(executionId, anchorMessageId, attemptId)) {
+    if (!entry.sub.hasBranch(executionId, anchorMessageId, attemptId)) {
       // A terminal fence can reject stale work after empty-set tombstone pruning.
       // Do not report its closed stream as success.
       entry.settledKeys.add(key)
@@ -571,7 +571,7 @@ export class ExecutionStreamOverlayService {
       if (t.anchorMessageId !== undefined && t.anchorMessageId !== anchorMessageId) return
       terminal = t
     })
-    const seed = pickSeed(getSeedMessages(), anchorMessageId, seedFromEmpty)
+    let seed = pickSeed(getSeedMessages(), anchorMessageId, seedFromEmpty)
     const topicId = entry.topicId
 
     const handle: ReaderHandle = {
@@ -593,6 +593,7 @@ export class ExecutionStreamOverlayService {
     void (async () => {
       let last: CherryUIMessage | undefined
       try {
+        seed = await entry.sub.getSeedMessage(executionId, anchorMessageId, attemptId, seed)
         for await (const snapshot of readUIMessageStream<CherryUIMessage>({
           stream: branch,
           message: seed,

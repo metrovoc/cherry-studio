@@ -84,6 +84,23 @@ const mocks = vi.hoisted(() => {
       return branch !== undefined && !branch.closed
     }
 
+    hasBranch(executionId: string, anchorMessageId?: string, attemptId?: number) {
+      return this.branches.has(this.#key(executionId, anchorMessageId, attemptId))
+    }
+
+    isAttaching() {
+      return false
+    }
+
+    async getSeedMessage(
+      _executionId: string,
+      _anchorMessageId: string | undefined,
+      _attemptId: number,
+      fallback: unknown
+    ) {
+      return fallback
+    }
+
     hasAnyOpenBranch() {
       for (const branch of this.branches.values()) {
         if (!branch.closed) return true

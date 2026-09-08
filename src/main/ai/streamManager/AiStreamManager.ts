@@ -753,7 +753,12 @@ export class AiStreamManager extends BaseService {
       if (existing.cleanupTimer) clearTimeout(existing.cleanupTimer)
       existing.cleanupTimer = undefined
       existing.expiresAt = undefined
-      for (const listener of input.listeners) existing.listeners.set(listener.id, listener)
+      for (const listener of input.listeners) {
+        const current = existing.listeners.get(listener.id)
+        if (current?.isAlive() && isRendererListener(current)) continue
+        current?.dispose?.()
+        existing.listeners.set(listener.id, listener)
+      }
       const nextExecution = this.createAndLaunchExecution(
         input.topicId,
         model.modelId,
@@ -1114,14 +1119,23 @@ export class AiStreamManager extends BaseService {
   addListener(topicId: string, listener: StreamListener): boolean {
     const stream = this.activeStreams.get(topicId)
     if (!stream) return false
+    const current = stream.listeners.get(listener.id)
+    if (current?.isAlive() && isRendererListener(current)) return true
+    current?.dispose?.()
     stream.listeners.set(listener.id, listener)
     // Replay buffered chunks from every execution's ring buffer so late
     // listeners catch up. Ordering within a single execution is preserved;
     // across executions chunks are interleaved in the order we see each
     // execution's buffer (acceptable: the Renderer demuxes by executionId + anchor).
     for (const exec of stream.executions.values()) {
-      for (const chunk of exec.buffer) {
-        listener.onChunk(chunk.chunk, chunk.executionId, chunk.anchorMessageId, chunk.attemptId)
+      for (const [index, chunk] of exec.buffer.entries()) {
+        listener.onChunk(
+          chunk.chunk,
+          chunk.executionId,
+          chunk.anchorMessageId,
+          chunk.attemptId,
+          index === 0 ? (exec.initialMessage ?? null) : undefined
+        )
       }
     }
     return true
@@ -1129,6 +1143,7 @@ export class AiStreamManager extends BaseService {
 
   removeListener(topicId: string, listenerId: string): void {
     const stream = this.activeStreams.get(topicId)
+    stream?.listeners.get(listenerId)?.dispose?.()
     stream?.listeners.delete(listenerId)
   }
 
@@ -1247,6 +1262,7 @@ export class AiStreamManager extends BaseService {
 
     const sourceModelId = modelId
     const anchorMessageId = exec.anchorMessageId
+    const initialMessage = exec.buffer.length === 0 ? (exec.initialMessage ?? null) : undefined
     const payload: StreamChunkPayload = {
       topicId,
       executionId: sourceModelId,
@@ -1339,7 +1355,7 @@ export class AiStreamManager extends BaseService {
         continue
       }
       try {
-        listener.onChunk(chunk, sourceModelId, anchorMessageId, exec.attemptId)
+        listener.onChunk(chunk, sourceModelId, anchorMessageId, exec.attemptId, initialMessage)
       } catch (err) {
         logger.warn('Listener threw', { topicId, listenerId: id, event: 'onChunk', err })
       }
@@ -1383,13 +1399,7 @@ export class AiStreamManager extends BaseService {
     // when the runtime will continue this topic, keep the stream alive so the next turn reaches the
     // carried renderer listeners, but let the runtime drive the continuation.
     const chatChaining = stream.status === 'done' && this.hasPendingSteer(topicId)
-    const agentChaining =
-      topicDone &&
-      !chatChaining &&
-      stream.status === 'done' &&
-      isAgentSessionTopic(topicId) &&
-      application.get('AgentSessionRuntimeService').willContinueTopic(topicId)
-    const chaining = chatChaining || agentChaining
+    const chaining = this.hasContinuation(stream)
 
     await this.broadcastExecutionDone(stream, exec, topicDone && !chaining)
 
@@ -1539,6 +1549,8 @@ export class AiStreamManager extends BaseService {
       anchorMessageId: exec?.anchorMessageId,
       isTopicDone
     }
+    if (exec) exec.notificationError = error
+    else stream.notificationError = result
     for (const listener of stream.listeners.values()) {
       if (listener.id.startsWith('persistence:')) continue
       try {
@@ -1572,6 +1584,8 @@ export class AiStreamManager extends BaseService {
       anchorMessageId: exec?.anchorMessageId,
       isTopicDone: true
     }
+    if (exec) exec.notificationError = error
+    else stream.notificationError = result
     for (const listener of stream.listeners.values()) {
       if (listener.id.startsWith('persistence:')) continue
       try {
@@ -1746,7 +1760,65 @@ export class AiStreamManager extends BaseService {
     // the original caller.
     if (!stream.lifecycle.canAttach(stream)) return { status: 'not-found' }
 
-    if (stream.status === 'done' || stream.status === 'aborted') {
+    const continuing = this.hasContinuation(stream)
+    const listener = new WebContentsListener(sender, req.topicId, req.subscriptionId)
+    const current = stream.listeners.get(listener.id)
+    if (req.subscriptionId || !current?.isAlive()) {
+      current?.dispose?.()
+      stream.listeners.set(listener.id, listener)
+    }
+
+    const bufferedChunks = [...stream.executions.values()].flatMap((exec) =>
+      buildCompactReplay(exec.buffer, this.config.maxDeltaBytes).map(projectStreamChunkPayloadForRenderer)
+    )
+    if (req.subscriptionId) {
+      const finished = [...stream.executions.values()].filter(
+        (exec) => exec.status !== 'streaming' || exec.notificationError
+      )
+      const terminals = finished.map((exec, index) => {
+        const isTopicDone = !isLiveStatus(stream.status) && !continuing && index === finished.length - 1
+        const identity = {
+          topicId: req.topicId,
+          executionId: exec.modelId,
+          anchorMessageId: exec.anchorMessageId,
+          attemptId: exec.attemptId,
+          isTopicDone,
+          ...(isTopicDone ? { topicAttemptWatermark: this.getTopicAttemptWatermark(stream) } : {})
+        }
+        const error = exec.notificationError ?? exec.error
+        if (error) {
+          return { ...identity, status: 'error' as const, error }
+        } else if (exec.status === 'aborted') {
+          return { ...identity, status: 'paused' as const }
+        } else {
+          return { ...identity, status: 'success' as const }
+        }
+      })
+      // The snapshot and future chunks share one ordered IPC event channel.
+      const topicError = stream.notificationError
+      listener.startReplay({
+        bufferedChunks,
+        seeds: [...stream.executions.values()].map((exec) => ({
+          executionId: exec.modelId,
+          attemptId: exec.attemptId,
+          anchorMessageId: exec.anchorMessageId,
+          message: exec.initialMessage ? projectStreamMessageForRenderer(req.topicId, exec.initialMessage) : undefined
+        })),
+        terminals: topicError
+          ? [
+              {
+                topicId: req.topicId,
+                status: 'error',
+                error: topicError.error,
+                isTopicDone: topicError.isTopicDone,
+                topicAttemptWatermark: topicError.topicAttemptWatermark
+              }
+            ]
+          : terminals
+      })
+    }
+
+    if (!continuing && (stream.status === 'done' || stream.status === 'aborted')) {
       // Map per-execution finalMessages so multi-model topics can rebuild
       // every sibling — not just the first. `finalMessage` (singular) is a
       // backwards-compat convenience pointing at the first iteration; both
@@ -1772,18 +1844,13 @@ export class AiStreamManager extends BaseService {
       // state via a topic-level path with no per-exec error attached).
       let firstError: SerializedError | undefined
       for (const exec of stream.executions.values()) {
-        if (exec.error) {
-          firstError = exec.error
+        if (exec.notificationError ?? exec.error) {
+          firstError = exec.notificationError ?? exec.error
           break
         }
       }
       return { status: 'error', error: firstError }
     }
-
-    // Reconnect: compact-replay each execution's buffer in isolation so
-    // text-delta / reasoning-delta merging stays per-execution.
-    const listener = new WebContentsListener(sender, req.topicId)
-    stream.listeners.set(listener.id, listener)
 
     const totalDropped = [...stream.executions.values()].reduce((sum, exec) => sum + exec.droppedChunks, 0)
     if (totalDropped > 0) {
@@ -1793,17 +1860,19 @@ export class AiStreamManager extends BaseService {
       })
     }
 
-    const bufferedChunks: StreamChunkPayload[] = []
-    for (const exec of stream.executions.values()) {
-      bufferedChunks.push(
-        ...buildCompactReplay(exec.buffer, this.config.maxDeltaBytes).map(projectStreamChunkPayloadForRenderer)
-      )
-    }
     return { status: 'attached', bufferedChunks }
   }
 
   detach(sender: Electron.WebContents, req: AiStreamDetachRequest): void {
-    this.removeListener(req.topicId, `wc:${sender.id}:${req.topicId}`)
+    const id = `wc:${sender.id}:${req.topicId}`
+    const listener = this.activeStreams.get(req.topicId)?.listeners.get(id)
+    if (
+      req.subscriptionId &&
+      (!(listener instanceof WebContentsListener) || listener.subscriptionId !== req.subscriptionId)
+    ) {
+      return
+    }
+    this.removeListener(req.topicId, id)
   }
 
   /** Full output of a deferred tool call, while the stream that produced it is still active. */
@@ -1838,8 +1907,12 @@ export class AiStreamManager extends BaseService {
   ): StreamExecution {
     // `loopPromise` is overwritten right after launch; initialise to a resolved sentinel
     // so the `exec` object reference is stable inside the arrow function below.
+    const lastIncoming = request.messages?.at(-1)
+    const initialMessage =
+      lastIncoming?.role === 'assistant' ? (structuredClone(lastIncoming) as CherryUIMessage) : undefined
     const exec: StreamExecution = {
       modelId,
+      initialMessage,
       attemptId: ++this.nextExecutionAttemptSequence,
       anchorMessageId: request.messageId,
       seedFromEmpty,
@@ -2006,6 +2079,15 @@ export class AiStreamManager extends BaseService {
       runtimeTiming: exec.runtimeTiming.snapshot()
     }
     await this.dispatchToListeners(stream, 'onPaused', (listener) => listener.onPaused(result))
+  }
+
+  private hasContinuation(stream: ActiveStream): boolean {
+    return (
+      stream.status === 'done' &&
+      (this.hasPendingSteer(stream.topicId) ||
+        (isAgentSessionTopic(stream.topicId) &&
+          application.get('AgentSessionRuntimeService').willContinueTopic(stream.topicId)))
+    )
   }
 
   private getTopicAttemptWatermark(stream: ActiveStream): number {
