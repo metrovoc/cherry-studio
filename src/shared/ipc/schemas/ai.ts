@@ -32,8 +32,8 @@ import {
   AgentWorkspaceNameSchema
 } from '@shared/data/api/schemas/agentWorkspaces'
 import { JobScheduleNameAtomSchema, TriggerSchema } from '@shared/data/api/schemas/jobs'
-import { ContentHashSchema, CleanupPolicySchema, type FileEntry, FileEntrySchema } from '@shared/data/types/file'
-import type { CherryMessagePart } from '@shared/data/types/message'
+import { CleanupPolicySchema, ContentHashSchema, type FileEntry, FileEntrySchema } from '@shared/data/types/file'
+import type { CherryMessagePart, CherryUIMessage } from '@shared/data/types/message'
 import {
   ImageGenerationModeSchema,
   ModelSchema,
@@ -295,11 +295,11 @@ export const aiRequestSchemas = {
     output: z.custom<AiStreamOpenResponse>()
   }),
   'ai.stream.attach': defineRoute({
-    input: z.strictObject({ topicId: z.string().min(1) }),
+    input: z.strictObject({ topicId: z.string().min(1), subscriptionId: z.string().min(1).optional() }),
     output: z.custom<AiStreamAttachResponse>()
   }),
   'ai.stream.detach': defineRoute({
-    input: z.strictObject({ topicId: z.string().min(1) }),
+    input: z.strictObject({ topicId: z.string().min(1), subscriptionId: z.string().min(1).optional() }),
     output: z.void()
   }),
   'ai.stream.abort': defineRoute({
@@ -505,6 +505,18 @@ export const aiRequestSchemas = {
 export type AiEventSchemas = {
   'ai.claude_code.binary.changed': ClaudeCodeBinaryStatus
   'ai.agent.attachment_selections.changed': { sessionId: string }
+  'ai.stream.attached': {
+    topicId: string
+    subscriptionId: string
+    bufferedChunks: StreamChunkPayload[]
+    seeds: Array<{
+      executionId: StreamChunkPayload['executionId']
+      attemptId: number
+      anchorMessageId?: string
+      message?: CherryUIMessage
+    }>
+    terminals: Array<StreamDonePayload | (StreamErrorPayload & { status: 'error' })>
+  }
   'ai.stream.chunk': StreamChunkPayload
   'ai.stream.done': StreamDonePayload
   'ai.stream.error': StreamErrorPayload
