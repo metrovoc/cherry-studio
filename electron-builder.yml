@@ -67,9 +67,6 @@ files:
   - "!**/node_modules/better-sqlite3/{bin,deps,src}/**"
   - "!**/node_modules/better-sqlite3/build/{Debug,Release/obj}/**"
   - "!**/node_modules/{selection-hook,@earendil-works/pi-coding-agent}/docs/**"
-  # node-gyp-build prefers build/Release over prebuilds/, so ship the prebuilds and drop the
-  # host-arch rebuild — a cross-built arm64 package would otherwise load the x86-64 binary (#20530).
-  - "!node_modules/selection-hook/build/**"
   - "!node_modules/selection-hook/node_modules" # we don't need what in the node_modules dir
   - "!node_modules/selection-hook/src" # we don't need source files
   - "!node_modules/@cherrystudio/macos-panel/src"
