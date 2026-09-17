@@ -99,10 +99,6 @@ export const topicHandlers: HandlersFor<TopicSchemas> = {
     GET: async ({ params, query }) => {
       const parsed = ListAssistantTopicsQuerySchema.parse(query ?? {})
       return topicService.listByAssistantActivityCursor(params.assistantId, parsed)
-    },
-
-    DELETE: async ({ params }) => {
-      return topicService.deleteByAssistantId(params.assistantId)
     }
   },
 

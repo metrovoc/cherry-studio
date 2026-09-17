@@ -1,3 +1,9 @@
+import { CircleX, Copy, ListX, Loader2, Pause } from 'lucide-react'
+import type { FC, ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { useTranslation } from 'react-i18next'
+
 import { Button, Tooltip } from '@cherrystudio/ui'
 import RefreshIcon from '@renderer/components/icons/RefreshIcon'
 import { useTimer } from '@renderer/hooks/useTimer'
@@ -5,11 +11,6 @@ import { ipcApi, useIpcOn } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
 import { isMac } from '@renderer/utils/platform'
 import { cn } from '@renderer/utils/style'
-import { CircleX, Copy, ListX, Loader2, Pause } from 'lucide-react'
-import type { FC, ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
-import { useHotkeys } from 'react-hotkeys-hook'
-import { useTranslation } from 'react-i18next'
 
 interface FooterProps {
   children?: ReactNode

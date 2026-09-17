@@ -1449,7 +1449,7 @@ describe('buildAgentParams web-tool routing', () => {
     })
 
     const result = await buildAgentParams({
-      request: {},
+      request: { conversation: CONVERSATION },
       signal: undefined,
       provider: codexProvider,
       model: codexModel,
