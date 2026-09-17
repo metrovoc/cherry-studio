@@ -1,5 +1,6 @@
-import { useDataChange, useInfiniteFlatItems, useInfiniteQuery } from '@renderer/data/hooks/useDataApi'
 import { useCallback } from 'react'
+
+import { useDataChange, useInfiniteFlatItems, useInfiniteQuery } from '@renderer/data/hooks/useDataApi'
 
 export function useQuickAssistantHistory(assistantId: string | undefined, enabled: boolean) {
   const query = useInfiniteQuery('/assistants/:assistantId/topics', {
