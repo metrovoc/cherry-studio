@@ -165,20 +165,6 @@ describe('topicHandlers', () => {
         cursor: 'previous'
       })
     })
-
-    it('delegates assistant-scoped topic delete to TopicService', async () => {
-      const result = { deletedIds: ['topic-a', 'topic-b'], deletedCount: 2 }
-      deleteByAssistantIdMock.mockResolvedValueOnce(result)
-
-      await expect(
-        topicHandlers['/assistants/:assistantId/topics'].DELETE({
-          params: { assistantId: 'assistant-1' }
-        } as never)
-      ).resolves.toEqual(result)
-
-      expect(deleteByAssistantIdMock).toHaveBeenCalledWith('assistant-1')
-      expect(deleteByIdsMock).not.toHaveBeenCalled()
-    })
   })
 
   describe('/topics/:id/duplicate', () => {

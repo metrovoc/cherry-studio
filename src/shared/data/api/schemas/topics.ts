@@ -296,22 +296,11 @@ export type TopicSchemas = {
     }
   }
 
-  /**
-   * Delete all topics currently linked to an assistant.
-   *
-   * This is an explicit scoped collection delete. It does not change
-   * the default `DELETE /assistants/:id` behavior, which only deletes the
-   * assistant itself unless the caller opts into `deleteTopics=true`.
-   */
   '/assistants/:assistantId/topics': {
     GET: {
       params: { assistantId: string }
       query?: ListAssistantTopicsQuery
       response: CursorPaginationResponse<Topic>
-    }
-    DELETE: {
-      params: { assistantId: string }
-      response: DeleteTopicsResult
     }
   }
 } & OrderEndpoints<'/topics'>

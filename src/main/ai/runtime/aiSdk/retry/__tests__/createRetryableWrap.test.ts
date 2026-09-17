@@ -425,9 +425,7 @@ describe('createRetryableWrap', () => {
     const failure = { error: { code: 'invalid_api_key', message: 'Invalid API key' } }
     const generate = vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(okResult)
     const wrap = createRetryableWrap({ fallbacks: [], retryPolicy: policy() })
-    await expect(wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] } as never)).rejects.toBe(
-      failure
-    )
+    await expect(wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] })).rejects.toBe(failure)
     expect(generate).toHaveBeenCalledTimes(1)
   })
 
@@ -438,7 +436,7 @@ describe('createRetryableWrap', () => {
       const generate = vi.fn().mockRejectedValue(failure)
       const wrap = createRetryableWrap({ fallbacks: [], retryPolicy: policy({ maxAttempts: 2 }) })
       const result = Promise.resolve(
-        wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] } as never)
+        wrap!(makeFakeLanguageModel('primary', generate)).doGenerate({ prompt: [] })
       ).catch((error) => error)
       await vi.advanceTimersByTimeAsync(10_000)
       expect(await result).toMatchObject({ errors: [failure, failure, failure] })

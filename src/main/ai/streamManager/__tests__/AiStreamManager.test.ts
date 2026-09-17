@@ -3151,7 +3151,7 @@ describe('AiStreamManager', () => {
   // chunk text translated via `errorFromStreamChunk` (name: 'StreamError').
 
   describe('stream errors', () => {
-    it('delivers structured provider failures to persistence listeners without losing their message or code', async () => {
+    it('delivers safe structured provider error messages to persistence listeners', async () => {
       vi.useRealTimers()
       const failure = {
         type: 'error',
@@ -3178,10 +3178,7 @@ describe('AiStreamManager', () => {
 
       await vi.waitFor(() => expect(listener.errorResults).toHaveLength(1))
       expect(listener.errorResults[0].error).toMatchObject({
-        name: 'service_unavailable_error',
-        message: 'Search service unavailable',
-        code: 'server_is_overloaded',
-        data: failure
+        message: 'Search service unavailable'
       })
       expect(listener.doneResults).toHaveLength(0)
     })

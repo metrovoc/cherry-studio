@@ -45,6 +45,7 @@ const chatEffortModels: Array<{
   pricing?: ProviderModelOverride['pricing']
 }> = [
   { modelId: 'deepseek-flash', values: ['high', 'max'] },
+  { modelId: 'deepseek-v4-1-flash', values: ['low', 'high', 'max'] },
   { modelId: 'deepseek-v4-flash', values: ['high', 'max'] },
   { modelId: 'deepseek-v4-flash-vision-exp', values: ['high', 'max'] },
   { modelId: 'deepseek-v4-pro', values: ['high', 'max'] },
@@ -69,7 +70,7 @@ const chatEffortModels: Array<{
   { modelId: 'omen-alpha', values: ['low', 'high'] }
 ]
 
-const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7']
+const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7', 'union-alpha']
 
 const qwenBudgetModels = [
   { max: 81_920, modelId: 'qwen3-5-plus' },

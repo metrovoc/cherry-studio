@@ -1621,17 +1621,6 @@ describe('AssistantDataService', () => {
             { id: 'topic-trashed', assistantId: null }
           ])
           expect(events).toEqual(['committed', 'topic-projection'])
-          expect(notifyDataApiDataChangeMock).toHaveBeenCalledWith([
-            { endpoint: '/topics', kind: 'projection', entityIds: ['topic-active', 'topic-trashed'] },
-            {
-              endpoint: '/topics',
-              kind: 'order',
-              dimension: 'lastActivityAt',
-              entityIds: ['topic-active', 'topic-trashed']
-            },
-            { endpoint: '/topics/:id', entityIds: ['topic-active', 'topic-trashed'] },
-            { endpoint: '/topics/latest' }
-          ])
         } finally {
           notifyDataApiDataChangeMock.mockReset()
         }

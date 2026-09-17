@@ -1,9 +1,10 @@
+import { readUIMessageStream, type UIMessageChunk } from 'ai'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { StreamChunkPayload } from '@shared/ai/transport'
 import type { UniqueModelId } from '@shared/data/types/model'
 import type { EventPayload } from '@shared/ipc/types'
 import type { SerializedError } from '@shared/types/error'
-import { readUIMessageStream, type UIMessageChunk } from 'ai'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ExecutionStreamOverlayService } from '../ExecutionStreamOverlayService'
 import { TopicStreamSubscription } from '../TopicStreamSubscription'
