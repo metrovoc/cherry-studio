@@ -436,9 +436,9 @@ describe('HomeWindow', () => {
     const { container } = render(<HomeWindow draggable={false} />)
 
     // Windows needs the opaque floating-surface token because its native window is not transparent.
-    expect(container.querySelector('[data-ui~="quick-assistant.view"]')).toHaveStyle({
-      backgroundColor: 'var(--popover)'
-    })
+    expect(container.querySelector<HTMLElement>('[data-ui~="quick-assistant.view"]')?.style.backgroundColor).toBe(
+      'var(--popover)'
+    )
   })
 
   it('uses the configured quick model in model-only mode', () => {
@@ -924,23 +924,19 @@ describe('HomeWindow', () => {
       topicId: 'temp-topic',
       ack: {
         mode: 'started',
-        reservedMessages: [
-          { id: 'authoritative-first', role: 'user', parts: [{ type: 'text', text: 'same' }] } as CherryUIMessage
-        ]
+        reservedMessages: [{ id: 'authoritative-first', role: 'user', parts: [{ type: 'text', text: 'same' }] }]
       }
     })
     state.messages = [
       ...state.messages,
-      { id: 'optimistic-second', role: 'user', parts: [{ type: 'text', text: 'same' }] } as CherryUIMessage
+      { id: 'optimistic-second', role: 'user', parts: [{ type: 'text', text: 'same' }] }
     ]
     state.dispatchListener?.({
       ok: true,
       topicId: 'temp-topic',
       ack: {
         mode: 'started',
-        reservedMessages: [
-          { id: 'authoritative-second', role: 'user', parts: [{ type: 'text', text: 'same' }] } as CherryUIMessage
-        ]
+        reservedMessages: [{ id: 'authoritative-second', role: 'user', parts: [{ type: 'text', text: 'same' }] }]
       }
     })
 

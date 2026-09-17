@@ -82,6 +82,8 @@ vi.mock('react-i18next', () => ({
   })
 }))
 
+import type * as CherryStudioUi from '@cherrystudio/ui'
+
 import InputBar from '../InputBar'
 
 vi.mock('@cherrystudio/ui', async (importOriginal) => importOriginal<typeof CherryStudioUi>())

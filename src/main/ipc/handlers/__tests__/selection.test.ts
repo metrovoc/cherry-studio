@@ -54,12 +54,6 @@ describe('selectionHandlers', () => {
     expect(selectionService.determineToolbarSize).toHaveBeenCalledWith(800, 40)
   })
 
-  it('process_action forwards the action item and fullscreen flag', async () => {
-    const actionItem = { id: 'a1', name: 'Translate', enabled: true, isBuiltIn: true }
-    await selectionHandlers['selection.process_action']({ actionItem, isFullScreen: true }, ctx('w1'))
-    expect(selectionService.processAction).toHaveBeenCalledWith(actionItem, true)
-  })
-
   it('pin_action_window pins the caller window by its own id via WindowManager.behavior', async () => {
     await selectionHandlers['selection.pin_action_window'](true, ctx('action-7'))
     expect(setAlwaysOnTop).toHaveBeenCalledWith('action-7', true)

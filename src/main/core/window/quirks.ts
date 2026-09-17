@@ -1,8 +1,8 @@
-import { BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 
+import { trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
 import { isMac } from '@main/core/platform'
 import type { AlwaysOnTopLevel, WindowBehavior, WindowQuirks } from '@main/core/window/types'
-import { trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
 
 /**
  * Apply declarative OS quirks to a freshly-created window by monkey-patching

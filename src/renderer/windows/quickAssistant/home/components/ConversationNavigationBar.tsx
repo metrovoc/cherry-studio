@@ -1,8 +1,9 @@
-import { Button, Tooltip } from '@cherrystudio/ui'
-import { isMac } from '@renderer/utils/platform'
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { Button, Tooltip } from '@cherrystudio/ui'
+import { isMac } from '@renderer/utils/platform'
 
 interface Props {
   title: string

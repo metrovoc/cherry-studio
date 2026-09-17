@@ -21,8 +21,8 @@ export const selectionHandlers: IpcHandlersFor<typeof selectionRequestSchemas> =
   'selection.determine_toolbar_size': async ({ width, height }) => {
     application.get('SelectionService').determineToolbarSize(width, height)
   },
-  'selection.process_action': async ({ actionItem, isFullScreen }) => {
-    application.get('SelectionService').processAction(actionItem, isFullScreen)
+  'selection.process_action': async ({ actionItem }) => {
+    application.get('SelectionService').processAction(actionItem)
   },
   'selection.pin_action_window': async (isPinned, ctx) => {
     // The caller IS the action window; pin it by its own id. `behavior.setAlwaysOnTop`

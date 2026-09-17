@@ -1,7 +1,9 @@
-import { BaseService } from '@main/core/lifecycle'
-import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { EventEmitter } from 'events'
+
+import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { BaseService } from '@main/core/lifecycle'
 
 const { platform, outsideClicks, windowManager } = vi.hoisted(() => ({
   platform: { isMac: true, isWin: false },
