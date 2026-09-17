@@ -327,7 +327,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const partsByMessageId = useMemo<Record<string, CherryMessagePart[]>>(() => {
     const next: Record<string, CherryMessagePart[]> = {}
     for (const message of displayMessages) {
-      next[message.id] = (message.parts ?? []) as CherryMessagePart[]
+      next[message.id] = message.parts ?? []
     }
     return next
   }, [displayMessages])

@@ -163,7 +163,17 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
   // original call in `maxAttempts`, so +1 yields that many same-model retries.
   const retryCount = options.retryPolicy.maxAttempts
   const backoffEnabled = options.retryPolicy.backoffEnabled
-  const transientRetry = and(error.isRetryable(true), not(error.statusCode(401, 429))).retry({
+  const retryableError = error((failure) => {
+    if (APICallError.isInstance(failure)) return failure.isRetryable
+    if (failure === null || typeof failure !== 'object') return false
+    const details = 'error' in failure ? failure.error : failure
+    if (details === null || typeof details !== 'object') return false
+    return (
+      ('code' in details && details.code === 'server_is_overloaded') ||
+      ('type' in details && details.type === 'service_unavailable_error')
+    )
+  })
+  const transientRetry = and(retryableError, not(error.statusCode(401, 429))).retry({
     maxAttempts: retryCount + 1,
     delay: RETRY_BASE_DELAY_MS,
     ...(backoffEnabled && { backoffFactor: 2 })
@@ -174,7 +184,7 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
     // holds since retryCount >= 1.)
     apiKeyFallbacks.length > 0
       ? transientRetry
-      : error.isRetryable(true).retry({
+      : retryableError.retry({
           maxAttempts: retryCount + 1,
           delay: RETRY_BASE_DELAY_MS,
           ...(backoffEnabled && { backoffFactor: 2 })

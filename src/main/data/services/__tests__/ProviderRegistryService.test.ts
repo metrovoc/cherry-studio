@@ -262,31 +262,25 @@ describe('ProviderRegistryService', () => {
         { id: 'openai', name: 'OpenAI', modelListSource: 'api', defaultChatEndpoint: 'openai-responses' }
       ]
     } as ReturnType<typeof readProviderRegistry>)
-    mockReadModels.mockImplementation(
-      (path) =>
-        ({
-          version: '1',
-          models: path.startsWith('/remote')
-            ? [{ id: 'gpt-6-astra', name: 'GPT-6 Astra', capabilities: ['reasoning'], contextWindow: 1050000 }]
-            : [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000 }]
-        }) as ReturnType<typeof readModelRegistry>
-    )
-    mockReadProviderModels.mockImplementation(
-      (path) =>
-        ({
-          version: '1',
-          overrides: path.startsWith('/remote')
-            ? [
-                {
-                  providerId: 'openai-codex',
-                  modelId: 'gpt-6-astra',
-                  apiModelId: 'gpt-6-astra',
-                  limits: { contextWindow: 272000 }
-                }
-              ]
-            : [{ providerId: 'openai', modelId: 'gpt-4o', apiModelId: 'gpt-4o' }]
-        }) as ReturnType<typeof readProviderModelRegistry>
-    )
+    mockReadModels.mockImplementation((path) => ({
+      version: '1',
+      models: path.startsWith('/remote')
+        ? [{ id: 'gpt-6-astra', name: 'GPT-6 Astra', capabilities: ['reasoning'], contextWindow: 1050000 }]
+        : [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000 }]
+    }))
+    mockReadProviderModels.mockImplementation((path) => ({
+      version: '1',
+      overrides: path.startsWith('/remote')
+        ? [
+            {
+              providerId: 'openai-codex',
+              modelId: 'gpt-6-astra',
+              apiModelId: 'gpt-6-astra',
+              limits: { contextWindow: 272000 }
+            }
+          ]
+        : [{ providerId: 'openai', modelId: 'gpt-4o', apiModelId: 'gpt-4o' }]
+    }))
     try {
       expect(providerRegistryService.listProviderRegistryModels({ providerId: 'openai-codex' })).toMatchObject([
         { id: 'openai-codex::gpt-6-astra', contextWindow: 272000 }

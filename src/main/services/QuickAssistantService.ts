@@ -1,4 +1,5 @@
-import { app, BrowserWindow, screen, shell } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { screen } from 'electron'
 
 /**
  * QuickAssistantService — business orchestration for the quick assistant window.

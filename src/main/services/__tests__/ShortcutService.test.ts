@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@logger', () => ({
@@ -37,9 +38,9 @@ const {
     open: vi.fn(),
     broadcastToType: vi.fn(),
     onWindowCreatedByType: vi.fn(),
-    getWindowInfosByType: vi.fn(
-      (_type: WindowType): Array<{ id: string; type: WindowType; isVisible: boolean; isFocused: boolean }> => []
-    )
+    getWindowInfosByType: vi.fn<
+      (type: WindowType) => Array<{ id: string; type: WindowType; isVisible: boolean; isFocused: boolean }>
+    >(() => [])
   },
   selectionServiceMock: {
     toggleEnabled: vi.fn(),
@@ -262,7 +263,9 @@ describe('ShortcutService', () => {
         isVisible: true,
         isFocused: true
       }
-      windowManagerMock.getWindowInfosByType.mockImplementation((type) => (focused?.type === type ? [focused] : []))
+      windowManagerMock.getWindowInfosByType.mockImplementation((type) =>
+        focused && focused.type === type ? [focused] : []
+      )
       await flushFocus()
       expect(nativeAccelerators.has('Command+Escape')).toBe(true)
       const dismiss = globalShortcutMock.register.mock.calls.find(([key]) => key === 'Command+Escape')![1]
