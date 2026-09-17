@@ -134,18 +134,24 @@ async function prepareNativeModulesForElectron(
   }
 
   // electron-builder's automatic pnpm rebuild can retain the host Node prebuild.
-  // Force the ABI-sensitive addon from source for the exact target before app files are copied.
+  // Rebuild the ABI-sensitive addon and patched macOS selection hook for the exact target.
   await rebuildFn({
     buildPath: projectRoot,
     electronVersion,
     platform,
     arch,
-    onlyModules: ['better-sqlite3'],
+    onlyModules: platform === 'darwin' ? ['better-sqlite3', 'selection-hook'] : ['better-sqlite3'],
     force: true,
     buildFromSource: true
   })
 }
 exports.prepareNativeModulesForElectron = prepareNativeModulesForElectron
+
+// macOS needs the patched source build; other platforms need the target-arch prebuild (#20530).
+const selectionHookFilters = (platform) => [
+  `!node_modules/selection-hook/${platform === 'darwin' ? 'prebuilds' : 'build'}/**`
+]
+exports.selectionHookFilters = selectionHookFilters
 
 // Most native packages encode Electron's platform key (win32) in their name, but some
 // (e.g. sqlite-vec) use the npm `windows` convention. Match either so a win32 build keeps
@@ -200,7 +206,7 @@ exports.default = async function (context) {
     let filters = electronBuilderConfig.files
 
     // add filters for other architectures (exclude them)
-    filters.push(...packagesToExclude)
+    filters.push(...selectionHookFilters(platform), ...packagesToExclude)
 
     context.packager.config.files[0].filter = filters
   }
