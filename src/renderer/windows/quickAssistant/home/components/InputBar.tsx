@@ -1,3 +1,7 @@
+import { Check, Loader2 } from 'lucide-react'
+import React, { type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Command,
@@ -15,9 +19,6 @@ import ModelAvatar from '@renderer/components/Avatar/ModelAvatar'
 import { useAssistantsApi } from '@renderer/hooks/useAssistant'
 import type { Assistant } from '@renderer/types/assistant'
 import type { Model } from '@shared/data/types/model'
-import { Check, Loader2 } from 'lucide-react'
-import React, { type ReactNode, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 
 interface InputBarProps {
   text: string

@@ -14,7 +14,6 @@ import { createLatestReconciler, type LatestReconciler } from '@main/core/concur
 import { type Activatable, BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isDev, isLinux, isMac, isWin } from '@main/core/platform'
 import { WindowType } from '@main/core/window/types'
-import { getApplicationId } from '@main/utils/appEdition'
 import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
 import { SelectionTriggerMode } from '@shared/data/preference/preferenceTypes'
 
@@ -1214,7 +1213,7 @@ export class SelectionService extends BaseService implements Activatable {
    * Process action item
    * @param actionItem Action item to process
    */
-  public processAction(actionItem: SelectionActionItem, _isFullScreen: boolean = false): void {
+  public processAction(actionItem: SelectionActionItem): void {
     const wm = application.get('WindowManager')
 
     // open({ initData }) atomically stores the action payload and, for the

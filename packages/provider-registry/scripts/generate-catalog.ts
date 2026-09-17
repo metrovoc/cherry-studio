@@ -538,6 +538,7 @@ function buildProviderModels(
   }
   // md-derived rows key on `modelId`; templates expand into matching rows without replacing upstream identity.
   const addModel = (o: any): void => {
+    if (seen.has(`${o.providerId} ${o.modelId} ${o.apiModelId ?? ''} ${variantsKey(o)}`)) return
     const k = `${o.providerId} ${o.modelId} ${variantsKey(o)}`
     if (seen.has(k)) return
     seen.add(k)

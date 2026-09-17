@@ -43,6 +43,17 @@ const { fake } = vi.hoisted(() => {
       }
       return b.stream
     },
+    async getSeedMessage(
+      _executionId: string,
+      _anchorMessageId: string | undefined,
+      _attemptId: number,
+      seed: CherryUIMessage | undefined
+    ) {
+      return seed
+    },
+    hasBranch(executionId: string, anchorMessageId?: string) {
+      return branches.has(keyOf(executionId, anchorMessageId))
+    },
     hasOpenBranch(executionId: string, anchorMessageId?: string) {
       const b = branches.get(keyOf(executionId, anchorMessageId))
       return !!b && !b.closed
@@ -51,6 +62,9 @@ const { fake } = vi.hoisted(() => {
       for (const b of branches.values()) {
         if (!b.closed) return true
       }
+      return false
+    },
+    isAttaching() {
       return false
     },
     isTopicOpen() {
