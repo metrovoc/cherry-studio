@@ -49,9 +49,13 @@ const ASSISTANTS_REFRESH_KEYS: ConcreteApiPaths[] = ['/assistants', '/assistants
  * consumer.
  */
 export function useAssistantsApi(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true
   const { data, isLoading, isRefreshing, error, refetch, mutate } = useQuery('/assistants', {
-    enabled: options.enabled ?? true,
+    enabled,
     query: { limit: ASSISTANTS_LIST_LIMIT }
+  })
+  useDataChange('/assistants', () => {
+    if (enabled) void mutate()
   })
 
   return {
