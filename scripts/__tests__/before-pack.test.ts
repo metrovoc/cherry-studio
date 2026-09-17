@@ -49,9 +49,10 @@ describe('assertPrebuiltPackages', () => {
 
 describe('prepareNativeModulesForElectron', () => {
   it.each([
-    ['mac', Arch.arm64, 'darwin', 'arm64'],
-    ['windows', Arch.x64, 'win32', 'x64']
-  ])('does not reuse the %s binary mirror for headers', async (platformName, arch, platform, archName) => {
+    ['mac', Arch.arm64, 'darwin', 'arm64', ['better-sqlite3', 'selection-hook']],
+    ['mac', Arch.x64, 'darwin', 'x64', ['better-sqlite3', 'selection-hook']],
+    ['windows', Arch.x64, 'win32', 'x64', ['better-sqlite3']]
+  ])('rebuilds required source modules for %s %s', async (platformName, arch, platform, archName, onlyModules) => {
     const rebuild = vi.fn(async () => {})
 
     await prepareNativeModulesForElectron(
@@ -73,7 +74,7 @@ describe('prepareNativeModulesForElectron', () => {
       electronVersion: '41.8.0',
       platform,
       arch: archName,
-      onlyModules: ['better-sqlite3'],
+      onlyModules,
       force: true,
       buildFromSource: true
     })
