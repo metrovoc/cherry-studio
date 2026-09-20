@@ -249,20 +249,25 @@ test('Quick Assistant keeps reading control when content collapses to bottom dur
       gestureSourceType: 'mouse',
       preventFling: false
     })
+    const finalPosition = await viewport.evaluate(async (element) => {
+      await new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())))
+      return { top: element.scrollTop, bottom: element.scrollHeight - element.clientHeight }
+    })
     const result = await probe.evaluate(({ state }) => state)
     expect(result.trusted).toBe(true)
     expect(result.wheelWhileClamped).toBe(true)
     expect(result.collapsed).not.toBeNull()
     expect(result.growth).not.toBeNull()
     expect(result.before.bottom - result.collapsed!.bottom).toBe(44)
-    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(result.growth!.top)
-    const positions = [result.growth!.top, ...result.positions]
-    const largestJump = Math.max(...positions.slice(1).map((position, index) => position - positions[index]))
-    // Even coalesced input cannot move farther than the entire 60px gesture.
-    expect(largestJump).toBeLessThanOrEqual(61)
-    expect(
-      await viewport.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
-    ).toBeGreaterThan(200)
+    const positions = [...result.positions, finalPosition.top]
+    const farthestMovement = Math.max(...positions.map((position) => Math.abs(position - result.growth!.top)))
+    // A clamped gesture may stop moving; content changes cannot add more than its entire 60px travel.
+    expect(farthestMovement).toBeLessThanOrEqual(61)
+    expect(finalPosition.bottom - finalPosition.top).toBeGreaterThan(200)
+
+    await viewport.hover()
+    await page.mouse.wheel(0, 40)
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(finalPosition.top)
   } finally {
     await probe.evaluate(({ dispose }) => dispose())
     await probe.dispose()

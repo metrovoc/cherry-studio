@@ -480,9 +480,6 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-      - name: Renderer Test
-        run: pnpm test:renderer --shard=${{ matrix.shard }}/5
-
       - name: Install Chromium
         if: matrix.shard == 1
         run: pnpm exec playwright install --with-deps chromium
@@ -490,6 +487,9 @@ jobs:
       - name: Quick Assistant scroll regression
         if: matrix.shard == 1
         run: pnpm test:quick-assistant-scroll
+
+      - name: Renderer Test
+        run: pnpm test:renderer --shard=${{ matrix.shard }}/5
 
   render-test:
     runs-on: ubuntu-latest
