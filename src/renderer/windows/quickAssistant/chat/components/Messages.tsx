@@ -1,15 +1,17 @@
 import { Loader2 } from 'lucide-react'
-import type { FC } from 'react'
-import { useLayoutEffect, useRef } from 'react'
+import { type FC, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { ScrollArea } from '@cherrystudio/ui'
 import { useMessageListRenderConfig } from '@renderer/components/chat/messages/hooks/useMessageListRenderConfig'
 import { useMessagePlatformActions } from '@renderer/components/chat/messages/hooks/useMessagePlatformActions'
+import { ScrollOwnershipProvider } from '@renderer/components/chat/messages/list/ScrollOwnershipContext'
 import { MessageContentProvider } from '@renderer/components/chat/messages/MessageContentProvider'
 import type { MessageListItem } from '@renderer/components/chat/messages/types'
 import type { Assistant } from '@renderer/types/assistant'
 import type { CherryMessagePart } from '@shared/data/types/message'
 
+import { useMessageViewport } from '../hooks/useMessageViewport'
 import MessageItem from './Message'
 
 interface Props {
@@ -21,28 +23,16 @@ interface Props {
 }
 
 const Messages: FC<Props> = ({ assistant, route, isOutputted, messages, partsByMessageId }) => {
+  const { t } = useTranslation()
   const { renderConfig } = useMessageListRenderConfig()
   const platformActions = useMessagePlatformActions()
-  const viewportRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const followsLatest = useRef(true)
-  const scrollKey = assistant?.id ?? 'runtime-default'
-
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current
-    const content = contentRef.current
-    if (!viewport || !content) return
-
-    followsLatest.current = true
-    const followLatest = () => {
-      if (followsLatest.current) viewport.scrollTop = viewport.scrollHeight
-    }
-    followLatest()
-    const observer = new ResizeObserver(followLatest)
-    observer.observe(viewport)
-    observer.observe(content)
-    return () => observer.disconnect()
-  }, [scrollKey])
+  const viewport = useMessageViewport({
+    scrollerRef,
+    contentRef,
+    conversationKey: `${assistant?.id ?? 'runtime-default'}:${messages[0]?.id ?? ''}`
+  })
 
   return (
     <MessageContentProvider
@@ -50,31 +40,28 @@ const Messages: FC<Props> = ({ assistant, route, isOutputted, messages, partsByM
       partsByMessageId={partsByMessageId}
       renderConfig={renderConfig}
       actions={platformActions}>
-      <ScrollArea
-        key={scrollKey}
-        type="hover"
-        className="w-full flex-1 bg-transparent!"
-        viewportProps={{
-          id: 'messages',
-          ref: viewportRef,
-          className: 'overflow-x-hidden [overflow-anchor:none]',
-          onScroll: ({ currentTarget }) => {
-            const { scrollHeight, scrollTop, clientHeight } = currentTarget
-            followsLatest.current = scrollHeight - scrollTop - clientHeight <= 2
-          }
-        }}
-        contentProps={{ ref: contentRef, className: 'flex min-h-full flex-col items-center justify-end pb-5' }}>
-        {messages.map((message, index) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            index={messages.length - index - 1}
-            total={messages.length}
-            route={route}
-          />
-        ))}
-        {!isOutputted && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-      </ScrollArea>
+      <Scrollbar
+        id="messages"
+        ref={scrollerRef}
+        tabIndex={0}
+        role="region"
+        aria-label={t('globalSearch.groups.message')}
+        className="min-h-0 w-full flex-1 overflow-x-hidden bg-transparent!">
+        <ScrollOwnershipProvider scrollContainerRef={scrollerRef} {...viewport}>
+          <div ref={contentRef} className="flex w-full flex-col items-center pb-5">
+            {messages.map((message, index) => (
+              <MessageItem
+                key={message.id}
+                message={message}
+                index={messages.length - index - 1}
+                total={messages.length}
+                route={route}
+              />
+            ))}
+            {!isOutputted && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+          </div>
+        </ScrollOwnershipProvider>
+      </Scrollbar>
     </MessageContentProvider>
   )
 }
