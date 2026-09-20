@@ -106,6 +106,7 @@
     "test:provider-registry": "vitest run --project provider-registry",
     "test:remote-protocol": "vitest run --project remote-protocol",
     "test:remote-transport": "vitest run --project remote-transport",
+    "test:quick-assistant-scroll": "playwright test tests/e2e/specs/quick-assistant-scroll.spec.ts --retries=0",
     "test:renderer": "vitest run --project renderer",
     "test:scripts": "vitest run --project scripts",
     "test:shared": "vitest run --project shared",
