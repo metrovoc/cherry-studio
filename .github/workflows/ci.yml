@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - main
+      - downstream
       - v2
       - "release/v*"
   pull_request:
@@ -52,6 +53,8 @@ jobs:
             renderer:
               - 'src/renderer/**'
               - 'src/preload/**'
+              - 'tests/e2e/**'
+              - 'playwright.config.ts'
               - 'tests/renderer.setup.ts'
               - 'tests/__mocks__/renderer/**'
               - 'tests/__mocks__/RendererLoggerService.ts'
@@ -479,6 +482,14 @@ jobs:
 
       - name: Renderer Test
         run: pnpm test:renderer --shard=${{ matrix.shard }}/5
+
+      - name: Install Chromium
+        if: matrix.shard == 1
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Quick Assistant scroll regression
+        if: matrix.shard == 1
+        run: pnpm test:quick-assistant-scroll
 
   render-test:
     runs-on: ubuntu-latest

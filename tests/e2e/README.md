@@ -60,7 +60,7 @@ pnpm playwright test tests/e2e/specs/app-launch.spec.ts
 
 # Test Quick Assistant viewport geometry in Chromium (no application build needed)
 pnpm exec playwright install chromium
-pnpm playwright test tests/e2e/specs/quick-assistant-scroll.spec.ts
+pnpm test:quick-assistant-scroll
 
 # Run tests matching a name
 pnpm playwright test -g "reasonable size"
@@ -108,9 +108,11 @@ New E2E tests should verify complete user outcomes across processes using stable
 
 The Quick Assistant scroll regression is a browser component test within this runner. It serves
 the production `ChatWindow`, message viewport, scrolling controller, and styles through Vite.
-Only message content and unrelated configuration inputs are substituted: completing the fixture
-removes a 44px process header while wheel input continues. The assertion protects the paragraph
-being read from a layout-induced jump, which jsdom cannot measure.
+Only message content and unrelated configuration inputs are substituted. The tests preserve the
+reading paragraph through completion, conversation navigation, and user scrolling during saved-history
+loading. A continuous browser gesture also checks that content collapsing to the bottom cannot resume
+following and pull the reader down when content grows. CI runs this suite on renderer shard 1 for pull
+requests and development-branch pushes, including `downstream`, with retries disabled.
 
 ---
 
