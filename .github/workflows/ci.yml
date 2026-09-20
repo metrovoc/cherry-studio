@@ -227,13 +227,13 @@ jobs:
         id: dependencies
       - name: "Dependency cache: ${{ steps.dependencies.outputs.cache-state }}"
         run: ":"
-      - run: pnpm check --group renderer --shard=${{ matrix.shard }}/5
       - name: Install Chromium
         if: matrix.shard == 1
         run: pnpm exec playwright install --with-deps chromium
       - name: Quick Assistant scroll regression
         if: matrix.shard == 1
         run: pnpm test:quick-assistant-scroll
+      - run: pnpm check --group renderer --shard=${{ matrix.shard }}/5
 
   package-test:
     runs-on: ubuntu-latest
