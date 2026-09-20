@@ -8,7 +8,7 @@ on:
   schedule:
     - cron: "17 3 * * *"
   push:
-    branches: [main, "release/v*"]
+    branches: [main, downstream, "release/v*"]
   pull_request:
     types: [ready_for_review, synchronize, opened, reopened]
 
@@ -228,6 +228,12 @@ jobs:
       - name: "Dependency cache: ${{ steps.dependencies.outputs.cache-state }}"
         run: ":"
       - run: pnpm check --group renderer --shard=${{ matrix.shard }}/5
+      - name: Install Chromium
+        if: matrix.shard == 1
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Quick Assistant scroll regression
+        if: matrix.shard == 1
+        run: pnpm test:quick-assistant-scroll
 
   package-test:
     runs-on: ubuntu-latest

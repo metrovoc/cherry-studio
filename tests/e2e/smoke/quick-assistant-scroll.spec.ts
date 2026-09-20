@@ -146,3 +146,126 @@ test('Quick Assistant opens history at the question and restores reading across 
   await page.getByRole('button', { name: 'Complete response', exact: true }).click()
   await expect.poll(() => paragraph.evaluate((element) => element.getBoundingClientRect().top)).toBe(readingTop)
 })
+
+test('Quick Assistant keeps the latest reading position while the same conversation is saved and history loads', async ({
+  page
+}) => {
+  await page.goto(url)
+  const viewport = page.locator('#messages')
+  const paragraph = page.getByText('Paragraph 30', { exact: true })
+  await expect(paragraph).toBeAttached()
+  await viewport.hover()
+  await page.mouse.wheel(0, -100)
+  await paragraph.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  await expect(paragraph).toBeInViewport()
+
+  await page
+    .getByRole('button', { name: 'Save current conversation', exact: true })
+    .evaluate((element: HTMLButtonElement) => element.click())
+  const finishLoading = page.getByRole('button', { name: 'Finish loading', exact: true })
+  await expect(finishLoading).toBeEnabled()
+  const beforeWheel = await viewport.evaluate((element) => element.scrollTop)
+  await page.mouse.wheel(0, 120)
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(beforeWheel + 120)
+  const readingTop = await paragraph.evaluate((element) => element.getBoundingClientRect().top)
+
+  await finishLoading.evaluate((element: HTMLButtonElement) => element.click())
+  await expect(finishLoading).toBeDisabled()
+  await expect.poll(() => paragraph.evaluate((element) => element.getBoundingClientRect().top)).toBe(readingTop)
+  await expect(paragraph).toBeInViewport()
+
+  await page
+    .getByRole('button', { name: 'Complete response', exact: true })
+    .evaluate((element: HTMLButtonElement) => element.click())
+  await expect.poll(() => paragraph.evaluate((element) => element.getBoundingClientRect().top)).toBe(readingTop)
+})
+
+test('Quick Assistant keeps reading control when content collapses to bottom during one continuous scroll gesture', async ({
+  page
+}) => {
+  await page.goto(url)
+  const viewport = page.locator('#messages')
+  await expect(page.getByText('Paragraph 79', { exact: true })).toBeAttached()
+  await viewport.hover()
+  await page.mouse.wheel(0, -100)
+  await expect
+    .poll(() => viewport.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop))
+    .toBeGreaterThan(50)
+  const probe = await viewport.evaluateHandle((element) => {
+    const article = element.querySelector('article')!
+    const originalPadding = article.style.paddingBottom
+    const snapshot = () => ({ top: element.scrollTop, bottom: element.scrollHeight - element.clientHeight })
+    // Trailing layout changes model collapse and late content without replacing messages or disabling anchoring.
+    article.style.paddingBottom = '44px'
+    element.scrollTop = element.scrollHeight - element.clientHeight - 30
+    const state = {
+      trusted: true,
+      before: snapshot(),
+      collapseRequested: false,
+      clampedAt: null as number | null,
+      wheelWhileClamped: false,
+      collapsed: null as ReturnType<typeof snapshot> | null,
+      growth: null as ReturnType<typeof snapshot> | null,
+      positions: [] as number[]
+    }
+    const onWheel = (event: Event) => {
+      state.trusted &&= event.isTrusted
+      if (!state.collapseRequested && element.scrollTop >= state.before.top + 4) {
+        state.collapseRequested = true
+        article.style.paddingBottom = '0px'
+      }
+      if (state.collapseRequested && state.clampedAt === null && snapshot().bottom === element.scrollTop) {
+        state.clampedAt = event.timeStamp
+        state.collapsed = snapshot()
+      }
+      if (state.clampedAt !== null && event.timeStamp > state.clampedAt) state.wheelWhileClamped = true
+      if (state.clampedAt !== null && !state.growth && event.timeStamp - state.clampedAt > 300) {
+        state.growth = snapshot()
+        article.style.paddingBottom = '300px'
+      }
+    }
+    const onScroll = () => {
+      if (state.growth) state.positions.push(element.scrollTop)
+    }
+    element.addEventListener('wheel', onWheel, { passive: true })
+    element.addEventListener('scroll', onScroll, { passive: true })
+    return {
+      state,
+      dispose() {
+        element.removeEventListener('wheel', onWheel)
+        element.removeEventListener('scroll', onScroll)
+        article.style.paddingBottom = originalPadding
+      }
+    }
+  })
+  const session = await page.context().newCDPSession(page)
+  try {
+    const bounds = (await viewport.boundingBox())!
+    await session.send('Input.synthesizeScrollGesture', {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+      yDistance: -60,
+      speed: 40,
+      gestureSourceType: 'mouse',
+      preventFling: false
+    })
+    const result = await probe.evaluate(({ state }) => state)
+    expect(result.trusted).toBe(true)
+    expect(result.wheelWhileClamped).toBe(true)
+    expect(result.collapsed).not.toBeNull()
+    expect(result.growth).not.toBeNull()
+    expect(result.before.bottom - result.collapsed!.bottom).toBe(44)
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(result.growth!.top)
+    const positions = [result.growth!.top, ...result.positions]
+    const largestJump = Math.max(...positions.slice(1).map((position, index) => position - positions[index]))
+    // Even coalesced input cannot move farther than the entire 60px gesture.
+    expect(largestJump).toBeLessThanOrEqual(61)
+    expect(
+      await viewport.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
+    ).toBeGreaterThan(200)
+  } finally {
+    await probe.evaluate(({ dispose }) => dispose())
+    await probe.dispose()
+    await session.detach()
+  }
+})

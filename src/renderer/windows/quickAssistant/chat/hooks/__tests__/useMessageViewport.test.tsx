@@ -257,6 +257,19 @@ describe('Quick Assistant message viewport', () => {
     expect(restored.scroller.scrollTop).toBe(1400)
   })
 
+  it('keeps user control while the same conversation is saved and its history reloads', () => {
+    const view = setupViewport()
+    view.rerender({ conversationKey: 'conversation-a', ready: false, initialPosition: 'start' })
+    view.wheel(-20)
+    view.scroll(400)
+    view.resize(1200)
+    expect(view.scroller.scrollTop).toBe(400)
+
+    view.rerender({ conversationKey: 'conversation-a', ready: true, initialPosition: 'start' })
+    view.resize(1400)
+    expect(view.scroller.scrollTop).toBe(400)
+  })
+
   it('lets a disclosure retain reading control when its expansion creates the first overflow', () => {
     const scroller = document.createElement('div')
     const content = document.createElement('div')
