@@ -40,6 +40,7 @@ const state = vi.hoisted(() => ({
   } as TestModel | undefined,
   messages: [] as CherryUIMessage[],
   persistedMessages: [] as CherryUIMessage[],
+  persistedHistoryStale: false,
   activeExecutions: [] as ActiveExecution[],
   isPending: false,
   liveAssistants: [] as never[],
@@ -199,7 +200,12 @@ vi.mock('@renderer/services/voice', () => ({
 }))
 
 vi.mock('@renderer/hooks/useTopicMessages', () => ({
-  useTopicMessages: () => ({ uiMessages: state.persistedMessages, activeNodeId: null, isLoading: false })
+  useTopicMessages: () => ({
+    uiMessages: state.persistedMessages,
+    activeNodeId: null,
+    isLoading: state.persistedHistoryStale,
+    isStale: state.persistedHistoryStale
+  })
 }))
 
 vi.mock('../hooks/useQuickAssistantHistory', () => ({
@@ -348,6 +354,7 @@ describe('finalizeLiveMessages', () => {
 
 describe('HomeWindow', () => {
   beforeEach(() => {
+    state.persistedHistoryStale = false
     state.quickAssistantId = ''
     state.quickModel = {
       id: 'anthropic::claude-sonnet',
@@ -510,14 +517,17 @@ describe('HomeWindow', () => {
     rerender(<HomeWindow />)
     const response = await screen.findByText('A long response')
 
+    state.persistedMessages = [
+      { id: 'older-question', role: 'user', parts: [{ type: 'text', text: 'A different conversation' }] }
+    ]
+    state.persistedHistoryStale = true
     state.streamStatus = 'done'
     state.activeExecutions = []
-    rerender(<HomeWindow />)
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'quickAssistant.history.open_in_main' })).toBeEnabled()
-    )
+    await act(async () => rerender(<HomeWindow />))
     expect(screen.getByText('A long response')).toBe(response)
+    expect(screen.queryByText('A different conversation')).not.toBeInTheDocument()
 
+    state.persistedHistoryStale = false
     state.persistedMessages = [
       ...state.messages,
       {
@@ -527,6 +537,9 @@ describe('HomeWindow', () => {
       }
     ]
     rerender(<HomeWindow />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'quickAssistant.history.open_in_main' })).toBeEnabled()
+    )
     expect(screen.getByText('A long response')).toBe(response)
 
     await user.type(screen.getByTestId('quick-input'), 'Continue')

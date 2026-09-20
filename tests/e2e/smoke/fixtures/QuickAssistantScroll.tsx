@@ -10,10 +10,11 @@ import ChatWindow from '@renderer/windows/quickAssistant/chat/ChatWindow'
 
 // Keep the production viewport and controller; replace only unrelated content and data inputs.
 export function MessageItem({ message }: { message: MessageListItem }) {
+  if (message.role === 'user') return <p>{message.id}: Original question</p>
   return (
     <article style={{ width: '100%', flexShrink: 0 }}>
       {message.status === 'pending' && <div style={{ height: 44 }}>Processing</div>}
-      {Array.from({ length: 80 }, (_, index) => (
+      {Array.from({ length: message.id === 'short-answer' ? 3 : 80 }, (_, index) => (
         <p key={index} style={{ height: 48, margin: 0 }}>
           Paragraph {index}
         </p>
@@ -29,12 +30,35 @@ export const useTopicStreamStatus = () => topicStatus
 
 function Fixture() {
   const [status, setStatus] = useState<MessageListItem['status']>('pending')
-  const message = { id: 'answer', role: 'assistant', status } as MessageListItem
+  const [conversation, setConversation] = useState('live')
+  const [loadingMessages, setLoadingMessages] = useState<MessageListItem[] | null>(null)
+  const messages = [
+    { id: `${conversation}-question`, role: 'user', status: 'success' },
+    { id: `${conversation}-answer`, role: 'assistant', status }
+  ] as MessageListItem[]
   return (
     <>
       <button onClick={() => setStatus('success')}>Complete response</button>
+      <button onClick={() => setConversation('history')}>Open history</button>
+      <button onClick={() => setConversation('short')}>Open short conversation</button>
+      <button
+        onClick={() => {
+          setLoadingMessages(messages)
+          setConversation('history')
+        }}>
+        Reopen history with loading
+      </button>
+      <button onClick={() => setLoadingMessages(null)}>Finish loading</button>
       <div style={{ display: 'flex', flexDirection: 'column', width: 800, height: 560 }}>
-        <ChatWindow assistant={null} route="chat" isOutputted messages={[message]} partsByMessageId={{ answer: [] }} />
+        <ChatWindow
+          conversationKey={conversation}
+          initialPosition={conversation === 'live' ? 'end' : 'start'}
+          route="chat"
+          isOutputted
+          messages={loadingMessages ?? messages}
+          isLoadingMessages={loadingMessages !== null}
+          partsByMessageId={{}}
+        />
       </div>
     </>
   )

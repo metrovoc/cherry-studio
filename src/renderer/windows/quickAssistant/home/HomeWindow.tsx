@@ -166,10 +166,15 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const activeTopicId = selectedTopicId ?? temporaryTopicId
   const selectedTopic = history.topics.find((topic) => topic.id === selectedTopicId)
   const {
-    uiMessages: persistedMessages,
+    uiMessages: loadedMessages,
     activeNodeId,
-    isLoading: isLoadingPersistedMessages
+    isLoading: isLoadingPersistedMessages,
+    isStale: isPersistedHistoryStale
   } = useTopicMessages(selectedTopicId ?? '', { enabled: Boolean(selectedTopicId) })
+  const persistedMessages = useMemo(
+    () => (selectedTopicId && !isPersistedHistoryStale ? loadedMessages : []),
+    [isPersistedHistoryStale, loadedMessages, selectedTopicId]
+  )
 
   const requestText = useMemo(() => {
     const trimmedUserInput = userInputText.trim()
@@ -867,7 +872,9 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
           <Suspense fallback={<LazyBranchFallback />}>
             <ChatWindow
               route={route}
-              assistant={currentAssistant ?? null}
+              conversationKey={activeTopicId ?? 'pending-topic'}
+              initialPosition={selectedTopicId ? 'start' : 'end'}
+              isLoadingMessages={isLoadingPersistedMessages}
               isOutputted={isOutputted}
               messages={messageItems}
               partsByMessageId={partsByMessageId}

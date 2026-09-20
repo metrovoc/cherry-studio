@@ -72,6 +72,14 @@ test.afterAll(async () => {
   }
 })
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'api', {
+      value: { cache: { onSync: () => () => {}, getAllShared: async () => ({}) } }
+    })
+  })
+})
+
 test('Quick Assistant preserves the paragraph being read when completion shrinks content during scrolling', async ({
   page
 }) => {
@@ -109,4 +117,32 @@ test('Quick Assistant preserves the paragraph being read when completion shrinks
   const largestJump = Math.max(...positions.slice(1).map((position, index) => Math.abs(position - positions[index])))
   expect(largestJump).toBeLessThan(12)
   await expect(paragraph).toBeInViewport()
+})
+
+test('Quick Assistant opens history at the question and restores reading across shorter conversations and loading', async ({
+  page
+}) => {
+  await page.goto(url)
+  const viewport = page.locator('#messages')
+  await page.getByRole('button', { name: 'Open history', exact: true }).click()
+  await expect(page.getByText('history-question: Original question', { exact: true })).toBeInViewport()
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0)
+
+  const paragraph = page.getByText('Paragraph 30', { exact: true })
+  await paragraph.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  await expect(paragraph).toBeInViewport()
+  const readingTop = await paragraph.evaluate((element) => element.getBoundingClientRect().top)
+  await page.getByRole('button', { name: 'Open short conversation', exact: true }).click()
+  await expect(page.getByText('short-question: Original question', { exact: true })).toBeInViewport()
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0)
+
+  await page.getByRole('button', { name: 'Reopen history with loading', exact: true }).click()
+  await expect(page.getByText('short-question: Original question', { exact: true })).toBeInViewport()
+  await expect(paragraph).not.toBeAttached()
+  await page.getByRole('button', { name: 'Finish loading', exact: true }).click()
+  await expect(paragraph).toBeInViewport()
+  await expect.poll(() => paragraph.evaluate((element) => element.getBoundingClientRect().top)).toBe(readingTop)
+
+  await page.getByRole('button', { name: 'Complete response', exact: true }).click()
+  await expect.poll(() => paragraph.evaluate((element) => element.getBoundingClientRect().top)).toBe(readingTop)
 })

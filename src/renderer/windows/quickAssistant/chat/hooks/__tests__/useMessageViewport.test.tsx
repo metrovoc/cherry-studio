@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
 import { act, fireEvent, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +11,7 @@ import { useMessageViewport } from '../useMessageViewport'
 let resizeCallbacks: Set<() => void>
 
 beforeEach(() => {
+  MockCacheUtils.resetMocks()
   resizeCallbacks = new Set()
   vi.stubGlobal(
     'ResizeObserver',
@@ -45,8 +47,16 @@ function setupViewport() {
   const scrollerRef = { current: scroller }
   const contentRef = { current: content }
   const { result, rerender, unmount } = renderHook(
-    ({ conversationKey }) => useMessageViewport({ scrollerRef, contentRef, conversationKey }),
-    { initialProps: { conversationKey: 'conversation-a' } }
+    ({
+      conversationKey,
+      ready = true,
+      initialPosition = 'end'
+    }: {
+      conversationKey: string
+      ready?: boolean
+      initialPosition?: 'start' | 'end'
+    }) => useMessageViewport({ scrollerRef, contentRef, conversationKey, ready, initialPosition }),
+    { initialProps: { conversationKey: 'conversation-a', ready: true, initialPosition: 'end' } }
   )
 
   return {
@@ -110,8 +120,16 @@ describe('Quick Assistant message viewport', () => {
 
     view.resize(760)
     view.scroll(560)
+    view.wheel(10)
+    view.wheel(5)
     view.resize(1200)
     expect(view.scroller.scrollTop).toBe(560)
+
+    view.scrollEnd()
+    view.scroll(1000)
+    view.wheel(20)
+    view.resize(1300)
+    expect(view.scroller.scrollTop).toBe(1100)
   })
 
   it('resumes following when the user scrolls back to the live bottom', () => {
@@ -191,7 +209,7 @@ describe('Quick Assistant message viewport', () => {
     expect(view.scroller.scrollTop).toBe(1100)
   })
 
-  it('preserves reading across updates and initializes a newly selected conversation at its bottom', () => {
+  it('opens unseen history at the beginning and restores each conversation through loading', () => {
     const view = setupViewport()
     view.wheel(-20)
     view.scroll(400)
@@ -199,8 +217,44 @@ describe('Quick Assistant message viewport', () => {
     view.resize(1200)
     expect(view.scroller.scrollTop).toBe(400)
 
-    view.rerender({ conversationKey: 'conversation-b' })
-    expect(view.scroller.scrollTop).toBe(1000)
+    // React can replace the old content before layout-effect cleanup, clamping the DOM offset.
+    view.scroller.scrollTop = 0
+    view.rerender({ conversationKey: 'conversation-b', ready: false, initialPosition: 'start' })
+    view.resize(200)
+    view.rerender({ conversationKey: 'conversation-b', initialPosition: 'start' })
+    view.resize(1600)
+    expect(view.scroller.scrollTop).toBe(0)
+    view.scroll(250)
+
+    view.rerender({ conversationKey: 'conversation-a', ready: false })
+    view.resize(200)
+    view.resize(1200)
+    view.rerender({ conversationKey: 'conversation-a' })
+    expect(view.scroller.scrollTop).toBe(400)
+    view.resize(1600)
+    expect(view.scroller.scrollTop).toBe(400)
+
+    view.rerender({ conversationKey: 'conversation-b', initialPosition: 'start' })
+    expect(view.scroller.scrollTop).toBe(250)
+  })
+
+  it('retains reading position across remounts and resumes following only for a saved following conversation', () => {
+    const view = setupViewport()
+    view.wheel(-20)
+    view.scroll(400)
+    view.unmount()
+
+    const restored = setupViewport()
+    expect(restored.scroller.scrollTop).toBe(400)
+    restored.wheel(400)
+    restored.scroll(800)
+    restored.rerender({ conversationKey: 'conversation-b', initialPosition: 'start' })
+    restored.resize(1400)
+    expect(restored.scroller.scrollTop).toBe(0)
+    restored.rerender({ conversationKey: 'conversation-a' })
+    expect(restored.scroller.scrollTop).toBe(1200)
+    restored.resize(1600)
+    expect(restored.scroller.scrollTop).toBe(1400)
   })
 
   it('lets a disclosure retain reading control when its expansion creates the first overflow', () => {
