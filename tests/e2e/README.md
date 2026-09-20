@@ -59,6 +59,10 @@ pnpm test:e2e --headed
 # Run a specific test file
 pnpm playwright test tests/e2e/smoke/appLaunch.test.ts
 
+# Test Quick Assistant viewport geometry in Chromium (no application build needed)
+pnpm exec playwright install chromium
+pnpm playwright test tests/e2e/specs/quick-assistant-scroll.spec.ts
+
 # Run tests matching a name
 pnpm playwright test -g "reasonable size"
 
@@ -102,6 +106,12 @@ The smoke suite uses the following Electron E2E infrastructure:
 - Use `playwright.regression.config.ts`, not the smoke suite's `playwright.config.ts`.
 
 New E2E tests should verify complete user outcomes across processes using stable semantic locators and observable conditions.
+
+The Quick Assistant scroll regression is a browser component test within this runner. It serves
+the production `ChatWindow`, message viewport, scrolling controller, and styles through Vite.
+Only message content and unrelated configuration inputs are substituted: completing the fixture
+removes a 44px process header while wheel input continues. The assertion protects the paragraph
+being read from a layout-induced jump, which jsdom cannot measure.
 
 ---
 
