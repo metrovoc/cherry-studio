@@ -31,6 +31,7 @@ export const useTopicStreamStatus = () => topicStatus
 function Fixture() {
   const [status, setStatus] = useState<MessageListItem['status']>('pending')
   const [conversation, setConversation] = useState('live')
+  const [isSaved, setIsSaved] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState<MessageListItem[] | null>(null)
   const messages = [
     { id: `${conversation}-question`, role: 'user', status: 'success' },
@@ -48,11 +49,20 @@ function Fixture() {
         }}>
         Reopen history with loading
       </button>
-      <button onClick={() => setLoadingMessages(null)}>Finish loading</button>
+      <button
+        onClick={() => {
+          setLoadingMessages(messages)
+          setIsSaved(true)
+        }}>
+        Save current conversation
+      </button>
+      <button disabled={loadingMessages === null} onClick={() => setLoadingMessages(null)}>
+        Finish loading
+      </button>
       <div style={{ display: 'flex', flexDirection: 'column', width: 800, height: 560 }}>
         <ChatWindow
           conversationKey={conversation}
-          initialPosition={conversation === 'live' ? 'end' : 'start'}
+          initialPosition={conversation === 'live' && !isSaved ? 'end' : 'start'}
           route="chat"
           isOutputted
           messages={loadingMessages ?? messages}

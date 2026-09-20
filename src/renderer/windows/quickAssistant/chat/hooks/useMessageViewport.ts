@@ -38,6 +38,7 @@ export function useMessageViewport({
 }: MessageViewportOptions): MessageViewportController {
   const follow = useViewportFollowState()
   const inputDirectionRef = useRef(0)
+  const restorePositionRef = useRef<((position: 'start' | 'end') => void) | null>(null)
   const stickToBottom = useCallback(() => {
     const scroller = scrollerRef.current
     if (scroller && Math.abs(getDistanceToBottom(scroller)) > BOTTOM_TOLERANCE_PX) {
@@ -94,20 +95,26 @@ export function useMessageViewport({
     if (!scroller || !content) return
 
     follow.enterReading('initializing')
-    if (!ready) return
-
     const cacheKey = `quick-assistant.scroll-position.${conversationKey}`
-    const saved = cacheService.getCasual<number | null>(cacheKey)
-    if (saved === null || (saved === undefined && initialPosition === 'end')) {
-      follow.enterFollowing('restored-bottom')
-      stickToBottom()
-    } else {
-      follow.enterReading('restored-anchor')
-      scroller.scrollTop = saved ?? 0
-    }
+    let initialized = false
     let previousScrollTop = scroller.scrollTop
     inputDirectionRef.current = 0
     let draggingScrollbar = false
+
+    // Saving or reloading the same conversation must never restore over ongoing user input.
+    restorePositionRef.current = (position) => {
+      if (initialized) return
+      initialized = true
+      const saved = cacheService.getCasual<number | null>(cacheKey)
+      if (saved === null || (saved === undefined && position === 'end')) {
+        follow.enterFollowing('restored-bottom')
+        stickToBottom()
+      } else {
+        follow.enterReading('restored-anchor')
+        scroller.scrollTop = saved ?? 0
+      }
+      previousScrollTop = scroller.scrollTop
+    }
 
     const onWheel = (event: WheelEvent) => {
       if (event.defaultPrevented || event.ctrlKey || event.deltaY === 0) return
@@ -167,7 +174,8 @@ export function useMessageViewport({
     ownerDocument.addEventListener('pointercancel', onPointerUp, { passive: true })
     return () => {
       // The new conversation's DOM may already have clamped scrollTop before cleanup.
-      cacheService.setCasual(cacheKey, follow.isFollowing() ? null : previousScrollTop)
+      if (initialized) cacheService.setCasual(cacheKey, follow.isFollowing() ? null : previousScrollTop)
+      restorePositionRef.current = null
       observer.disconnect()
       scroller.removeEventListener('wheel', onWheel)
       scroller.removeEventListener('keydown', onKeyDown)
@@ -177,17 +185,11 @@ export function useMessageViewport({
       ownerDocument.removeEventListener('pointerup', onPointerUp)
       ownerDocument.removeEventListener('pointercancel', onPointerUp)
     }
-  }, [
-    autoStick,
-    contentRef,
-    conversationKey,
-    follow,
-    initialPosition,
-    notifyWheelIntent,
-    ready,
-    scrollerRef,
-    stickToBottom
-  ])
+  }, [autoStick, contentRef, conversationKey, follow, notifyWheelIntent, scrollerRef, stickToBottom])
+
+  useLayoutEffect(() => {
+    if (ready) restorePositionRef.current?.(initialPosition)
+  }, [conversationKey, initialPosition, ready])
 
   return { requestReadingControl, scrollToElement, notifyWheelIntent, scrollByWheel }
 }
