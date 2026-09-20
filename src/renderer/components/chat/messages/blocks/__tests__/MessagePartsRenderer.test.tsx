@@ -2022,9 +2022,15 @@ describe('MessagePartsRenderer', () => {
       })
     })
 
-    it('keeps the final text node mounted across the active-to-terminal frame', () => {
+    it.each([
+      { name: 'no process history', prefix: [] },
+      { name: 'empty reasoning', prefix: [{ type: 'reasoning', text: '', state: 'streaming' }] },
+      { name: 'visible reasoning', prefix: [{ type: 'reasoning', text: 'Considering the answer', state: 'done' }] },
+      { name: 'an unsupported tool', prefix: [toolPart('unknown', 'output-available', 'unknown_provider_tool')] },
+      { name: 'an answered question entering history', prefix: [answeredAskUserQuestionPart('question')] }
+    ])('keeps the final text node mounted when completing with $name', ({ prefix }) => {
       activateTurn('streaming')
-      const parts = [{ type: 'text', text: 'stable answer node' }] as unknown as CherryMessagePart[]
+      const parts = [...prefix, { type: 'text', text: 'stable answer node' }] as CherryMessagePart[]
       const { rerender } = renderParts(parts, msg({ status: 'pending' }))
       const activeAnswerNode = screen.getByText('stable answer node')
 
@@ -2032,6 +2038,52 @@ describe('MessagePartsRenderer', () => {
       rerender(renderPartsTree(parts, msg({ status: 'success' })))
 
       expect(screen.getByText('stable answer node')).toBe(activeAnswerNode)
+    })
+
+    it('keeps buffered text and the reading selection when empty process history disappears', () => {
+      let rafId = 0
+      const frames = new Map<number, FrameRequestCallback>()
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        frames.set(++rafId, callback)
+        return rafId
+      })
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+
+      activateTurn('streaming')
+      const pendingMessage = msg({ status: 'pending' })
+      const initialParts: CherryMessagePart[] = [
+        { type: 'reasoning', text: '', state: 'streaming' },
+        { type: 'text', text: 'Visible prefix', state: 'streaming' }
+      ]
+      const { rerender } = renderParts(initialParts, pendingMessage)
+      const answer = screen.getByText('Visible prefix')
+      const selection = window.getSelection()!
+      const range = document.createRange()
+      range.selectNodeContents(answer)
+      selection.removeAllRanges()
+      selection.addRange(range)
+
+      const fullText = 'Visible prefix followed by the buffered answer.'
+      const updatedParts: CherryMessagePart[] = [
+        { type: 'reasoning', text: '', state: 'done' },
+        { type: 'text', text: fullText, state: 'streaming' }
+      ]
+      rerender(renderPartsTree(updatedParts, pendingMessage))
+
+      expect(screen.getByText('Visible prefix')).toBe(answer)
+      expect(selection.toString()).toBe('Visible prefix')
+      expect(screen.queryByText(fullText)).toBeNull()
+
+      finishTurn('done')
+      rerender(renderPartsTree(updatedParts, msg({ status: 'success' })))
+      act(() => {
+        const callbacks = [...frames.values()]
+        frames.clear()
+        callbacks.forEach((callback) => callback(performance.now()))
+      })
+
+      expect(screen.getByText(fullText)).toBe(answer)
+      selection.removeAllRanges()
     })
 
     it('settles a quickly failed live error block into the visible motion state', () => {

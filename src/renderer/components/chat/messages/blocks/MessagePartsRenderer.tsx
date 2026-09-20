@@ -1294,20 +1294,25 @@ const MessageProcessLayout = React.memo(function MessageProcessLayout({
   )
 
   if (isActive) {
-    const resultContent = liveResultItems.map((item) => {
-      if (item.kind === 'process') return null
+    // The result slot must stay keyed when process history appears or disappears.
+    const resultContent = (
+      <React.Fragment key="message-result">
+        {liveResultItems.map((item) => {
+          if (item.kind === 'process') return null
 
-      return (
-        <MessageContentEntryView
-          key={`message-content-${message.id}-${item.key}`}
-          enableAnimation={isStreamLive}
-          entry={item.entry}
-          isStreaming={openTextTailIndex === item.entry.index}
-          message={message}
-          renderOptions={activeResultRenderOptions}
-        />
-      )
-    })
+          return (
+            <MessageContentEntryView
+              key={`message-content-${message.id}-${item.key}`}
+              enableAnimation={isStreamLive}
+              entry={item.entry}
+              isStreaming={openTextTailIndex === item.entry.index}
+              message={message}
+              renderOptions={activeResultRenderOptions}
+            />
+          )
+        })}
+      </React.Fragment>
+    )
 
     if (liveProcessItems.length === 0) return <>{resultContent}</>
 
@@ -1347,19 +1352,23 @@ const MessageProcessLayout = React.memo(function MessageProcessLayout({
               }
         )
       : null
-  const completedResult = groupPartEntries(completedLayout.resultEntries).map((entry) => {
-    const firstEntry = Array.isArray(entry) ? entry[0] : entry
-    return (
-      <MessageContentEntryView
-        key={`message-content-${message.id}-${firstEntry.index}`}
-        enableAnimation={false}
-        entry={entry}
-        isStreaming={false}
-        message={message}
-        renderOptions={completedRenderOptions}
-      />
-    )
-  })
+  const completedResult = (
+    <React.Fragment key="message-result">
+      {groupPartEntries(completedLayout.resultEntries).map((entry) => {
+        const firstEntry = Array.isArray(entry) ? entry[0] : entry
+        return (
+          <MessageContentEntryView
+            key={`message-content-${message.id}-${firstEntry.index}`}
+            enableAnimation={false}
+            entry={entry}
+            isStreaming={false}
+            message={message}
+            renderOptions={completedRenderOptions}
+          />
+        )
+      })}
+    </React.Fragment>
+  )
 
   const hasVisibleCompletedHistory = completedHistoryEntries.some((entry) =>
     isPotentiallyVisibleEntry(entry, message.id)
