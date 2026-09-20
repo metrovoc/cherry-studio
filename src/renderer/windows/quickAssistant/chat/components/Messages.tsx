@@ -8,21 +8,30 @@ import { useMessagePlatformActions } from '@renderer/components/chat/messages/ho
 import { ScrollOwnershipProvider } from '@renderer/components/chat/messages/list/ScrollOwnershipContext'
 import { MessageContentProvider } from '@renderer/components/chat/messages/MessageContentProvider'
 import type { MessageListItem } from '@renderer/components/chat/messages/types'
-import type { Assistant } from '@renderer/types/assistant'
 import type { CherryMessagePart } from '@shared/data/types/message'
 
 import { useMessageViewport } from '../hooks/useMessageViewport'
 import MessageItem from './Message'
 
 interface Props {
-  assistant: Assistant | null
+  conversationKey: string
+  initialPosition: 'start' | 'end'
+  isLoadingMessages: boolean
   route: string
   isOutputted: boolean
   messages: MessageListItem[]
   partsByMessageId: Record<string, CherryMessagePart[]>
 }
 
-const Messages: FC<Props> = ({ assistant, route, isOutputted, messages, partsByMessageId }) => {
+const Messages: FC<Props> = ({
+  conversationKey,
+  initialPosition,
+  isLoadingMessages,
+  route,
+  isOutputted,
+  messages,
+  partsByMessageId
+}) => {
   const { t } = useTranslation()
   const { renderConfig } = useMessageListRenderConfig()
   const platformActions = useMessagePlatformActions()
@@ -31,7 +40,9 @@ const Messages: FC<Props> = ({ assistant, route, isOutputted, messages, partsByM
   const viewport = useMessageViewport({
     scrollerRef,
     contentRef,
-    conversationKey: `${assistant?.id ?? 'runtime-default'}:${messages[0]?.id ?? ''}`
+    conversationKey,
+    initialPosition,
+    ready: !isLoadingMessages && messages.length > 0
   })
 
   return (
