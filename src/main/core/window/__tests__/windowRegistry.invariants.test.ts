@@ -53,6 +53,18 @@ describe('WINDOW_TYPE_REGISTRY behavior invariants', () => {
       focusable: false
     })
   })
+
+  it('keeps selection results auxiliary when their source window is fullscreen', () => {
+    expect(WINDOW_TYPE_REGISTRY[WindowType.SelectionAction]?.windowOptions.platformOverrides?.mac).toMatchObject({
+      type: 'panel',
+      fullscreenable: false,
+      hiddenInMissionControl: true
+    })
+    expect(WINDOW_TYPE_REGISTRY[WindowType.SelectionAction]?.behavior?.visibleOnAllWorkspaces).toMatchObject({
+      enabled: true,
+      visibleOnFullScreen: true
+    })
+  })
 })
 
 // The shared preload bundle is code-split, and Electron's sandbox blocks a preload from

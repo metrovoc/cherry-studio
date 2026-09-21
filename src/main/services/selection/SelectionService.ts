@@ -260,10 +260,8 @@ export class SelectionService extends BaseService implements Activatable {
         mw.window.on('resized', () => {
           if (mw.window.isDestroyed()) return
           if (this.isRemeberWinSize) {
-            this.lastActionWindowSize = {
-              width: mw.window.getBounds().width,
-              height: mw.window.getBounds().height
-            }
+            const { width, height } = mw.window.getNormalBounds()
+            this.lastActionWindowSize = { width, height }
           }
         })
       })
