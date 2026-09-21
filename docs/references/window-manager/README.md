@@ -85,7 +85,7 @@ Runtime setters for the declarative behavior layer live on `wm.behavior` (the {@
 1. **WM must maintain state** — e.g. `hideOnBlur` needs an override map the blur listener reads; `macShowInDock` needs a per-type override map the Dock predicate reads.
 2. **WM can derive parameters from the registry** — e.g. `setAlwaysOnTop` auto-fills `level` / `relativeLevel`.
 
-`visibleOnAllWorkspaces` satisfies neither (no state; options differ per call, as in SelectionAction's full-screen show sequence) — consumers drive it directly on the `BrowserWindow` instance.
+`visibleOnAllWorkspaces` has no WM-owned runtime state. Declare stable options in the registry; consumers that need to change them call the `BrowserWindow` instance directly.
 
 **Note on `wm.behavior.setMacShowInDockByType`**: uniquely keyed by window TYPE (not windowId), because Dock visibility is an app-level UI decision — two instances of the same type should contribute identically, and services routinely need to flip the override BEFORE any instance exists (e.g. tray-on-launch calls `wm.behavior.setMacShowInDockByType(Main, false)` before the first `open(Main)`). See [Platform → Declarative Behavior Layer](./window-manager-platform.md#declarative-behavior-layer) for semantics.
 
@@ -96,7 +96,7 @@ Runtime setters for the declarative behavior layer live on `wm.behavior` (the {@
 | Only want initial state on create | Declare in registry `behavior.*` |
 | Single driver, runtime toggle | Use `wm.behavior.setHideOnBlur` / `wm.behavior.setAlwaysOnTop` (or `window.*` if no setter exists) |
 | Multiple independent drivers (pin + auto_close) | Compute final target state on the consumer side, then call setters once. **Do NOT** store intermediate state in WM. |
-| Call-specific options that differ per call | Drive directly on `BrowserWindow` (e.g. SelectionAction's show sequence) |
+| Call-specific options that differ per call | Drive directly on `BrowserWindow` |
 
 ### Type Derivation Convention
 
