@@ -420,7 +420,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
     lifecycle: 'pooled',
     htmlPath: 'windows/selection/action/index.html',
     // preload omitted → defaults to 'preload.js'.
-    // SelectionService controls visibility itself via showActionWindow (computes bounds + fullscreen handling).
+    // SelectionService positions and shows the result panel via showActionWindow.
     showMode: 'manual',
     windowOptions: {
       width: 500,
@@ -436,6 +436,8 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
         mac: {
           type: 'panel',
           hiddenInMissionControl: true,
+          // Results float over the source Space instead of becoming a fullscreen primary window.
+          fullscreenable: false,
           titleBarStyle: 'hidden', // [macOS]
           trafficLightPosition: { x: 12, y: 11 } // [macOS]
         }

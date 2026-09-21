@@ -1,9 +1,19 @@
+import { EventEmitter } from 'events'
+
+import type { BrowserWindow, Rectangle } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// @application, electron, and @logger are globally mocked in tests/main.setup.ts.
+// @application and @logger are globally mocked in tests/main.setup.ts.
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle/BaseService'
 import { WindowType } from '@main/core/window/types'
+
+vi.mock('electron', () => ({
+  screen: {
+    getCursorScreenPoint: () => ({ x: 500, y: 300 }),
+    getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })
+  }
+}))
 
 vi.mock('@main/core/platform', () => ({
   isDev: false,
@@ -245,5 +255,55 @@ describe('SelectionService macOS toolbar', () => {
     expect(toolbarWindow.setFocusable).not.toHaveBeenCalled()
     expect(toolbarWindow.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
     expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
+  })
+})
+
+describe('SelectionService remembered action size', () => {
+  let svc: InstanceType<typeof SelectionService>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    BaseService.resetInstances()
+    svc = new SelectionService()
+  })
+
+  afterEach(async () => {
+    await svc._doDestroy()
+    BaseService.resetInstances()
+    vi.restoreAllMocks()
+  })
+
+  it('opens the next action at the normal size after a fullscreen or maximized resize', async () => {
+    const access = svc as unknown as { isRemeberWinSize: boolean }
+    const wm = application.get('WindowManager')
+    let bounds = { x: 0, y: 0, width: 1920, height: 1080 }
+    let visible = false
+    const actionWindow = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      getBounds: () => bounds,
+      getNormalBounds: () => ({ x: 100, y: 100, width: 640, height: 480 }),
+      setPosition: (x: number, y: number) => {
+        bounds = { ...bounds, x, y }
+      },
+      setBounds: (nextBounds: Rectangle) => {
+        bounds = nextBounds
+      },
+      show: () => {
+        visible = true
+      }
+    })
+
+    await svc._doInit()
+    const created = vi.mocked(wm.onWindowCreatedByType).mock.calls.find(([type]) => type === WindowType.SelectionAction)
+    const onCreated = created![1] as (managed: { window: typeof actionWindow }) => void
+    onCreated({ window: actionWindow })
+    access.isRemeberWinSize = true
+    actionWindow.emit('resized')
+
+    vi.spyOn(wm, 'getWindow').mockReturnValue(actionWindow as unknown as BrowserWindow)
+    svc.processAction({ id: 'translate', name: 'Translate', enabled: true, isBuiltIn: true, selectedText: 'Hello' })
+
+    expect(visible).toBe(true)
+    expect(bounds).toMatchObject({ width: 640, height: 480 })
   })
 })
