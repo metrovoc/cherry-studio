@@ -11,7 +11,7 @@ let url: string
 let cacheDir: string
 
 test.beforeAll(async () => {
-  const fixture = '/tests/e2e/fixtures/QuickAssistantScroll.tsx'
+  const fixture = '/tests/e2e/smoke/fixtures/QuickAssistantScroll.tsx'
   const inputs = ['useMessageListRenderConfig', 'useMessagePlatformActions', 'useTopicStreamStatus']
   mkdirSync(resolve('node_modules/.cache'), { recursive: true })
   cacheDir = mkdtempSync(resolve('node_modules/.cache/quick-assistant-scroll-'))
@@ -56,12 +56,12 @@ test.beforeAll(async () => {
     },
     server: { host: '127.0.0.1', port: 0 },
     optimizeDeps: {
-      entries: ['tests/e2e/fixtures/quick-assistant-scroll.html'],
+      entries: ['tests/e2e/smoke/fixtures/quick-assistant-scroll.html'],
       include: ['react', 'react-dom/client', 'react-i18next', 'i18next']
     }
   })
   await server.listen()
-  url = `${server.resolvedUrls!.local[0]}tests/e2e/fixtures/quick-assistant-scroll.html`
+  url = `${server.resolvedUrls!.local[0]}tests/e2e/smoke/fixtures/quick-assistant-scroll.html`
 })
 
 test.afterAll(async () => {
