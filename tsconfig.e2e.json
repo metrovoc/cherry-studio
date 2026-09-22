@@ -5,5 +5,13 @@
     "incremental": false,
     "types": ["node"]
   },
-  "include": ["tests/e2e/**/*.ts", "tests/e2e/**/*.tsx", "playwright.config.ts", "playwright.regression.config.ts", "src/preload/*.d.ts", "src/renderer/env.d.ts", "src/renderer/types/*.d.ts"]
+  "include": [
+    "tests/e2e/**/*.ts",
+    "tests/e2e/**/*.tsx",
+    "playwright.config.ts",
+    "playwright.regression.config.ts",
+    "src/preload/*.d.ts",
+    "src/renderer/env.d.ts",
+    "src/renderer/types/*.d.ts"
+  ]
 }
