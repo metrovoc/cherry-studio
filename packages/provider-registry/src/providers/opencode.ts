@@ -72,7 +72,7 @@ const chatEffortModels: Array<{
   { modelId: 'omen-alpha', values: ['low', 'high'] }
 ]
 
-const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7', 'union-alpha']
+const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7']
 
 const qwenBudgetModels = [
   { max: 81_920, modelId: 'qwen3-5-plus' },
