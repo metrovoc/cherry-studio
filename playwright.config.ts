@@ -54,11 +54,15 @@ export default defineConfig({
     navigationTimeout: 30000
   },
 
-  // Single project for Electron testing
   projects: [
     {
       name: 'electron',
       testMatch: '**/*.test.ts'
+    },
+    {
+      name: 'quick-assistant-scroll',
+      testMatch: '**/quick-assistant-scroll.spec.ts',
+      use: { browserName: 'chromium' }
     }
   ]
 })
