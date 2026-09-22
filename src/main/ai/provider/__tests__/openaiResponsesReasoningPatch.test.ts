@@ -9,7 +9,7 @@ const prompt: LanguageModelV3CallOptions['prompt'] = [
 // Guards patches/@ai-sdk__openai@3.0.109.patch. DeepSeek's Responses API emits
 // response.reasoning_text.delta rather than OpenAI's reasoning summary delta event.
 describe('patched @ai-sdk/openai Responses model capabilities', () => {
-  it('does not send the Codex-only ultra effort to standard OpenAI Astra', async () => {
+  it('does not send unsupported ultra effort to OpenAI Astra', async () => {
     let requestBody: { reasoning?: { effort?: string } } = {}
     const model = createOpenAI({
       apiKey: 'sk-test',
