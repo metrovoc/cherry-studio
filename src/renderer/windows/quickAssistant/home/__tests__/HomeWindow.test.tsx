@@ -76,8 +76,6 @@ const state = vi.hoisted(() => ({
     | undefined
 }))
 
-vi.mock('@renderer/utils/platform', () => ({ isMac: true }))
-
 import HomeWindow, { finalizeLiveMessages } from '../HomeWindow'
 
 vi.mock('@renderer/ipc', async () => {
