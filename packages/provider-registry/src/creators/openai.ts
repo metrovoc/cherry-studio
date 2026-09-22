@@ -110,6 +110,86 @@ export default defineCreator({
       reasoning: { controls: [{ kind: 'effort', values: ['low', 'medium', 'high', 'xhigh', 'max'] }] }
     },
     {
+      id: 'gpt-6-sol',
+      name: 'GPT-6 Sol',
+      family: 'gpt',
+      capabilities: ['reasoning', 'function-call', 'image-recognition', 'structured-output', 'file-search'],
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      endpointTypes: ['openai-responses'],
+      contextWindow: 1050000,
+      maxInputTokens: 922000,
+      maxOutputTokens: 128000,
+      pricing: {
+        input: { currency: 'USD', perMillionTokens: 2 },
+        cacheRead: { currency: 'USD', perMillionTokens: 0.2 },
+        cacheWrite: { currency: 'USD', perMillionTokens: 2.5 },
+        output: { currency: 'USD', perMillionTokens: 10 },
+        inputTokenTiers: [
+          {
+            minInputTokens: 272001,
+            input: { currency: 'USD', perMillionTokens: 4 },
+            cacheRead: { currency: 'USD', perMillionTokens: 0.4 },
+            cacheWrite: { currency: 'USD', perMillionTokens: 5 },
+            output: { currency: 'USD', perMillionTokens: 15 }
+          }
+        ]
+      },
+      parameterSupport: {
+        temperature: { supported: true },
+        topP: { supported: true },
+        topK: { supported: false },
+        frequencyPenalty: false,
+        presencePenalty: false,
+        maxTokens: true,
+        stopSequences: false,
+        systemMessage: true
+      },
+      reasoning: {
+        controls: [{ kind: 'effort', values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' }]
+      }
+    },
+    {
+      id: 'gpt-6-luna',
+      name: 'GPT-6 Luna',
+      family: 'gpt',
+      capabilities: ['reasoning', 'function-call', 'image-recognition', 'structured-output', 'file-search'],
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      endpointTypes: ['openai-responses'],
+      contextWindow: 1050000,
+      maxInputTokens: 922000,
+      maxOutputTokens: 128000,
+      pricing: {
+        input: { currency: 'USD', perMillionTokens: 0.1 },
+        cacheRead: { currency: 'USD', perMillionTokens: 0.01 },
+        cacheWrite: { currency: 'USD', perMillionTokens: 0.125 },
+        output: { currency: 'USD', perMillionTokens: 0.5 },
+        inputTokenTiers: [
+          {
+            minInputTokens: 272001,
+            input: { currency: 'USD', perMillionTokens: 0.2 },
+            cacheRead: { currency: 'USD', perMillionTokens: 0.02 },
+            cacheWrite: { currency: 'USD', perMillionTokens: 0.25 },
+            output: { currency: 'USD', perMillionTokens: 0.75 }
+          }
+        ]
+      },
+      parameterSupport: {
+        temperature: { supported: true },
+        topP: { supported: true },
+        topK: { supported: false },
+        frequencyPenalty: false,
+        presencePenalty: false,
+        maxTokens: true,
+        stopSequences: false,
+        systemMessage: true
+      },
+      reasoning: {
+        controls: [{ kind: 'effort', values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' }]
+      }
+    },
+    {
       id: 'gpt-image-1-mini',
       name: 'GPT-Image-1-Mini',
       family: 'gpt-image',

@@ -56,11 +56,17 @@ describe('Codex non-streaming calls', () => {
   }
   const sse = (event: unknown) => `data: ${JSON.stringify(event)}\n\n`
 
-  it('satisfies SDK generation through a streaming-only backend, preserving text and usage', async () => {
+  it.each([
+    ['gpt-6-astra', 'max'],
+    ['gpt-6-sol', 'max'],
+    ['gpt-6-luna', 'max']
+  ])('generates with %s at %s through the streaming-only backend', async (modelId, effort) => {
+    let requestBody: any
     const model = createOpenAI({
       apiKey: 'test',
       fetch: async (_input, init) => {
         const body = JSON.parse(coerceCodexRequestBody(init?.body) as string)
+        requestBody = body
         if (body.stream !== true) return Response.json({ detail: 'Stream must be set to true' }, { status: 400 })
         const encoded = new TextEncoder().encode(
           sse({ type: 'response.output_item.done', output_index: 0, item: completed.output[0] }) +
@@ -78,11 +84,16 @@ describe('Codex non-streaming calls', () => {
         )
         return adaptCodexResponse(response, init?.body)
       }
-    }).responses('gpt-6-astra')
-    const result = await model.doGenerate({ prompt: [{ role: 'user', content: [{ type: 'text', text: 'Reply OK' }] }] })
+    }).responses(modelId)
+    const result = await model.doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Reply OK' }] }],
+      providerOptions: { openai: { reasoningEffort: effort, reasoningSummary: 'auto' } }
+    })
+    expect(requestBody).toMatchObject({ model: modelId, reasoning: { effort, summary: 'auto' } })
     expect(result.content).toContainEqual(expect.objectContaining({ type: 'text', text: 'OK' }))
     expect(result.usage.inputTokens.total).toBe(10)
     expect(result.usage.outputTokens.total).toBe(1)
+    expect(result.warnings).not.toContainEqual(expect.objectContaining({ feature: 'reasoningEffort' }))
   })
 
   it('preserves streaming responses and HTTP errors', async () => {

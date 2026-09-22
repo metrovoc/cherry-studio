@@ -21809,7 +21809,7 @@
               {
                 "default": "low",
                 "kind": "effort",
-                "values": ["low", "medium", "high", "xhigh", "max", "ultra"]
+                "values": ["low", "medium", "high", "xhigh", "max"]
               }
             ],
             "defaultEffort": "low"
@@ -21833,7 +21833,7 @@
               {
                 "default": "medium",
                 "kind": "effort",
-                "values": ["low", "medium", "high", "xhigh", "max", "ultra"]
+                "values": ["low", "medium", "high", "xhigh", "max"]
               }
             ],
             "defaultEffort": "medium"
@@ -21856,12 +21856,62 @@
           "support": {
             "controls": [
               {
-                "default": "low",
+                "default": "medium",
                 "kind": "effort",
-                "values": ["low", "medium", "high", "xhigh", "max", "ultra"]
+                "values": ["low", "medium", "high", "xhigh", "max"]
               }
             ],
-            "defaultEffort": "low"
+            "defaultEffort": "medium"
+          }
+        }
+      },
+      "supportsFastMode": true
+    },
+    {
+      "apiModelId": "gpt-6-luna",
+      "endpointTypes": ["openai-responses"],
+      "limits": {
+        "contextWindow": 272000,
+        "maxInputTokens": 144000
+      },
+      "modelId": "gpt-6-luna",
+      "providerId": "openai-codex",
+      "reasoningContracts": {
+        "openai-responses": {
+          "support": {
+            "controls": [
+              {
+                "default": "medium",
+                "kind": "effort",
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              }
+            ],
+            "defaultEffort": "medium"
+          }
+        }
+      },
+      "supportsFastMode": true
+    },
+    {
+      "apiModelId": "gpt-6-sol",
+      "endpointTypes": ["openai-responses"],
+      "limits": {
+        "contextWindow": 272000,
+        "maxInputTokens": 144000
+      },
+      "modelId": "gpt-6-sol",
+      "providerId": "openai-codex",
+      "reasoningContracts": {
+        "openai-responses": {
+          "support": {
+            "controls": [
+              {
+                "default": "medium",
+                "kind": "effort",
+                "values": ["low", "medium", "high", "xhigh", "max"]
+              }
+            ],
+            "defaultEffort": "medium"
           }
         }
       },
@@ -23368,18 +23418,6 @@
                 }
               ]
             }
-          }
-        }
-      }
-    },
-    {
-      "endpointTypes": ["anthropic-messages"],
-      "modelId": "union-alpha",
-      "providerId": "opencode",
-      "reasoningContracts": {
-        "anthropic-messages": {
-          "support": {
-            "controls": []
           }
         }
       }
@@ -42052,5 +42090,5 @@
       "providerId": "zhipu"
     }
   ],
-  "version": "d59c7aa2dd9e4149"
+  "version": "9637f978943c1938"
 }

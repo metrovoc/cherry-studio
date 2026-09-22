@@ -76,7 +76,35 @@ describe('patched @ai-sdk/openai sampling parameters', () => {
     }
   )
 
-  it('rejects Codex-only Ultra reasoning for standard OpenAI GPT-6 Astra', async () => {
+  it.each(['gpt-6-sol', 'gpt-6-luna'])('keeps none effort and sampling parameters for %s', async (modelId) => {
+    const { body, warnings } = await capture(modelId, { reasoningEffort: 'none' })
+
+    expect(body.reasoning).toEqual({ effort: 'none' })
+    expect(body.temperature).toBe(0.7)
+    expect(body.top_p).toBe(0.9)
+    expect(body.top_logprobs).toBe(5)
+    expect(body.include).toContain('message.output_text.logprobs')
+    expect(warnings).toEqual([])
+  })
+
+  it.each(['gpt-6-sol', 'gpt-6-luna'])('removes sampling parameters for %s with reasoning enabled', async (modelId) => {
+    const { body } = await capture(modelId, { reasoningEffort: 'max' })
+
+    expect(body.reasoning).toEqual({ effort: 'max' })
+    expect(body.temperature).toBeUndefined()
+    expect(body.top_p).toBeUndefined()
+    expect(body.top_logprobs).toBeUndefined()
+    expect(body.include).not.toContain('message.output_text.logprobs')
+  })
+
+  it.each(['gpt-6-sol', 'gpt-6-luna'])('does not send unsupported ultra effort to OpenAI %s', async (modelId) => {
+    const { body, warnings } = await capture(modelId, { reasoningEffort: 'ultra' })
+
+    expect(body.reasoning).toBeUndefined()
+    expect(warnings).toContainEqual(expect.objectContaining({ type: 'unsupported', feature: 'reasoningEffort' }))
+  })
+
+  it('rejects unsupported ultra reasoning for OpenAI GPT-6 Astra', async () => {
     const { body, warnings } = await capture('gpt-6-astra', {
       reasoningEffort: 'ultra',
       withoutLogprobs: true

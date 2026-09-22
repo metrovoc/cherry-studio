@@ -3,11 +3,8 @@ import type { ProviderModelOverride } from '../schemas/provider-models'
 import { defineProvider } from './types'
 import { openaiResponsesSummaryWire } from './wires'
 
-/**
- * The Codex backend publishes its own per-model ladder in upstream
- * `codex-rs/models-manager/models.json` — it differs from the platform API
- * (no `none`, plus the subscription-only `ultra` tier on some SKUs).
- */
+// Codex model metadata includes client orchestration modes such as `ultra`.
+// Direct Responses requests must expose only backend-supported effort values.
 function codexReasoning(
   values: readonly ReasoningEffort[],
   defaultEffort: ReasoningEffort
@@ -52,7 +49,9 @@ export default defineProvider({
         'gpt-5-6-sol',
         'gpt-5-6-terra',
         'gpt-5-6-luna',
-        'gpt-6-astra'
+        'gpt-6-astra',
+        'gpt-6-sol',
+        'gpt-6-luna'
       ]
     }
   ],
@@ -69,7 +68,23 @@ export default defineProvider({
       supportsFastMode: true,
       limits: { contextWindow: 272000, maxInputTokens: 144000 },
       endpointTypes: ['openai-responses'],
-      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'low')
+      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'medium')
+    },
+    {
+      modelId: 'gpt-6-sol',
+      apiModelId: 'gpt-6-sol',
+      supportsFastMode: true,
+      limits: { contextWindow: 272000, maxInputTokens: 144000 },
+      endpointTypes: ['openai-responses'],
+      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'medium')
+    },
+    {
+      modelId: 'gpt-6-luna',
+      apiModelId: 'gpt-6-luna',
+      supportsFastMode: true,
+      limits: { contextWindow: 272000, maxInputTokens: 144000 },
+      endpointTypes: ['openai-responses'],
+      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'medium')
     },
     // Codex backend serves the gpt-5.6 family with a 372k context window
     // (per upstream `codex-rs/models-manager/models.json`), smaller than the
@@ -80,7 +95,7 @@ export default defineProvider({
       supportsFastMode: true,
       limits: { contextWindow: 372000 },
       endpointTypes: ['openai-responses'],
-      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'low')
+      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'low')
     },
     {
       modelId: 'gpt-5-6-terra',
@@ -88,7 +103,7 @@ export default defineProvider({
       supportsFastMode: true,
       limits: { contextWindow: 372000 },
       endpointTypes: ['openai-responses'],
-      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'medium')
+      reasoningContracts: codexReasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'medium')
     },
     {
       modelId: 'gpt-5-6-luna',

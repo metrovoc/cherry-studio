@@ -487,7 +487,9 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'gpt-5-6-luna',
         'gpt-5-6-sol',
         'gpt-5-6-terra',
-        'gpt-6-astra'
+        'gpt-6-astra',
+        'gpt-6-luna',
+        'gpt-6-sol'
       ]
     },
     openai: {
@@ -529,6 +531,8 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Rec
         'gpt-5-nano',
         'gpt-5-pro',
         'gpt-6-astra',
+        'gpt-6-luna',
+        'gpt-6-sol',
         'o3',
         'o3-mini',
         'o3-pro',

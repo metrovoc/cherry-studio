@@ -6,6 +6,7 @@ export default defineCreator({
   modelsDevProviders: ['vercel'],
   idPrefixes: ['v0'],
   reasoningFamilies: [
+    { pattern: '^arrow-2(?:-telos)?$' },
     { pattern: '^muse-spark' },
     { pattern: '^interfaze' },
     { pattern: '^laguna-s' },

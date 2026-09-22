@@ -62,34 +62,86 @@ describe('OpenAI catalog', () => {
     })
   })
 
-  it('keeps GPT-6 Astra on the OpenAI Responses endpoint', () => {
-    expect(loader.findProvider('openai')).toMatchObject({
-      defaultChatEndpoint: 'openai-responses',
-      endpointConfigs: {
-        'openai-responses': { adapterFamily: 'openai' }
-      }
-    })
-    expect(loader.findOverride('openai', 'gpt-6-astra')).toBeNull()
-  })
+  it.each([
+    { modelId: 'gpt-6-sol', name: 'GPT-6 Sol', rates: [2, 0.2, 2.5, 10], longRates: [4, 0.4, 5, 15] },
+    { modelId: 'gpt-6-luna', name: 'GPT-6 Luna', rates: [0.1, 0.01, 0.125, 0.5], longRates: [0.2, 0.02, 0.25, 0.75] }
+  ])(
+    'keeps $modelId selectable with its official API limits, controls, and pricing',
+    ({ modelId, name, rates, longRates }) => {
+      expect(loader.findModel(modelId)).toMatchObject({
+        id: modelId,
+        name,
+        ownedBy: 'openai',
+        capabilities: expect.arrayContaining(['reasoning', 'function-call', 'image-recognition', 'structured-output']),
+        inputModalities: ['text', 'image'],
+        outputModalities: ['text'],
+        contextWindow: 1050000,
+        maxInputTokens: 922000,
+        maxOutputTokens: 128000,
+        parameterSupport: {
+          temperature: { supported: true },
+          topP: { supported: true }
+        },
+        reasoning: {
+          controls: [{ kind: 'effort', values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' }],
+          defaultEffort: 'medium'
+        },
+        pricing: {
+          input: { currency: 'USD', perMillionTokens: rates[0] },
+          cacheRead: { currency: 'USD', perMillionTokens: rates[1] },
+          cacheWrite: { currency: 'USD', perMillionTokens: rates[2] },
+          output: { currency: 'USD', perMillionTokens: rates[3] },
+          inputTokenTiers: [
+            {
+              minInputTokens: 272001,
+              input: { currency: 'USD', perMillionTokens: longRates[0] },
+              cacheRead: { currency: 'USD', perMillionTokens: longRates[1] },
+              cacheWrite: { currency: 'USD', perMillionTokens: longRates[2] },
+              output: { currency: 'USD', perMillionTokens: longRates[3] }
+            }
+          ]
+        }
+      })
+      expect(loader.findModel(modelId)?.capabilities).not.toContain('image-generation')
+    }
+  )
 
-  it('offers GPT-6 Astra through ChatGPT Codex with its subscription limits and controls', () => {
-    expect(loader.findOverride('openai-codex', 'gpt-6-astra')).toMatchObject({
-      apiModelId: 'gpt-6-astra',
+  it.each(['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'])(
+    'routes %s reasoning and tools through OpenAI Responses',
+    (modelId) => {
+      expect(loader.findProvider('openai')).toMatchObject({
+        defaultChatEndpoint: 'openai-responses',
+        endpointConfigs: {
+          'openai-responses': { adapterFamily: 'openai' }
+        }
+      })
+      expect(loader.findModel(modelId)?.endpointTypes).toEqual(['openai-responses'])
+      expect(loader.findOverride('openai', modelId)).toBeNull()
+    }
+  )
+
+  it.each([
+    ['gpt-6-astra', ['low', 'medium', 'high', 'xhigh', 'max']],
+    ['gpt-6-sol', ['low', 'medium', 'high', 'xhigh', 'max']],
+    ['gpt-6-luna', ['low', 'medium', 'high', 'xhigh', 'max']]
+  ] as const)('offers %s through ChatGPT Codex with its subscription limits and controls', (modelId, values) => {
+    expect(loader.findOverride('openai-codex', modelId)).toMatchObject({
+      apiModelId: modelId,
       endpointTypes: ['openai-responses'],
       limits: { contextWindow: 272000, maxInputTokens: 144000 },
-      modelId: 'gpt-6-astra',
+      modelId,
       providerId: 'openai-codex',
       reasoningContracts: {
         'openai-responses': {
           support: {
             controls: [
               {
-                default: 'low',
+                default: 'medium',
                 kind: 'effort',
-                values: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+                values
               }
             ],
-            defaultEffort: 'low'
+            defaultEffort: 'medium'
           }
         }
       },
@@ -97,11 +149,10 @@ describe('OpenAI catalog', () => {
     })
   })
 
-  // The base catalog infers the platform-API ladder for gpt-5.6 (`none`…`xhigh`), which the Codex
-  // backend neither accepts (`none`) nor is limited to (`max`/`ultra`); each SKU carries its own.
+  // Codex exposes a per-model effort ladder distinct from the platform API catalog.
   it.each([
-    ['gpt-5-6-sol', ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'low'],
-    ['gpt-5-6-terra', ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'], 'medium'],
+    ['gpt-5-6-sol', ['low', 'medium', 'high', 'xhigh', 'max'], 'low'],
+    ['gpt-5-6-terra', ['low', 'medium', 'high', 'xhigh', 'max'], 'medium'],
     ['gpt-5-6-luna', ['low', 'medium', 'high', 'xhigh', 'max'], 'medium'],
     ['gpt-5-5', ['low', 'medium', 'high', 'xhigh'], 'medium']
   ])('serves %s on Codex with the backend ladder, not the platform one', (modelId, values, defaultEffort) => {
@@ -111,7 +162,20 @@ describe('OpenAI catalog', () => {
     expect(contract?.support?.defaultEffort).toBe(defaultEffort)
   })
 
-  it('enables OpenAI web search for GPT-6 Astra', () => {
-    expect(isServerToolModelEligible('gpt-6-astra', 'openai', 'web-search')).toBe(true)
+  it('does not offer orchestration-only ultra as a Codex backend effort', () => {
+    const invalid = loader
+      .getOverridesForProvider('openai-codex')
+      .filter((override) =>
+        override.reasoningContracts?.['openai-responses']?.support?.controls?.some(
+          (control) => control.kind === 'effort' && control.values.includes('ultra')
+        )
+      )
+
+    expect(invalid.map((override) => override.modelId)).toEqual([])
+  })
+
+  it.each(['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'])('enables web search for %s on OpenAI and Codex', (modelId) => {
+    expect(isServerToolModelEligible(modelId, 'openai', 'web-search')).toBe(true)
+    expect(isServerToolModelEligible(modelId, 'openai-codex', 'web-search')).toBe(true)
   })
 })

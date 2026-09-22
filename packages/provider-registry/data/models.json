@@ -7652,11 +7652,11 @@
       "pricing": {
         "input": {
           "currency": "USD",
-          "perMillionTokens": 0.54252
+          "perMillionTokens": 0.53988
         },
         "output": {
           "currency": "USD",
-          "perMillionTokens": 1.6275600000000001
+          "perMillionTokens": 1.61964
         }
       }
     },
@@ -17462,19 +17462,68 @@
       }
     },
     {
-      "capabilities": ["function-call", "reasoning", "image-recognition", "structured-output", "file-input"],
+      "capabilities": ["reasoning", "function-call", "image-recognition", "structured-output", "file-search"],
       "contextWindow": 1050000,
+      "endpointTypes": ["openai-responses"],
+      "family": "gpt",
       "id": "gpt-6-luna",
-      "inputModalities": ["image", "text"],
+      "inputModalities": ["text", "image"],
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
       "metadata": {},
-      "name": "OpenAI: GPT-6 Luna",
+      "name": "GPT-6 Luna",
       "outputModalities": ["text"],
       "ownedBy": "openai",
+      "parameterSupport": {
+        "frequencyPenalty": false,
+        "maxTokens": true,
+        "presencePenalty": false,
+        "stopSequences": false,
+        "systemMessage": true,
+        "temperature": {
+          "supported": true
+        },
+        "topK": {
+          "supported": false
+        },
+        "topP": {
+          "supported": true
+        }
+      },
       "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.01
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 0.125
+        },
         "input": {
           "currency": "USD",
-          "perMillionTokens": 0.09999999999999999
+          "perMillionTokens": 0.1
         },
+        "inputTokenTiers": [
+          {
+            "cacheRead": {
+              "currency": "USD",
+              "perMillionTokens": 0.02
+            },
+            "cacheWrite": {
+              "currency": "USD",
+              "perMillionTokens": 0.25
+            },
+            "input": {
+              "currency": "USD",
+              "perMillionTokens": 0.2
+            },
+            "minInputTokens": 272001,
+            "output": {
+              "currency": "USD",
+              "perMillionTokens": 0.75
+            }
+          }
+        ],
         "output": {
           "currency": "USD",
           "perMillionTokens": 0.5
@@ -17483,10 +17532,12 @@
       "reasoning": {
         "controls": [
           {
+            "default": "medium",
             "kind": "effort",
             "values": ["none", "low", "medium", "high", "xhigh", "max"]
           }
         ],
+        "defaultEffort": "medium",
         "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"]
       }
     },
@@ -17520,19 +17571,68 @@
       }
     },
     {
-      "capabilities": ["function-call", "reasoning", "image-recognition", "structured-output", "file-input"],
+      "capabilities": ["reasoning", "function-call", "image-recognition", "structured-output", "file-search"],
       "contextWindow": 1050000,
+      "endpointTypes": ["openai-responses"],
+      "family": "gpt",
       "id": "gpt-6-sol",
-      "inputModalities": ["image", "text"],
+      "inputModalities": ["text", "image"],
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
       "metadata": {},
-      "name": "OpenAI: GPT-6 Sol",
+      "name": "GPT-6 Sol",
       "outputModalities": ["text"],
       "ownedBy": "openai",
+      "parameterSupport": {
+        "frequencyPenalty": false,
+        "maxTokens": true,
+        "presencePenalty": false,
+        "stopSequences": false,
+        "systemMessage": true,
+        "temperature": {
+          "supported": true
+        },
+        "topK": {
+          "supported": false
+        },
+        "topP": {
+          "supported": true
+        }
+      },
       "pricing": {
+        "cacheRead": {
+          "currency": "USD",
+          "perMillionTokens": 0.2
+        },
+        "cacheWrite": {
+          "currency": "USD",
+          "perMillionTokens": 2.5
+        },
         "input": {
           "currency": "USD",
           "perMillionTokens": 2
         },
+        "inputTokenTiers": [
+          {
+            "cacheRead": {
+              "currency": "USD",
+              "perMillionTokens": 0.4
+            },
+            "cacheWrite": {
+              "currency": "USD",
+              "perMillionTokens": 5
+            },
+            "input": {
+              "currency": "USD",
+              "perMillionTokens": 4
+            },
+            "minInputTokens": 272001,
+            "output": {
+              "currency": "USD",
+              "perMillionTokens": 15
+            }
+          }
+        ],
         "output": {
           "currency": "USD",
           "perMillionTokens": 10
@@ -17541,10 +17641,12 @@
       "reasoning": {
         "controls": [
           {
+            "default": "medium",
             "kind": "effort",
             "values": ["none", "low", "medium", "high", "xhigh", "max"]
           }
         ],
+        "defaultEffort": "medium",
         "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"]
       }
     },
@@ -23147,5 +23249,5 @@
       "ownedBy": "zhipu"
     }
   ],
-  "version": "7002b7ec807053c9"
+  "version": "89cb87795e685b38"
 }

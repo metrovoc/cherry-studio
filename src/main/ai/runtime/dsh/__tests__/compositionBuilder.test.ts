@@ -402,7 +402,7 @@ describe('buildDshCompositionYaml', () => {
     expect(route.models[0].reasoningEfforts).toEqual({ low: 'low', high: 'high' })
   })
 
-  it('preserves Codex Astra Ultra reasoning through the gateway and bundled dsh config', async () => {
+  it('preserves Codex Astra Max reasoning through the gateway and bundled dsh config', async () => {
     const provider = {
       id: 'openai-codex',
       name: 'OpenAI Codex',
@@ -423,13 +423,13 @@ describe('buildDshCompositionYaml', () => {
       capabilities: [MODEL_CAPABILITY.REASONING],
       endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
       contextWindow: 272_000,
-      reasoning: { selectableEfforts: ['low', 'ultra'] }
+      reasoning: { selectableEfforts: ['low', 'max'] }
     } as unknown as Model
     const injection = buildDshGatewayInjection(
       provider,
       model,
       { baseUrl: 'http://127.0.0.1:23333', apiKey: SECRET_API_KEY, usageHeaders: {} },
-      'ultra'
+      'max'
     )
     const yaml = buildDshCompositionYaml(
       makeInput({
@@ -442,17 +442,17 @@ describe('buildDshCompositionYaml', () => {
     )
 
     expect(injection.api).toBe('openai-completions')
-    expect(injection.reasoning).toBe('ultra')
-    expect(injection.modelConfig.reasoningEfforts).toEqual({ low: 'low', ultra: 'ultra' })
+    expect(injection.reasoning).toBe('max')
+    expect(injection.modelConfig.reasoningEfforts).toEqual({ low: 'low', max: 'max' })
     const llmConfig = entryById(yaml, 'llm-pi-ai').config
     expect(llmConfig?.providers['openai-codex']).toMatchObject({
-      reasoning: 'ultra',
-      models: [{ reasoningEfforts: { low: 'low', ultra: 'ultra' } }]
+      reasoning: 'max',
+      models: [{ reasoningEfforts: { low: 'low', max: 'max' } }]
     })
 
     const pluginUrl = pathToFileURL(resolveDshPluginPath('@deepseek-ai/dsh-llm-pi-ai')).href
     const { Config } = await import(pluginUrl)
-    expect(Config(llmConfig).providers['openai-codex']).toMatchObject({ reasoning: 'ultra' })
+    expect(Config(llmConfig).providers['openai-codex']).toMatchObject({ reasoning: 'max' })
   })
 
   it('preserves provider-default reasoning when Cherry selects Default', () => {

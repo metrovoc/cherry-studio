@@ -229,6 +229,7 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   { pattern: 'sonar-deep-research' },
   // stepfun
   { pattern: 'step-3' },
+  { pattern: '^step-5-preview$' },
   { pattern: 'step-r1-v-mini' },
   // tencent
   { pattern: '^hunyuan-a13b', toggle: true },
@@ -239,6 +240,7 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   // upstage
   { pattern: '^solar-pro-?[2-9]' },
   // vercel
+  { pattern: '^arrow-2(?:-telos)?$' },
   { pattern: '^muse-spark' },
   { pattern: '^interfaze' },
   { pattern: '^laguna-s' },
