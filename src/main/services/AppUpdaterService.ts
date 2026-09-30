@@ -15,7 +15,6 @@ import { getAppEdition } from '@main/utils/appEdition'
 import { generateUserAgent, getClientId } from '@main/utils/systemInfo'
 import type { RetryPolicy } from '@shared/data/api/schemas/jobs'
 import { UpgradeChannel } from '@shared/data/preference/preferenceTypes'
-import type { AppEdition } from '@shared/types/appEdition'
 import { APP_NAME } from '@shared/utils/constants'
 import {
   hasMultiLanguageReleaseNotes,
@@ -27,28 +26,10 @@ import {
 
 const logger = loggerService.withContext('AppUpdaterService')
 
-type ReleaseRegion = 'cn' | 'global'
-
-export const RELEASE_HISTORY_URL = 'https://releases.cherry-ai.com/release-history.json'
+export const RELEASE_HISTORY_URL =
+  'https://github.com/metrovoc/cherry-studio/releases/latest/download/release-history.json'
 const RELEASE_HISTORY_TIMEOUT_MS = 10_000
 const RELEASE_HISTORY_MAX_BYTES = 1024 * 1024
-
-function getEditionUpdateChannel(channel: UpgradeChannel, edition: AppEdition): string {
-  return edition === 'cn' ? `${channel}-cn` : channel
-}
-
-function getUpdateHeaders({ region, edition }: { region: ReleaseRegion; edition: AppEdition }) {
-  return {
-    'User-Agent': generateUserAgent(),
-    'Cache-Control': 'no-cache',
-    'Client-Id': getClientId(),
-    'App-Name': APP_NAME,
-    'App-Version': `v${app.getVersion()}`,
-    OS: process.platform,
-    'X-Edition': edition,
-    'X-Region': region
-  }
-}
 
 class ReleaseNotesUpdater extends AppUpdater {
   constructor() {
@@ -112,17 +93,15 @@ export class AppUpdaterService extends BaseService {
       ;(autoUpdater as NsisUpdater).installDirectory = application.getPath('app.install')
     }
 
-    // Cancel an in-flight download when the test plan or channel changes — the
-    // download targets the previously selected channel. The v2 settings UI
-    // writes these preferences directly (no IPC), so react to the change here
-    // rather than in a now-removed `App_SetTestPlan`/`App_SetTestChannel` handler.
-    this.registerDisposable(
-      application
-        .get('PreferenceService')
-        .subscribeMultipleChanges(['app.dist.test_plan.enabled', 'app.dist.test_plan.channel'], () =>
-          this.cancelDownload()
-        )
-    )
+    if (getAppEdition() === 'cn') {
+      this.registerDisposable(
+        application
+          .get('PreferenceService')
+          .subscribeMultipleChanges(['app.dist.test_plan.enabled', 'app.dist.test_plan.channel'], () =>
+            this.cancelDownload()
+          )
+      )
+    }
 
     // Stop the scheduled check when this service stops (it depends on
     // SchedulerService, so SchedulerService is still alive at this point).
@@ -179,51 +158,65 @@ export class AppUpdaterService extends BaseService {
     this.registerDisposable(() => autoUpdater.removeListener('update-downloaded', onUpdateDownloaded))
   }
 
-  private async getUpdateRequest() {
-    const currentVersion = app.getVersion()
-    const testPlan = application.get('PreferenceService').get('app.dist.test_plan.enabled')
-    const requestedChannel = testPlan
-      ? application.get('PreferenceService').get('app.dist.test_plan.channel') || UpgradeChannel.RC
-      : UpgradeChannel.LATEST
-
-    const ipCountry = await regionService.getCountry()
-    const region: ReleaseRegion = ipCountry.toLowerCase() === 'cn' ? 'cn' : 'global'
-    const edition = getAppEdition()
-    const updateChannel = getEditionUpdateChannel(requestedChannel, edition)
-
-    const updateHeaders = getUpdateHeaders({ region, edition })
-
-    return { currentVersion, edition, ipCountry, region, testPlan, updateChannel, updateHeaders }
+  private async getUpdateRequest(): Promise<{
+    currentVersion: string
+    updateChannel: string
+    updateHeaders: Record<string, string>
+  }> {
+    if (getAppEdition() === 'cn') {
+      const testPlan = application.get('PreferenceService').get('app.dist.test_plan.enabled')
+      const channel = testPlan
+        ? application.get('PreferenceService').get('app.dist.test_plan.channel') || UpgradeChannel.RC
+        : UpgradeChannel.LATEST
+      const country = await regionService.getCountry()
+      return {
+        currentVersion: app.getVersion(),
+        updateChannel: `${channel}-cn`,
+        updateHeaders: {
+          'User-Agent': generateUserAgent(),
+          'Cache-Control': 'no-cache',
+          'Client-Id': getClientId(),
+          'App-Name': APP_NAME,
+          'App-Version': `v${app.getVersion()}`,
+          OS: process.platform,
+          'X-Edition': 'cn',
+          'X-Region': country.toLowerCase() === 'cn' ? 'cn' : 'global'
+        }
+      }
+    }
+    return {
+      currentVersion: app.getVersion(),
+      updateChannel: UpgradeChannel.LATEST,
+      updateHeaders: {
+        'User-Agent': `CherryStudio/${app.getVersion()}`,
+        'Cache-Control': 'no-cache'
+      }
+    }
   }
 
   private async configureUpdaterForCheck() {
-    const { currentVersion, edition, ipCountry, region, testPlan, updateChannel, updateHeaders } =
-      await this.getUpdateRequest()
-
-    autoUpdater.requestHeaders = {
-      ...autoUpdater.requestHeaders,
-      ...updateHeaders
-    }
-
-    logger.info(
-      `Using managed update feed for version ${currentVersion}, edition: ${edition}, testPlan: ${testPlan}, channel: ${updateChannel}, region: ${region} (IP country: ${ipCountry})`
-    )
+    const { currentVersion, updateChannel, updateHeaders } = await this.getUpdateRequest()
+    autoUpdater.requestHeaders =
+      getAppEdition() === 'cn' ? { ...autoUpdater.requestHeaders, ...updateHeaders } : updateHeaders
+    logger.info(`Checking version ${currentVersion}, update channel: ${updateChannel}`)
+    // A saved upstream beta/RC preference must never select a different fork feed.
     autoUpdater.channel = updateChannel
-
-    // disable downgrade after change the channel
+    if (getAppEdition() !== 'cn') autoUpdater.allowPrerelease = false
     autoUpdater.allowDowngrade = false
-    // Keep differential downloads disabled for the current release artifacts.
     autoUpdater.disableDifferentialDownload = true
   }
 
   private async fetchReleaseHistory(): Promise<ReleaseNotesEntry[] | null> {
     try {
       const { updateHeaders } = await this.getUpdateRequest()
-      const response = await net.fetch(RELEASE_HISTORY_URL, {
-        headers: updateHeaders,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(RELEASE_HISTORY_TIMEOUT_MS)
-      })
+      const response = await net.fetch(
+        getAppEdition() === 'cn' ? 'https://releases.cherry-ai.com/release-history.json' : RELEASE_HISTORY_URL,
+        {
+          headers: updateHeaders,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(RELEASE_HISTORY_TIMEOUT_MS)
+        }
+      )
 
       if (!response.ok) {
         throw new Error(`Release history request failed with HTTP ${response.status}`)
@@ -260,6 +253,7 @@ export class AppUpdaterService extends BaseService {
     updater.autoInstallOnAppQuit = false
     updater.requestHeaders = updateHeaders
     updater.channel = updateChannel
+    if (getAppEdition() !== 'cn') updater.allowPrerelease = false
     updater.allowDowngrade = false
     const result = await updater.checkForUpdates()
     if (!result) throw new Error('Update query did not produce a result')
@@ -278,6 +272,7 @@ export class AppUpdaterService extends BaseService {
       updater.autoInstallOnAppQuit = false
       updater.requestHeaders = updateHeaders
       updater.channel = updateChannel
+      if (getAppEdition() !== 'cn') updater.allowPrerelease = false
       updater.allowDowngrade = false
 
       const result = await updater.checkForUpdates()
