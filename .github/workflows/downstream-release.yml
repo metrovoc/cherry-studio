@@ -1,0 +1,307 @@
+name: Downstream macOS release
+
+on:
+  push:
+    branches: [downstream]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: downstream-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.repository == 'metrovoc/cherry-studio' && github.ref == 'refs/heads/downstream'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
+      tag: ${{ steps.gate.outputs.tag }}
+      catalog-commit: ${{ steps.catalog.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Select newer stable version and wait for its exact complete CI
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(jq -er '.version' package.json)
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'No stable version to publish'
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          if jq -e --arg version "$VERSION" '
+            [ .[][] | select(.draft == false and .prerelease == false)
+              | .tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+              | ltrimstr("v") | split(".") | map(tonumber) ]
+            | any(. >= ($version | split(".") | map(tonumber)))
+          ' "$RUNNER_TEMP/releases.json" > /dev/null; then
+            echo 'No newer stable version to publish'
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          while true; do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha')" = "$GITHUB_SHA"
+            gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f head_sha="$GITHUB_SHA" -f event=push -F per_page=100 > "$RUNNER_TEMP/ci.json"
+            RUN=$(jq -c --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              [.workflow_runs[] | select(.head_sha == $sha and .head_branch == "downstream" and .event == "push"
+                and .head_repository.full_name == $repo and .path == ".github/workflows/ci.yml")]
+              | sort_by(.id) | last
+            ' "$RUNNER_TEMP/ci.json")
+            if [ "$(jq -r '.status' <<< "$RUN")" = completed ]; then
+              test "$(jq -r '.conclusion' <<< "$RUN")" = success
+              echo 'publish=true' >> "$GITHUB_OUTPUT"
+              break
+            fi
+            sleep 30
+          done
+      - name: Verify the immutable metrovoc catalog pin
+        id: catalog
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CATALOG_COMMIT=$(jq -er '.commit | select(type == "string" and test("^[a-f0-9]{40}$"))' scripts/release/catalog-pin.json)
+          gh api "repos/$GITHUB_REPOSITORY/commits/$CATALOG_COMMIT" > "$RUNNER_TEMP/catalog-commit.json"
+          jq -e --arg sha "$CATALOG_COMMIT" '
+            def dco:
+              .commit.author.email as $email |
+              .commit.author.name == "metrovoc" and ($email | type == "string" and length > 0) and
+              (.commit.message | rtrimstr("\n") | split("\n\n") | last | split("\n") |
+                index("Signed-off-by: metrovoc <" + $email + ">") != null);
+            .sha == $sha and .author.login == "metrovoc" and .committer.login == "metrovoc"
+              and .commit.verification.verified == true and .commit.verification.reason == "valid" and dco
+          ' "$RUNNER_TEMP/catalog-commit.json"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/x-files/downstream-provider-registry" --jq '.object.sha')" = "$CATALOG_COMMIT"
+          echo "sha=$CATALOG_COMMIT" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: preflight
+    if: needs.preflight.outputs.publish == 'true' && github.repository == 'metrovoc/cherry-studio' && github.ref == 'refs/heads/downstream'
+    runs-on: macos-15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+      CATALOG_COMMIT: ${{ needs.preflight.outputs.catalog-commit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require downstream, immutable catalog and a nonconflicting tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/downstream
+          test "$(jq -er '.commit' scripts/release/catalog-pin.json)" = "$CATALOG_COMMIT"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/x-files/downstream-provider-registry" --jq '.object.sha')" = "$CATALOG_COMMIT"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$CATALOG_COMMIT" > "$RUNNER_TEMP/catalog-commit.json"
+          jq -e --arg sha "$CATALOG_COMMIT" '
+            def dco:
+              .commit.author.email as $email |
+              .commit.author.name == "metrovoc" and ($email | type == "string" and length > 0) and
+              (.commit.message | rtrimstr("\n") | split("\n\n") | last | split("\n") |
+                index("Signed-off-by: metrovoc <" + $email + ">") != null);
+            .sha == $sha and .author.login == "metrovoc" and .committer.login == "metrovoc"
+              and .commit.verification.verified == true and .commit.verification.reason == "valid" and dco
+          ' "$RUNNER_TEMP/catalog-commit.json"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
+          fi
+
+      - name: Verify trusted downstream CI before running repository code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha')" = "$GITHUB_SHA"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -F per_page=100 > "$RUNNER_TEMP/trusted-ci.json"
+          jq -e --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            [.workflow_runs[] | select(.head_sha == $sha and .head_branch == "downstream" and .event == "push")]
+            | sort_by(.id) | last
+            | .head_repository.full_name == $repo and .path == ".github/workflows/ci.yml"
+              and .status == "completed" and .conclusion == "success"
+          ' "$RUNNER_TEMP/trusted-ci.json"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v5
+      - name: Install dependencies
+        run: |
+          test "$(node --version)" = "v$(cat .node-version)"
+          pnpm install --frozen-lockfile
+
+      - name: Gate exact downstream SHA, complete CI and increasing version
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -F per_page=100 > "$RUNNER_TEMP/ci.json"
+          DOWNSTREAM_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha') \
+            RELEASES_FILE="$RUNNER_TEMP/releases.json" CI_RUNS_FILE="$RUNNER_TEMP/ci.json" \
+            node scripts/release/validate-downstream-release.js prepare
+
+      - name: Require complete notarization setup before building
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node -e "require('./scripts/release/prepare-downstream-signing').validateNotarizationCredentials(process.env)"
+
+      - name: Build application
+        if: steps.gate.outputs.resume != 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          brew install python-setuptools
+          pnpm run build
+
+      - name: Decode the PKCS12 export without accepting a URL or path
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: node scripts/release/prepare-downstream-signing.js certificate
+
+      - name: Import only the pinned Developer ID certificate
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
+          umask 077
+          KEYCHAIN="$RUNNER_TEMP/downstream-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KEYCHAIN" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security > /dev/null
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security find-identity -v -p codesigning "$KEYCHAIN" > "$RUNNER_TEMP/signing-identities.txt"
+          echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          node scripts/release/prepare-downstream-signing.js config
+          rm "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/signing-identities.txt"
+
+      - name: Download the complete existing draft without replacing its assets
+        if: steps.gate.outputs.resume == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir dist
+
+      - name: Sign, notarize and verify before archives are created
+        if: steps.gate.outputs.resume != 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -z "${CSC_LINK:-}"
+          pnpm exec electron-builder --config "$RUNNER_TEMP/downstream-builder.json" --mac --arm64 --publish never
+
+      - name: Verify shipped ZIP, DMG and update metadata
+        run: |
+          node scripts/release/validate-downstream-release.js artifacts
+          VERSION=$(node -p "require('./package.json').version")
+          ZIP="dist/Cherry-Studio-$VERSION-mac-arm64.zip"
+          DMG="dist/Cherry-Studio-$VERSION-mac-arm64.dmg"
+          ditto -x -k "$ZIP" "$RUNNER_TEMP/zip-check"
+          node scripts/release/verify-downstream-signature.js "$RUNNER_TEMP/zip-check/Cherry Studio.app"
+          test "$(lipo -archs "$RUNNER_TEMP/zip-check/Cherry Studio.app/Contents/MacOS/Cherry Studio")" = arm64
+          hdiutil attach "$DMG" -readonly -nobrowse -mountpoint "$RUNNER_TEMP/dmg-check"
+          trap 'hdiutil detach "$RUNNER_TEMP/dmg-check"' EXIT
+          node scripts/release/verify-downstream-signature.js "$RUNNER_TEMP/dmg-check/Cherry Studio.app"
+          diff -qr "$RUNNER_TEMP/zip-check/Cherry Studio.app" "$RUNNER_TEMP/dmg-check/Cherry Studio.app"
+          diff -qr packages/provider-registry/data "$RUNNER_TEMP/zip-check/Cherry Studio.app/Contents/Resources/provider-registry"
+          if [ -f dist/release-history.json ]; then
+            cmp resources/cherry-studio/release-history.json dist/release-history.json
+          else
+            cp resources/cherry-studio/release-history.json dist/release-history.json
+          fi
+
+      - name: Check out the immutable signed downstream catalog
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.catalog-commit }}
+          path: downstream-catalog
+          persist-credentials: false
+
+      - name: Reproduce and verify the signed catalog without publishing it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C downstream-catalog rev-parse HEAD)" = "$CATALOG_COMMIT"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$CATALOG_COMMIT" > "$RUNNER_TEMP/catalog-commit.json"
+          node scripts/release/verify-downstream-catalog.js downstream-catalog "$RUNNER_TEMP/catalog-commit.json"
+
+      - name: Recheck pinned catalog and release gates, then publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -F per_page=100 > "$RUNNER_TEMP/ci.json"
+          DOWNSTREAM_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha') \
+            RELEASES_FILE="$RUNNER_TEMP/releases.json" CI_RUNS_FILE="$RUNNER_TEMP/ci.json" \
+            node scripts/release/validate-downstream-release.js
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/x-files/downstream-provider-registry" --jq '.object.sha')" = "$CATALOG_COMMIT"
+          if [ -n "$(git ls-remote origin "refs/tags/$RELEASE_TAG")" ]; then
+            git fetch origin "refs/tags/$RELEASE_TAG"
+            test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ steps.gate.outputs.resume }}" != true ]; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/downstream-release-notes.md" \
+              "dist/Cherry-Studio-$VERSION-mac-arm64.zip" "dist/Cherry-Studio-$VERSION-mac-arm64.dmg" \
+              dist/latest-mac.yml dist/release-history.json
+          fi
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha')" = "$GITHUB_SHA"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f event=push -F per_page=100 > "$RUNNER_TEMP/ci.json"
+          DOWNSTREAM_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/downstream" --jq '.object.sha') \
+            RELEASES_FILE="$RUNNER_TEMP/releases.json" CI_RUNS_FILE="$RUNNER_TEMP/ci.json" \
+            node scripts/release/validate-downstream-release.js
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/x-files/downstream-provider-registry" --jq '.object.sha')" = "$CATALOG_COMMIT"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$CATALOG_COMMIT" > "$RUNNER_TEMP/catalog-commit.json"
+          jq -e --arg sha "$CATALOG_COMMIT" '
+            def dco:
+              .commit.author.email as $email |
+              .commit.author.name == "metrovoc" and ($email | type == "string" and length > 0) and
+              (.commit.message | rtrimstr("\n") | split("\n\n") | last | split("\n") |
+                index("Signed-off-by: metrovoc <" + $email + ">") != null);
+            .sha == $sha and .author.login == "metrovoc" and .committer.login == "metrovoc"
+              and .commit.verification.verified == true and .commit.verification.reason == "valid" and dco
+          ' "$RUNNER_TEMP/catalog-commit.json"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/downstream-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/downstream-signing.keychain-db"
+          fi
+          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/signing-identities.txt" "$RUNNER_TEMP/downstream-builder.json"

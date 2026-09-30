@@ -185,9 +185,10 @@ rpm:
   # https://github.com/electron/forge/issues/3594
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 publish:
-  provider: generic
-  url: https://releases.cherry-ai.com
-  useMultipleRangeRequest: false
+  provider: github
+  owner: metrovoc
+  repo: cherry-studio
+  releaseType: release
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/packaging/before-pack.js
@@ -197,23 +198,16 @@ artifactBuildCompleted: scripts/packaging/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.6 - Bug Fixes and Provider Updates
+    Cherry Studio 2.1.3 - Fork Updates
 
-    🐛 Bug Fixes
-    - [Search] Fix searches for programming languages with hash symbols (e.g., C#, F#) not matching messages.
-    - [Backup] Fix restore failing on Windows when browser storage is locked by the current session. Restore progress now stays monotonic, failed attempts are reported with retry guidance, and orphaned restore files are cleaned up.
-    - [Errors] Stop misreporting client-refusal errors as "invalid API key" — now shows the correct permission guidance instead of sending users to regenerate working keys.
-    - [Chat] Context-usage token counts now follow the selected interface language and update when it changes.
+    ✨ Improvements
+    - [Updates] Receive stable macOS updates and release notes from the metrovoc fork through the existing in-app update notifications.
+    - [Models] Keep the downstream provider catalog alongside fork releases.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.6 - 问题修复与供应商更新
+    Cherry Studio 2.1.3 - 分支更新
 
-    🐛 问题修复
-    - [搜索] 修复搜索包含井号的编程语言（如 C#、F#）时无法匹配消息的问题。
-    - [备份] 修复 Windows 上浏览器存储被当前会话锁定导致恢复失败的问题。恢复进度现在保持单调，失败的恢复会显示重试指引，孤立的恢复文件会被清理。
-    - [错误] 修复客户端拒绝被错误报告为"API 密钥无效"的问题 — 现在显示正确的权限指引，而不是引导用户重新生成有效的密钥。
-    - [对话] 上下文使用量的 token 计数现在跟随所选界面语言，并在切换语言时更新。
-
-    💡 提示
-    - 腾讯 TI 和混元供应商已随腾讯平台下线而停用。请配置 TokenHub 或其他可用供应商以继续使用；现有本地数据已保留。
+    ✨ 改进
+    - [更新] 通过应用内更新通知接收 metrovoc 分支的 macOS 稳定版更新和发行说明。
+    - [模型] 分支版本继续使用对应的下游服务商目录。
     <!--LANG:END-->
