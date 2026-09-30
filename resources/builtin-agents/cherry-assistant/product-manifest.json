@@ -661,7 +661,7 @@
       },
       {
         "id": "doubao",
-        "name": "Doubao"
+        "name": "doubao"
       },
       {
         "id": "minimax",
@@ -746,10 +746,6 @@
       {
         "id": "cerebras",
         "name": "Cerebras AI"
-      },
-      {
-        "id": "comfyui",
-        "name": "ComfyUI"
       },
       {
         "id": "mimo",
