@@ -73,8 +73,14 @@ function verifyDownstreamSignature(appPath) {
     }).trim(),
     version: require('../../package.json').version
   })
+  verifyMacSignatureIdentity(appPath)
+  run('xcrun', ['stapler', 'validate', appPath], { stdio: 'pipe' })
+  run('spctl', ['--assess', '--type', 'execute', appPath], { stdio: 'pipe' })
+}
+
+function verifyMacSignatureIdentity(appPath) {
   const requirement = REQUIREMENT_TERMS.join(' and ')
-  run('codesign', ['--verify', '--deep', '--strict', '-R', requirement, appPath], { stdio: 'pipe' })
+  run('codesign', ['--verify', '--deep', '--strict', '-R', `=${requirement}`, appPath], { stdio: 'pipe' })
   const result = spawnSync('codesign', ['-d', '-r-', appPath], { encoding: 'utf8' })
   const actual = `${result.stdout}\n${result.stderr}`
     .split('\n')
@@ -98,8 +104,6 @@ function verifyDownstreamSignature(appPath) {
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true })
   }
-  run('xcrun', ['stapler', 'validate', appPath], { stdio: 'pipe' })
-  run('spctl', ['--assess', '--type', 'execute', appPath], { stdio: 'pipe' })
 }
 
 exports.default = async (context) => {
@@ -107,6 +111,7 @@ exports.default = async (context) => {
   verifyDownstreamSignature(path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`))
 }
 exports.verifyDownstreamSignature = verifyDownstreamSignature
+exports.verifyMacSignatureIdentity = verifyMacSignatureIdentity
 exports.validateMacBundleMetadata = validateMacBundleMetadata
 exports.validateDeveloperIdRequirement = validateDeveloperIdRequirement
 exports.SIGNING_CERTIFICATE_SHA1 = SIGNING_CERTIFICATE_SHA1
