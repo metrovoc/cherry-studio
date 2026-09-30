@@ -5,6 +5,8 @@ const os = require('node:os')
 const path = require('node:path')
 const { parse } = require('yaml')
 
+const { sanitizeSigningDiagnostic } = require('./signing-diagnostics')
+
 const SIGNING_CERTIFICATE_SHA1 = 'E1A605A41412F1C3A204AD8E9318EC97F62939B9'
 const SIGNING_TEAM_ID = 'PH4977K248'
 const REQUIREMENT_TERMS = [
@@ -25,15 +27,18 @@ function validateDeveloperIdRequirement(requirement) {
     .map((term) => term.trim().replace(/\s+/g, ' '))
     .sort()
   if (JSON.stringify(terms) !== JSON.stringify([...REQUIREMENT_TERMS].sort())) {
-    throw new Error('Designated requirement must preserve the Developer ID app and team identity')
+    throw new Error(
+      `Designated requirement must preserve the Developer ID app and team identity: ${sanitizeSigningDiagnostic({ message: requirement })}`
+    )
   }
 }
 
 function run(command, args, options) {
   try {
     return execFileSync(command, args, options)
-  } catch {
-    throw new Error(`macOS verification failed: ${command}`)
+  } catch (error) {
+    const status = typeof error.status === 'number' ? error.status : 'unknown'
+    throw new Error(`macOS verification failed: ${command} (exit ${status}): ${sanitizeSigningDiagnostic(error)}`)
   }
 }
 
@@ -87,18 +92,19 @@ function verifyMacSignatureIdentity(appPath) {
     .find((line) => line.startsWith('designated => '))
     ?.slice(14)
     .trim()
-  if (result.status !== 0 || !actual) throw new Error('Unable to inspect designated requirement')
+  if (result.status !== 0 || !actual) {
+    throw new Error(`Unable to inspect designated requirement: ${sanitizeSigningDiagnostic(result)}`)
+  }
   validateDeveloperIdRequirement(actual)
   const details = spawnSync('codesign', ['-d', '--verbose=4', appPath], { encoding: 'utf8' })
   if (details.status !== 0 || !/flags=.*\bruntime\b/.test(`${details.stdout}\n${details.stderr}`)) {
-    throw new Error('Hardened runtime is required')
+    throw new Error(`Hardened runtime is required: ${sanitizeSigningDiagnostic(details)}`)
   }
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'downstream-signature-'))
   try {
-    const prefix = path.join(temporary, 'certificate')
-    run('codesign', ['-d', '--extract-certificates', prefix, appPath], { stdio: 'pipe' })
+    run('codesign', ['-d', '--extract-certificates', path.resolve(appPath)], { cwd: temporary, stdio: 'pipe' })
     const digest = createHash('sha1')
-      .update(fs.readFileSync(`${prefix}0`))
+      .update(fs.readFileSync(path.join(temporary, 'codesign0')))
       .digest('hex')
     if (digest.toUpperCase() !== SIGNING_CERTIFICATE_SHA1) throw new Error('Signing certificate changed')
   } finally {
