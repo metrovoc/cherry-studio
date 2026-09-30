@@ -3,7 +3,6 @@ name: Downstream macOS release
 on:
   push:
     branches: [downstream]
-    paths: [package.json]
   workflow_dispatch:
 
 permissions:
