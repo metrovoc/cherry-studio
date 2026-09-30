@@ -15,6 +15,7 @@ import {
   prepareSigningConfig,
   validateNotarizationCredentials
 } from '../release/prepare-downstream-signing'
+import { sanitizeSigningDiagnostic } from '../release/signing-diagnostics'
 import {
   createDownstreamHistory,
   validateDownstreamArtifacts,
@@ -444,5 +445,80 @@ describe('temporary signing-keychain lifecycle', () => {
       })
     ).toThrow('Temporary signing probe failed before app packaging')
     expect(fs.readdirSync(directory).filter((name) => name.startsWith('signing-probe-'))).toEqual([])
+  })
+})
+
+describe('safe signing diagnostics', () => {
+  it.each([
+    'Developer ID Application',
+    'Developer ID Installer',
+    'Apple Development',
+    'Apple Distribution',
+    'Mac Developer',
+    '3rd Party Mac Developer Application'
+  ])('redacts unexpected %s signer names', (kind) => {
+    const diagnostic = sanitizeSigningDiagnostic(new Error(`Wrong signer: ${kind}: Example Person (OTHERTEAM0)`), {})
+    expect(diagnostic).toContain('[redacted signing identity]')
+    expect(diagnostic).not.toContain('Example Person')
+  })
+  it('keeps useful stderr while removing secrets, certificate names, stdout and command arguments', () => {
+    const secrets = {
+      CSC_LINK: 'base64-export-placeholder',
+      CSC_KEY_PASSWORD: 'p12-password-placeholder',
+      APPLE_ID: 'account@example.com',
+      APPLE_APP_SPECIFIC_PASSWORD: 'notary-password-placeholder',
+      APPLE_TEAM_ID: 'SECRETTEAM',
+      KEYCHAIN_PASSWORD: 'keychain-password-placeholder'
+    }
+    const error = Object.assign(new Error('Command failed: codesign --sign raw-command-value'), {
+      stdout: 'never-log-stdout',
+      stderr: Buffer.from(
+        `Unable to use Developer ID Application: Example Person (SECRETTEAM)\nThe specified item could not be found in the keychain. ${Object.values(secrets).join(' ')}`
+      )
+    })
+    const diagnostic = sanitizeSigningDiagnostic(error, secrets)
+    expect(diagnostic).toContain('The specified item could not be found in the keychain.')
+    for (const value of [...Object.values(secrets), 'Example Person', 'raw-command-value', 'never-log-stdout']) {
+      expect(diagnostic).not.toContain(value)
+    }
+  })
+
+  it('strips execFile command headers and retains safe message-only errors', () => {
+    expect(
+      sanitizeSigningDiagnostic(
+        new Error('Command failed: codesign --sign private-command-arguments\nerror: item not found'),
+        {}
+      )
+    ).toBe('error: item not found')
+    expect(
+      sanitizeSigningDiagnostic(new Error('Command failed: codesign --sign private-command-arguments'), {})
+    ).not.toContain('private-command-arguments')
+    expect(sanitizeSigningDiagnostic(new Error('Signing certificate changed'), {})).toBe('Signing certificate changed')
+  })
+
+  it.each(['compile', 'sign', 'verify'])('reports %s probe failure without leaking raw native errors', (stage) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'signing-diagnostic-'))
+    roots.push(directory)
+    const nativeError = Object.assign(new Error('Command failed: raw-command-arguments'), {
+      stderr: 'native stage diagnostic'
+    })
+    expect(() =>
+      probeSigningKeychain({
+        directory,
+        keychain: '/tmp/test.keychain-db',
+        entitlements: '/tmp/entitlements.plist',
+        execute: (command: string) => {
+          if (
+            (stage === 'compile' && command === '/usr/bin/xcrun') ||
+            (stage === 'sign' && command === '/usr/bin/codesign')
+          )
+            throw nativeError
+        },
+        verifyIdentity: () => {
+          if (stage === 'verify') throw nativeError
+        }
+      })
+    ).toThrow(`Temporary signing probe failed before app packaging (${stage}): native stage diagnostic`)
+    expect(fs.readdirSync(directory)).toEqual([])
   })
 })
