@@ -68,11 +68,11 @@ required.
    `electron-builder.yml`
 2. Publish and pin the matching verified `metrovoc` catalog commit as described
    above
-3. Push the reviewed version-bump commit to `downstream`; a `package.json` change
+3. Push the reviewed version-bump commit or an unpublished release fix to `downstream`; each push
    starts an unprivileged Ubuntu preflight that waits for the complete exact-SHA CI
 4. Verify the signing and notarization job succeeds for that exact commit
 
-Package changes without a newer stable version finish without publishing. CI
+Pushes without a newer stable version finish without publishing. CI
 failure or a moved downstream HEAD stops the release. A matching tag is created
 only after signing and artifact validation; existing conflicting tags are refused.
 

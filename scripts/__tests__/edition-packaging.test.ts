@@ -92,7 +92,7 @@ describe('edition packaging', () => {
     expect(script).toContain(`--${arch}`)
   })
 
-  it('keeps the existing global product and update identity', () => {
+  it('preserves the global product identity while using stable fork updates', () => {
     const config = parse(readFileSync(path.join(projectRoot, 'electron-builder.yml'), 'utf8'))
 
     expect({
@@ -109,7 +109,7 @@ describe('edition packaging', () => {
       nsisGuid: '41a4ccd8-bcc0-5710-9eee-0e164da68057',
       productName: 'Cherry Studio',
       protocol: 'cherrystudio',
-      publish: { provider: 'generic', url: 'https://releases.cherry-ai.com' },
+      publish: { provider: 'github', owner: 'metrovoc', repo: 'cherry-studio', releaseType: 'release' },
       windowsArtifactName: '${productName}-${version}-${arch}-setup.${ext}'
     })
   })
