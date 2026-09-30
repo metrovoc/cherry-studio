@@ -1,6 +1,7 @@
 const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const { sanitizeSigningDiagnostic } = require('./signing-diagnostics')
 
 const {
   SIGNING_CERTIFICATE_SHA1,
@@ -111,11 +112,13 @@ function probeSigningKeychain({
 }) {
   const temporary = fs.mkdtempSync(path.join(directory, 'signing-probe-'))
   const binary = path.join(temporary, 'probe')
+  let stage = 'compile'
   try {
     execute('/usr/bin/xcrun', ['clang', '-x', 'c', '-', '-arch', 'arm64', '-mmacosx-version-min=13.0', '-o', binary], {
       input: 'int main(void) { return 0; }\n',
       stdio: 'pipe'
     })
+    stage = 'sign'
     execute(
       '/usr/bin/codesign',
       [
@@ -135,9 +138,12 @@ function probeSigningKeychain({
       ],
       { stdio: 'pipe' }
     )
+    stage = 'verify'
     verifyIdentity(binary)
-  } catch {
-    throw new Error('Temporary signing probe failed before app packaging')
+  } catch (error) {
+    throw new Error(
+      `Temporary signing probe failed before app packaging (${stage}): ${sanitizeSigningDiagnostic(error)}`
+    )
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true })
   }
