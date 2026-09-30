@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 
 import {
+  cleanupSigningKeychain,
   decodeCertificateExport,
+  parseKeychainSearchList,
+  probeSigningKeychain,
+  registerSigningKeychain,
   prepareSigningConfig,
   validateNotarizationCredentials
 } from '../release/prepare-downstream-signing'
@@ -307,5 +311,138 @@ describe('Developer ID designated requirement', () => {
     `${terms.join(' and ')} or anchor trusted`
   ])('rejects broadened or different trust requirements', (requirement) => {
     expect(() => validateDeveloperIdRequirement(requirement)).toThrow()
+  })
+})
+
+describe('temporary signing-keychain lifecycle', () => {
+  function fixture() {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'signing-keychain-'))
+    roots.push(directory)
+    const keychain = path.join(directory, 'temporary signing.keychain-db')
+    const backupPath = path.join(directory, 'keychains.json')
+    fs.writeFileSync(keychain, 'temporary keychain fixture')
+    return { directory, keychain, backupPath }
+  }
+
+  it('parses quoted keychain paths without whitespace splitting or shell evaluation', () => {
+    expect(
+      parseKeychainSearchList('    "/Library/Keychains/System.keychain"\n    "/tmp/Name With Spaces.keychain-db"\n')
+    ).toEqual(['/Library/Keychains/System.keychain', '/tmp/Name With Spaces.keychain-db'])
+    expect(() => parseKeychainSearchList('unquoted value')).toThrow()
+    expect(() => parseKeychainSearchList('"relative/path"')).toThrow()
+  })
+
+  it('adds the signing keychain without hiding existing keychains, then restores the exact list', () => {
+    const { keychain, backupPath } = fixture()
+    const original = ['/tmp/Login With Spaces.keychain-db', '/Library/Keychains/System.keychain']
+    const commands: string[][] = []
+    const execute = (_command: string, args: string[]) => {
+      commands.push(args)
+      return original.map((entry) => JSON.stringify(entry)).join('\n')
+    }
+    registerSigningKeychain({ keychain, backupPath, execute })
+    expect(commands[1]).toEqual(['list-keychains', '-d', 'user', '-s', keychain, ...original])
+    expect(JSON.parse(fs.readFileSync(backupPath, 'utf8'))).toEqual(original)
+    cleanupSigningKeychain({ keychain, backupPath, execute })
+    expect(commands[2]).toEqual(['list-keychains', '-d', 'user', '-s', ...original])
+    expect(commands[3]).toEqual(['delete-keychain', keychain])
+    expect(fs.existsSync(keychain)).toBe(false)
+    expect(fs.existsSync(backupPath)).toBe(false)
+  })
+
+  it('keeps a recoverable original list if installing the new list fails', () => {
+    const { keychain, backupPath } = fixture()
+    expect(() =>
+      registerSigningKeychain({
+        keychain,
+        backupPath,
+        execute: (_command: string, args: string[]) => {
+          if (args.includes('-s')) throw new Error('cannot set list')
+          return '"/tmp/original.keychain-db"'
+        }
+      })
+    ).toThrow()
+    expect(JSON.parse(fs.readFileSync(backupPath, 'utf8'))).toEqual(['/tmp/original.keychain-db'])
+  })
+
+  it.each(['restore', 'delete'])('removes private temporary files even when %s fails', (failure) => {
+    const { keychain, backupPath, directory } = fixture()
+    const exported = path.join(directory, 'signing.p12')
+    fs.writeFileSync(exported, 'export fixture')
+    fs.writeFileSync(backupPath, JSON.stringify(['/tmp/original.keychain-db']))
+    const commands: string[][] = []
+    expect(() =>
+      cleanupSigningKeychain({
+        keychain,
+        backupPath,
+        files: [exported],
+        execute: (_command: string, args: string[]) => {
+          commands.push(args)
+          if (
+            (failure === 'restore' && args[0] === 'list-keychains') ||
+            (failure === 'delete' && args[0] === 'delete-keychain')
+          )
+            throw new Error('cleanup failed')
+        }
+      })
+    ).toThrow('Signing cleanup failed')
+    expect(commands).toContainEqual(['delete-keychain', keychain])
+    expect([keychain, backupPath, exported].some((file) => fs.existsSync(file))).toBe(false)
+  })
+
+  it('compiles and signs an isolated arm64 probe with the exact production identity before verification', () => {
+    const { directory, keychain } = fixture()
+    const commands: Array<{ command: string; args: string[] }> = []
+    let verified = ''
+    probeSigningKeychain({
+      directory,
+      keychain,
+      entitlements: '/workspace/build/entitlements.mac.plist',
+      execute: (command: string, args: string[]) => {
+        commands.push({ command, args })
+      },
+      verifyIdentity: (binary: string) => {
+        verified = binary
+      }
+    })
+    expect(commands[0].command).toBe('/usr/bin/xcrun')
+    expect(commands[0].args.slice(0, 5)).toEqual(['clang', '-x', 'c', '-', '-arch'])
+    expect(commands[1]).toEqual({
+      command: '/usr/bin/codesign',
+      args: [
+        '--sign',
+        SIGNING_CERTIFICATE_SHA1,
+        '--force',
+        '--keychain',
+        keychain,
+        '--timestamp',
+        '--options',
+        'runtime',
+        '--identifier',
+        'com.kangfenmao.CherryStudio',
+        '--entitlements',
+        '/workspace/build/entitlements.mac.plist',
+        verified
+      ]
+    })
+    expect(fs.existsSync(path.dirname(verified))).toBe(false)
+  })
+
+  it.each(['signing', 'verification'])('removes the probe and fails closed after %s failure', (failure) => {
+    const { directory, keychain } = fixture()
+    expect(() =>
+      probeSigningKeychain({
+        directory,
+        keychain,
+        entitlements: '/workspace/entitlements.plist',
+        execute: (command: string) => {
+          if (failure === 'signing' && command === '/usr/bin/codesign') throw new Error('private native error')
+        },
+        verifyIdentity: () => {
+          if (failure === 'verification') throw new Error('identity mismatch')
+        }
+      })
+    ).toThrow('Temporary signing probe failed before app packaging')
+    expect(fs.readdirSync(directory).filter((name) => name.startsWith('signing-probe-'))).toEqual([])
   })
 })

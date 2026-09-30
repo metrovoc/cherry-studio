@@ -169,7 +169,8 @@ jobs:
       - name: Build application
         if: steps.gate.outputs.resume != 'true'
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
+          NODE_OPTIONS: --max-old-space-size=6144
+          CONCURRENTLY_MAX_PROCESSES: "1"
         run: |
           brew install python-setuptools
           pnpm run build
@@ -195,11 +196,13 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          node scripts/release/prepare-downstream-signing.js register-keychain
           security import "$RUNNER_TEMP/signing.p12" -k "$KEYCHAIN" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security > /dev/null
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           security find-identity -v -p codesigning "$KEYCHAIN" > "$RUNNER_TEMP/signing-identities.txt"
           echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
           node scripts/release/prepare-downstream-signing.js config
+          node scripts/release/prepare-downstream-signing.js probe
           rm "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/signing-identities.txt"
 
       - name: Download the complete existing draft without replacing its assets
@@ -299,8 +302,4 @@ jobs:
 
       - name: Remove signing material
         if: always()
-        run: |
-          if [ -f "$RUNNER_TEMP/downstream-signing.keychain-db" ]; then
-            security delete-keychain "$RUNNER_TEMP/downstream-signing.keychain-db"
-          fi
-          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/signing-identities.txt" "$RUNNER_TEMP/downstream-builder.json"
+        run: node scripts/release/prepare-downstream-signing.js cleanup
