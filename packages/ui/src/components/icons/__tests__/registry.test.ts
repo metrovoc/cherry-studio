@@ -86,6 +86,8 @@ describe('resolveModelIconRef — pattern boundaries (#10, #11, #12)', () => {
 describe('resolveModelIconRef — dedicated model marks', () => {
   const gptCases = [
     ['openai/gpt-6-astra', 'gpt-6-astra'],
+    ['openai/gpt-6.1-sol', 'gpt-5-6-sol'],
+    ['gpt-6-1-sol', 'gpt-5-6-sol'],
     ['openai/gpt-5.6-luna-pro', 'gpt-5-6-luna'],
     ['gpt-5.5-pro', 'gpt-5-5-pro'],
     ['gpt-5.4-mini', 'gpt-5-4-mini'],

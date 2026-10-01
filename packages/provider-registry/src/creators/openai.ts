@@ -51,7 +51,8 @@ export default defineCreator({
     { pattern: '^(?!.*o3-mini).*o3' },
     { pattern: 'gpt-oss' },
     { pattern: '^(?!.*chat).*gpt-5' },
-    { pattern: '^gpt-realtime-2' }
+    { pattern: '^gpt-realtime-2' },
+    { pattern: '^gpt-daybreak-(?:blue|red)-latest$' }
   ],
   // `text-embedding-3` / `-ada` only — bare `text-embedding` over-claims Google's `text-embedding-00x`
   // (gecko, served by google-vertex), mis-attributing them to OpenAI.

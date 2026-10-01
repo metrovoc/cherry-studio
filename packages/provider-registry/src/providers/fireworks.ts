@@ -49,9 +49,20 @@ const reasoningContracts = (support: ReasoningSupport): ProviderModelOverride['r
 
 const override = (modelId: string, support: ReasoningSupport): Partial<ProviderModelOverride> => ({
   modelId,
+  ...(wireModelIds[modelId] ? { apiModelId: wireModelIds[modelId] } : {}),
   endpointTypes: [...FIREWORKS_ENDPOINTS],
   reasoningContracts: reasoningContracts(support)
 })
+
+const wireModelIds: Record<string, string> = {
+  'deepseek-v4-flash': 'accounts/fireworks/models/deepseek-v4-flash-0731',
+  'deepseek-v4-pro': 'accounts/fireworks/models/deepseek-v4-pro-0813',
+  'glm-5-2': 'accounts/fireworks/models/glm-5p2',
+  'glm-5-2-fast': 'accounts/fireworks/routers/glm-5p2-fast',
+  'kimi-k2-6': 'accounts/fireworks/models/kimi-k2p6',
+  'kimi-k2-7-code': 'accounts/fireworks/models/kimi-k2p7-code',
+  'qwen3-7-plus': 'accounts/fireworks/models/qwen3p7-plus'
+}
 
 const toggleModels = ['kimi-k2-6', 'kimi-k2-7-code']
 

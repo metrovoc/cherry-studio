@@ -21,5 +21,6 @@ longer a wire break and must not bump the version. What still breaks a vN client
 a renamed or retyped field, a removed required field.
 
 A new runtime wire behavior that requires a higher `REGISTRY_MIN_APP_VERSION` also gets a new schema
-stream and baseline, even if the JSON still parses. Older streams retain their published minimum
-versions and continue receiving compatible updates; raising the floor in place would cut them off.
+stream and baseline, even if the JSON still parses. Older streams with a different runtime minimum retain their entire published snapshot unchanged.
+Schema parsing cannot prove that open-ended adapter or wire strings are executable by an older app.
+Only existing streams with the same runtime minimum receive schema-downconverted updates.

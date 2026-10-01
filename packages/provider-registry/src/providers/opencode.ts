@@ -65,11 +65,7 @@ const chatEffortModels: Array<{
   },
   { modelId: 'hy3', values: ['none', 'low', 'high'] },
   { modelId: 'kimi-k3', values: ['max'] },
-  // Stealth model, no creator entry: models.dev routes it through `@ai-sdk/openai-compatible`
-  // and prints an effort ladder, so pin chat/completions rather than let it fall back unpinned.
-  { modelId: 'ox-alpha', values: ['low', 'high', 'max'] },
-  // Same shape as ox-alpha: unclassified stealth SKU, chat/completions with a printed ladder.
-  { modelId: 'omen-alpha', values: ['low', 'high'] }
+  { modelId: 'space-bunny', values: ['low', 'medium', 'high', 'xhigh', 'max'] }
 ]
 
 const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7']
@@ -100,6 +96,7 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
     }
   })),
   { modelId: 'longcat-2-0', endpointTypes: ['openai-chat-completions'] },
+  { modelId: 'longcat-2-5-preview', endpointTypes: ['openai-chat-completions'] },
   // models.dev routes Zen Go's Grok 4.5 through `@ai-sdk/openai` (Responses); the Go endpoint table
   // still prints chat/completions, so Chat stays selectable behind the Responses default (#17860).
   {
@@ -122,6 +119,13 @@ const endpointOverrides: Partial<ProviderModelOverride>[] = [
     endpointTypes: ['openai-responses'],
     reasoningContracts: {
       'openai-responses': { support: effortSupport(['low', 'medium', 'high', 'xhigh']) }
+    }
+  },
+  {
+    modelId: 'gpt-6-luna',
+    endpointTypes: ['openai-responses'],
+    reasoningContracts: {
+      'openai-responses': { support: effortSupport(['none', 'low', 'medium', 'high', 'xhigh', 'max']) }
     }
   },
   {

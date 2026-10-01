@@ -1,6 +1,6 @@
 {
   "name": "CherryStudio",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "private": true,
   "description": "A powerful AI assistant for producer.",
   "homepage": "https://github.com/CherryHQ/cherry-studio",
@@ -116,8 +116,8 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.284",
-    "@cherrystudio/macos-panel": "workspace:*",
     "@cherrystudio/dsh-bridge": "workspace:*",
+    "@cherrystudio/macos-panel": "workspace:*",
     "@cherrystudio/remote-protocol": "workspace:*",
     "@cherrystudio/remote-transport": "workspace:*",
     "@deepseek-ai/dsh-sdk-client": "0.2.0-rc.2",

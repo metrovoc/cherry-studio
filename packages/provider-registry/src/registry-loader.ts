@@ -42,7 +42,7 @@ export { ProviderModelListSchema } from './schemas/provider-models'
  * keys). Structural changes (field rename / retype / required-field removal)
  * still bump. New runtime wire behavior also gets a new stream when it requires
  * raising {@link REGISTRY_MIN_APP_VERSION}, so older streams keep their existing
- * version floor and continue receiving compatible catalog updates.
+ * version floor and snapshot until runtime compatibility can be established.
  */
 export const REGISTRY_SCHEMA_VERSION = 3
 
@@ -51,7 +51,7 @@ export const REGISTRY_SCHEMA_VERSION = 3
  * the current remote catalog. Bump when data starts using a new adapter family,
  * endpoint type, wire behavior, or other value that older runtime code cannot execute.
  */
-export const REGISTRY_MIN_APP_VERSION = '2.1.4'
+export const REGISTRY_MIN_APP_VERSION = '2.1.5'
 
 /**
  * The three JSON data files this package emits (`packages/provider-registry/data/`).

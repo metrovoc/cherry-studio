@@ -71,6 +71,7 @@ describe('inferReasoningMembership', () => {
     'claude-3-5-sonnet',
     'hunyuan-lite',
     'gpt-4o',
+    'kimi-k2',
     // Xunfei MaaS non-reasoning ids: pre-v3 deepseek, glm below 4.5, embedding/rerank.
     'xopdeepseekv2pro',
     'xopglmv42',
@@ -83,6 +84,15 @@ describe('inferReasoningMembership', () => {
     expect(inferReasoningMembership('deepseek/deepseek-r1:free')).toBe(true)
     expect(inferReasoningMembership('accounts/fireworks/models/deepseek-r1')).toBe(true)
     expect(inferReasoningMembership('qwen/qwen3-32b(free)')).toBe(true)
+  })
+
+  it('keeps original Kimi K2 Instruct non-thinking despite gateway metadata', () => {
+    const dataDir = join(fileURLToPath(import.meta.url), '..', '..', '..', 'data')
+    const models = JSON.parse(readFileSync(join(dataDir, 'models.json'), 'utf8')).models
+    const model = models.find((entry: { id: string }) => entry.id === 'kimi-k2')
+    expect(model).toBeDefined()
+    expect(model.reasoning).toBeUndefined()
+    expect(model.capabilities).not.toContain('reasoning')
   })
 
   it('claims every catalog model that ships reasoning controls', () => {
