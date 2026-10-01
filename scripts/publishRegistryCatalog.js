@@ -2,8 +2,8 @@
  * Stage the catalog into every published schema-version dir of the
  * `x-files/provider-registry` branch, one manifest each.
  *
- * The current version gets the catalog verbatim. An older version gets it
- * down-converted: its own frozen `compat/vN-validator.mjs` is the oracle, and
+ * The current version gets the catalog verbatim. An existing older version with
+ * the same runtime floor gets it down-converted: its own frozen `compat/vN-validator.mjs` is the oracle, and
  * whatever it cannot represent is dropped — the same degradation a v2+ client
  * applies at read time (`schemas/forwardCompat.ts`), moved to publish time for
  * clients too old to do it themselves. A version whose break cannot be dropped
@@ -87,6 +87,12 @@ async function publishRegistryCatalog({
   const published = []
 
   for (const version of listSchemaVersions(compatDirectory, currentVersion)) {
+    const destination = path.join(destinationDirectory, `v${version}`)
+    const manifestPath = path.join(destination, 'manifest.json')
+    // Schema validation cannot detect new adapter or wire semantics accepted as strings.
+    // Preserve older streams unless their published runtime floor matches this catalog.
+    if (version < currentVersion && readPublishedMinAppVersion(manifestPath) !== minAppVersion) continue
+
     const { validateCatalogFile } = await import(
       pathToFileURL(path.join(compatDirectory, `v${version}-validator.mjs`)).href
     )
@@ -108,13 +114,8 @@ async function publishRegistryCatalog({
     }
     if (Object.keys(contents).length !== CATALOG_FILES.length) continue
 
-    const destination = path.join(destinationDirectory, `v${version}`)
-    const manifestPath = path.join(destination, 'manifest.json')
-    // An older dir keeps the semantic floor it was published with; only the
-    // current version tracks REGISTRY_MIN_APP_VERSION.
-    const floor = (version === currentVersion ? null : readPublishedMinAppVersion(manifestPath)) ?? minAppVersion
     const manifest = {
-      minAppVersion: floor,
+      minAppVersion,
       sourceAppVersion,
       revision,
       schemaVersion: version,

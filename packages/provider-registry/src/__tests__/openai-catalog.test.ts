@@ -116,7 +116,7 @@ describe('OpenAI catalog', () => {
   })
 
   it.each([
-    ['gpt-6-sol', ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']],
+    ['gpt-6-sol', ['low', 'medium', 'high', 'xhigh', 'max']],
     ['gpt-6-luna', ['low', 'medium', 'high', 'xhigh', 'max']]
   ] as const)('offers %s on Codex with subscription-specific limits and reasoning', (id, values) => {
     expect(loader.findOverride('openai-codex', id)).toMatchObject({
