@@ -16,7 +16,7 @@ import * as z from 'zod'
  * keys). Structural changes (field rename / retype / required-field removal)
  * still bump. New runtime wire behavior also gets a new stream when it requires
  * raising {@link REGISTRY_MIN_APP_VERSION}, so older streams keep their existing
- * version floor and continue receiving compatible catalog updates.
+ * version floor and snapshot until runtime compatibility can be established.
  */
 export const REGISTRY_SCHEMA_VERSION = 4
 

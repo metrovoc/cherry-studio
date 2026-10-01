@@ -104,6 +104,7 @@ const endpointOverrides: ProviderModelTemplate[] = [
     }
   })),
   { modelId: 'longcat-2-0', endpointTypes: ['openai-chat-completions'] },
+  { modelId: 'longcat-2-5-preview', endpointTypes: ['openai-chat-completions'] },
   // models.dev routes Zen Go's Grok 4.5 through `@ai-sdk/openai` (Responses); the Go endpoint table
   // still prints chat/completions, so Chat stays selectable behind the Responses default (#17860).
   {
@@ -126,6 +127,13 @@ const endpointOverrides: ProviderModelTemplate[] = [
     endpointTypes: ['openai-responses'],
     reasoningContracts: {
       'openai-responses': { support: effortSupport(['low', 'medium', 'high', 'xhigh']) }
+    }
+  },
+  {
+    modelId: 'gpt-6-luna',
+    endpointTypes: ['openai-responses'],
+    reasoningContracts: {
+      'openai-responses': { support: effortSupport(['none', 'low', 'medium', 'high', 'xhigh', 'max']) }
     }
   },
   {

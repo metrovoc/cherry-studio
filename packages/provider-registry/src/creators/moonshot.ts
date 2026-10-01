@@ -44,6 +44,8 @@ export default defineCreator({
   })),
   reasoningFamilies: [
     { pattern: '^kimi-k3[.-]1-pro(?:-highspeed)?$', effort: K31_EFFORTS, toggle: false },
+    // The original K2 Instruct is non-thinking; K2 Thinking is a separate model.
+    { pattern: '^kimi-k2$', toggle: false, template: true },
     // K2.7-code only accepts thinking type 'enabled' (platform.kimi.com
     // claude-code guide: requests without it are rejected) — always-on, the
     // explicit `toggle: false` stops the generic toggle below.

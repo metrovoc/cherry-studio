@@ -121,13 +121,15 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   },
   { pattern: 'claude-3-7-sonnet|claude-3\\.7-sonnet' },
   { pattern: 'claude-(?:sonnet|opus|haiku)-4' },
+  // arceeai
+  { pattern: '^trinity-large$' },
   // baichuan
   { pattern: 'baichuan-m2$', budget: { min: 0, max: 30000 }, template: true },
   { pattern: 'baichuan-m3$', budget: { min: 0, max: 30000 }, template: true },
   { pattern: '^baichuan-m[23]$' },
   // bailing
   { pattern: 'ring-(?:1t|mini|flash)' },
-  { pattern: '^ling-3[.-]0-flash' },
+  { pattern: '^ling-3[.-][01]-flash' },
   { pattern: '^inkling' },
   // bytedance
   {
@@ -252,6 +254,7 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   { pattern: 'gpt-oss' },
   { pattern: '^(?!.*chat).*gpt-5' },
   { pattern: '^gpt-realtime-2' },
+  { pattern: '^gpt-daybreak-(?:blue|red)-latest$' },
   // perplexity
   { pattern: '^sonar-reasoning|^sonar-deep-research', effort: ['low', 'medium', 'high'] },
   { pattern: 'sonar-deep-research' },
@@ -272,6 +275,7 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   { pattern: '^arrow-2(?:-telos)?$' },
   { pattern: '^muse-spark' },
   { pattern: '^interfaze' },
+  { pattern: '^(?:ember-1|fugu-ultra|namazu|pixel-canary)$' },
   { pattern: '^laguna-s' },
   { pattern: '^fugu-(?:max|ultra-v2)', effort: ['high', 'xhigh', 'max'] },
   // xai

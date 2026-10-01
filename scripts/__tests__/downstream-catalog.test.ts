@@ -124,13 +124,28 @@ async function catalogFixture() {
   const catalogDirectory = path.join(root, 'catalog')
   fs.cpSync(path.resolve(__dirname, '../../packages/provider-registry/data'), sourceDirectory, { recursive: true })
   fs.mkdirSync(catalogDirectory)
+  const oldDirectory = path.join(catalogDirectory, 'v2')
+  fs.mkdirSync(oldDirectory)
+  for (const file of ['models.json', 'providers.json', 'provider-models.json']) {
+    fs.writeFileSync(
+      path.join(oldDirectory, file),
+      JSON.stringify({
+        version: 'preserved',
+        [file === 'provider-models.json' ? 'overrides' : file.replace('.json', '')]: []
+      })
+    )
+  }
+  fs.writeFileSync(
+    path.join(oldDirectory, 'manifest.json'),
+    JSON.stringify({ schemaVersion: 2, minAppVersion: '2.1.2', sourceAppVersion: '2.1.4', revision: 35, files: {} })
+  )
   const options = {
     catalogDirectory,
     sourceDirectory,
     compatDirectory: path.resolve(__dirname, '../../packages/provider-registry/compat'),
-    currentVersion: 2,
-    minAppVersion: '2.1.2',
-    version: '2.1.3'
+    currentVersion: 3,
+    minAppVersion: '2.1.5',
+    version: '2.1.5'
   }
   await publishRegistryCatalog({
     ...options,
@@ -142,16 +157,24 @@ async function catalogFixture() {
 }
 
 function editManifest(directory: string, changes: object) {
-  const file = path.join(directory, 'v2/manifest.json')
+  const file = path.join(directory, 'v3/manifest.json')
   fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), ...changes }))
 }
 
 describe('catalog release correspondence', () => {
   it('accepts a byte-exact publication, including older-schema projections, without editing it', async () => {
     const options = await catalogFixture()
-    const manifest = fs.readFileSync(path.join(options.catalogDirectory, 'v2/manifest.json'))
+    const manifest = fs.readFileSync(path.join(options.catalogDirectory, 'v3/manifest.json'))
+    const previous = fs
+      .readdirSync(path.join(options.catalogDirectory, 'v2'))
+      .map((file) => fs.readFileSync(path.join(options.catalogDirectory, 'v2', file), 'utf8'))
     await expect(verifyCatalogContents(options)).resolves.toBeUndefined()
-    expect(fs.readFileSync(path.join(options.catalogDirectory, 'v2/manifest.json'))).toEqual(manifest)
+    expect(
+      fs
+        .readdirSync(path.join(options.catalogDirectory, 'v2'))
+        .map((file) => fs.readFileSync(path.join(options.catalogDirectory, 'v2', file), 'utf8'))
+    ).toEqual(previous)
+    expect(fs.readFileSync(path.join(options.catalogDirectory, 'v3/manifest.json'))).toEqual(manifest)
   })
 
   it.each([
@@ -168,7 +191,8 @@ describe('catalog release correspondence', () => {
     await expect(verifyCatalogContents(options)).rejects.toThrow()
   })
 
-  it.each(['v1', 'v2'])('rejects differing published bytes in %s', async (schema) => {
+  it('rejects differing published bytes in the current stream', async () => {
+    const schema = 'v3'
     const options = await catalogFixture()
     fs.appendFileSync(path.join(options.catalogDirectory, schema, 'models.json'), '\n')
     await expect(verifyCatalogContents(options)).rejects.toThrow('differs')
@@ -182,13 +206,13 @@ describe('catalog release correspondence', () => {
 
   it('rejects missing published files', async () => {
     const options = await catalogFixture()
-    fs.rmSync(path.join(options.catalogDirectory, 'v2/providers.json'))
+    fs.rmSync(path.join(options.catalogDirectory, 'v3/providers.json'))
     await expect(verifyCatalogContents(options)).rejects.toThrow('differs')
   })
 
   it('rejects symlinks rather than copying or following them', async () => {
     const options = await catalogFixture()
-    const file = path.join(options.catalogDirectory, 'v2/models.json')
+    const file = path.join(options.catalogDirectory, 'v3/models.json')
     fs.rmSync(file)
     fs.symlinkSync(path.join(options.sourceDirectory, 'models.json'), file)
     await expect(verifyCatalogContents(options)).rejects.toThrow('regular files')
@@ -196,7 +220,7 @@ describe('catalog release correspondence', () => {
 
   it('rejects unexpected schema files', async () => {
     const options = await catalogFixture()
-    fs.writeFileSync(path.join(options.catalogDirectory, 'v2/extra.json'), '{}')
+    fs.writeFileSync(path.join(options.catalogDirectory, 'v3/extra.json'), '{}')
     await expect(verifyCatalogContents(options)).rejects.toThrow('Unexpected')
   })
 })
