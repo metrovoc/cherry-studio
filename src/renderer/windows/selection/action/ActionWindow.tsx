@@ -48,6 +48,7 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   const [actionWindowOpacity] = usePreference('feature.selection.action_window_opacity')
 
   const [isPinned, setIsPinned] = useState(isAutoPin)
+  const previousAutoPin = useRef(isAutoPin)
   const [isWindowFocus, setIsWindowFocus] = useState(true)
 
   const [showOpacitySlider, setShowOpacitySlider] = useState(false)
@@ -87,7 +88,6 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   // would leak stale pin/opacity/slider/scroll state across same-type reuses.
   useEffect(() => {
     setIsPinned(isAutoPin)
-    void ipcApi.request('selection.pin_action_window', isAutoPin)
     setOpacity(actionWindowOpacity)
     setShowOpacitySlider(false)
     isAutoScrollEnabled.current = true
@@ -99,12 +99,10 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   }, [action])
 
   useEffect(() => {
-    if (isAutoPin) {
-      void ipcApi.request('selection.pin_action_window', true)
-      setIsPinned(true)
-    } else {
-      void ipcApi.request('selection.pin_action_window', false)
-      setIsPinned(false)
+    if (previousAutoPin.current !== isAutoPin) {
+      previousAutoPin.current = isAutoPin
+      void ipcApi.request('selection.pin_action_window', isAutoPin)
+      setIsPinned(isAutoPin)
     }
   }, [isAutoPin])
 

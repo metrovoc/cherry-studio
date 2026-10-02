@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 
+import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
 import type { BrowserWindow, Rectangle } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -290,7 +291,8 @@ describe('SelectionService remembered action size', () => {
       },
       show: () => {
         visible = true
-      }
+      },
+      showInactive: () => {}
     })
 
     await svc._doInit()
@@ -306,4 +308,54 @@ describe('SelectionService remembered action size', () => {
     expect(visible).toBe(true)
     expect(bounds).toMatchObject({ width: 640, height: 480 })
   })
+})
+
+describe('SelectionService action presentation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    MockMainPreferenceServiceUtils.resetMocks()
+    vi.mocked(application.get('PreferenceService').get).mockImplementation((key) =>
+      MockMainPreferenceServiceUtils.getPreferenceValue(key)
+    )
+    BaseService.resetInstances()
+  })
+
+  afterEach(() => {
+    BaseService.resetInstances()
+    vi.restoreAllMocks()
+  })
+
+  it.each([false, true])(
+    'initializes a reused panel with auto-pin %s before showing above the source app',
+    (autoPin) => {
+      const svc = new SelectionService()
+      const wm = application.get('WindowManager')
+      let pinned = !autoPin
+      let visible = false
+      let aboveSource = false
+      const panel = {
+        setPosition: () => {},
+        setBounds: () => {},
+        show: () => {
+          expect(pinned).toBe(autoPin)
+          visible = true
+        },
+        showInactive: () => {
+          expect(visible).toBe(true)
+          aboveSource = true
+        }
+      }
+      MockMainPreferenceServiceUtils.setPreferenceValue('feature.selection.auto_pin', autoPin)
+      vi.spyOn(wm, 'open').mockReturnValue('selection-action')
+      vi.spyOn(wm, 'getWindow').mockReturnValue(panel as unknown as BrowserWindow)
+      vi.spyOn(wm.behavior, 'setAlwaysOnTop').mockImplementation((_id, value) => {
+        pinned = value
+      })
+
+      svc.processAction({ id: 'translate', name: 'Translate', enabled: true, isBuiltIn: true, selectedText: 'Hello' })
+
+      expect(visible && aboveSource).toBe(true)
+      expect(pinned).toBe(autoPin)
+    }
+  )
 })

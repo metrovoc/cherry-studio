@@ -190,7 +190,8 @@ export class QuickAssistantService extends BaseService implements Activatable {
       }
     }
     const dispose = () => {
-      disposeOutsideClicks?.()
+      outsideClicks?.dispose()
+      companionListeners.forEach((listener) => listener.dispose())
       this.disposeWindowListeners = null
       if (window.isDestroyed()) return
       window.removeListener('blur', onBlur)
@@ -206,11 +207,30 @@ export class QuickAssistantService extends BaseService implements Activatable {
     window.on('show', onShow)
     window.once('closed', onClosed)
 
-    const disposeOutsideClicks = isMac
+    const outsideClicks = isMac
       ? watchOutsideClicks(window.getNativeWindowHandle(), () => {
           if (!this.isPinnedQuickAssistant) this.hideQuickAssistant()
         })
       : undefined
+
+    const wm = application.get('WindowManager')
+    const companionTypes = [WindowType.SelectionToolbar, WindowType.SelectionAction]
+    const updateCompanions = () =>
+      outsideClicks?.setCompanions(
+        companionTypes.flatMap((type) =>
+          wm
+            .getWindowsByType(type)
+            .filter((companion) => !companion.isDestroyed())
+            .map((companion) => companion.getNativeWindowHandle())
+        )
+      )
+    const companionListeners = outsideClicks
+      ? companionTypes.flatMap((type) => [
+          wm.onWindowCreatedByType(type, updateCompanions),
+          wm.onWindowDestroyedByType(type, updateCompanions)
+        ])
+      : []
+    if (outsideClicks) updateCompanions()
 
     this.disposeWindowListeners = dispose
   }

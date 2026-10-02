@@ -41,6 +41,7 @@ const mockMainWindowService = {
  * Tests can assert on these spies directly.
  */
 const mockWindowManager = {
+  behavior: { setAlwaysOnTop: vi.fn() },
   broadcast: vi.fn(),
   broadcastToType: vi.fn(),
   getWindow: vi.fn(() => undefined),

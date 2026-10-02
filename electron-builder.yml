@@ -199,32 +199,16 @@ artifactBuildCompleted: scripts/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.5 - Upstream Updates and GPT-6.1 Sol
-
-    ✨ New Features
-    - [Models] Use GPT-6.1 Sol with OpenAI and OpenAI Codex, including supported reasoning levels, fast mode, and built-in web search.
-    - [Models] Add the latest upstream Claude and MiniMax models and local ComfyUI image workflows.
-    - [Messages] Export selected messages and open referenced Agent conversations directly.
-    - [Device connections] Receive upstream LAN and VPN pairing improvements with IPv4/IPv6 support.
+    Cherry Studio 2.1.6 - Assistant Window Fixes
 
     🐛 Bug Fixes
-    - [Chat] Improve model selection on retry, tool panels, reasoning extraction, and conversation recovery.
-    - [Files] Improve PDF previews, translations, skill installation, and file handling.
-    - [Assistants] Preserve downstream Quick Assistant history, selection tools, scrolling, and macOS panel behavior alongside upstream fixes.
-    - [Updates] Continue receiving signed, notarized macOS releases and compatible model catalogs from the fork.
+    - [Quick Assistant] Keep the panel open when clicking Selection Assistant tools and results.
+    - [Selection Assistant] Show results above the source app while preserving pin preferences and keyboard focus.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.5 - 上游更新与 GPT-6.1 Sol
-
-    ✨ 新功能
-    - [模型] OpenAI 和 OpenAI Codex 支持 GPT-6.1 Sol，提供受支持的推理强度、快速模式和内置网页搜索。
-    - [模型] 同步上游最新 Claude、MiniMax 模型及本地 ComfyUI 图像工作流。
-    - [消息] 支持导出选中的消息并直接打开引用的智能体对话。
-    - [设备连接] 同步局域网与 VPN 配对改进，支持 IPv4/IPv6。
+    Cherry Studio 2.1.6 - 助手窗口修复
 
     🐛 问题修复
-    - [对话] 改进重试时的模型选择、工具面板、推理提取和对话恢复。
-    - [文件] 改进 PDF 预览、翻译、技能安装和文件处理。
-    - [助手] 同步上游修复，同时保留下游快捷助手历史、划词工具、滚动和 macOS 面板行为。
-    - [更新] 继续通过分支接收已签名、公证的 macOS 版本及兼容的模型目录。
+    - [快捷助手] 点击划词助手工具栏和结果窗口时，快捷助手保持打开。
+    - [划词助手] 结果窗口显示在来源应用上方，同时保留置顶设置和键盘焦点。
     <!--LANG:END-->

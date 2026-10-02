@@ -77,9 +77,22 @@ int main() {
       Check(clicks == 1, "Clicking another app window did not dismiss");
       monitor.Handle(nil);
       Check(clicks == 2, "Clicking another process did not dismiss");
+      NSHashTable<NSWindow *> *companions = [NSHashTable weakObjectsHashTable];
+      [companions addObject:dialog];
+      monitor.SetCompanions(companions);
+      monitor.Handle(dialog);
+      [dialog addChildWindow:candidate ordered:NSWindowAbove];
+      monitor.Handle(candidate);
+      Check(clicks == 2, "A companion or its input panel dismissed the owner");
+      [dialog removeChildWindow:candidate];
+      monitor.Handle(foreign);
+      Check(clicks == 3, "An unrelated input panel was exempted");
+      monitor.SetCompanions([NSHashTable weakObjectsHashTable]);
+      monitor.Handle(dialog);
+      Check(clicks == 4, "A removed companion remained exempted");
       owner.simulatedVisible = NO;
       monitor.Handle(nil);
-      Check(clicks == 2, "A hidden panel received outside clicks");
+      Check(clicks == 4, "A hidden panel received outside clicks");
     }
     [other removeChildWindow:foreign];
     for (TestPanel *panel in @[owner, candidate, dialog, foreign, other]) {

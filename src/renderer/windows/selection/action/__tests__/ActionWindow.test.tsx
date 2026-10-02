@@ -8,7 +8,7 @@ import type { SelectionActionItem } from '@shared/data/preference/preferenceType
 
 import ActionWindow from '../ActionWindow'
 
-const { actionState, generalMounts, ipcRequest, opacityPreference, platform } = vi.hoisted(() => ({
+const { actionState, generalMounts, ipcRequest, opacityPreference, autoPinPreference, platform } = vi.hoisted(() => ({
   actionState: {
     value: {
       id: 'test-action',
@@ -20,6 +20,7 @@ const { actionState, generalMounts, ipcRequest, opacityPreference, platform } = 
   generalMounts: { count: 0 },
   ipcRequest: vi.fn(),
   opacityPreference: { value: 100 },
+  autoPinPreference: { value: false },
   platform: { isMac: false }
 }))
 
@@ -43,6 +44,7 @@ vi.mock('@cherrystudio/ui', async (importOriginal) => {
 
 vi.mock('@data/hooks/usePreference', () => ({
   usePreference: (key: string) => {
+    if (key === 'feature.selection.auto_pin') return [autoPinPreference.value]
     if (key === 'feature.selection.action_window_opacity') return [opacityPreference.value]
     return [false]
   }
@@ -82,6 +84,8 @@ describe('ActionWindow surface', () => {
       isBuiltIn: false
     } as SelectionActionItem
     opacityPreference.value = 100
+    autoPinPreference.value = false
+    ipcRequest.mockClear()
     platform.isMac = false
     generalMounts.count = 0
     HTMLElement.prototype.scrollTo = vi.fn()
@@ -96,6 +100,21 @@ describe('ActionWindow surface', () => {
 
     await waitFor(() => expect(generalMounts.count).toBe(2))
   })
+
+  it.each([false, true])(
+    'leaves native session pin initialization to main for auto-pin %s, but applies preference changes',
+    (autoPin) => {
+      autoPinPreference.value = autoPin
+      const { rerender } = render(<ActionWindow />)
+      expect(ipcRequest).not.toHaveBeenCalledWith('selection.pin_action_window', autoPin)
+      autoPinPreference.value = !autoPin
+      rerender(<ActionWindow />)
+      expect(ipcRequest).toHaveBeenCalledWith('selection.pin_action_window', !autoPin)
+      autoPinPreference.value = autoPin
+      rerender(<ActionWindow />)
+      expect(ipcRequest).toHaveBeenCalledWith('selection.pin_action_window', autoPin)
+    }
+  )
 
   it('uses an opaque popover surface at 100% window opacity', () => {
     const { container } = render(<ActionWindow />)
@@ -185,6 +204,6 @@ describe('ActionWindow surface', () => {
     })
     expect(container.firstElementChild).toHaveStyle({ opacity: '0.6' })
     expect(HTMLElement.prototype.scrollTo).toHaveBeenCalledWith({ top: 0 })
-    expect(ipcRequest).toHaveBeenCalledWith('selection.pin_action_window', false)
+    expect(ipcRequest).not.toHaveBeenCalledWith('selection.pin_action_window', false)
   })
 })
