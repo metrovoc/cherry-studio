@@ -79,6 +79,38 @@ static napi_value WatchOutsideClicks(napi_env env, napi_callback_info info) {
   return result;
 }
 
+static napi_value SetOutsideClickCompanions(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2], result;
+  uint32_t id = 0, count = 0;
+  bool isArray = false;
+  napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  if (!NSThread.isMainThread || argc != 2 ||
+      napi_get_value_uint32(env, args[0], &id) != napi_ok ||
+      napi_is_array(env, args[1], &isArray) != napi_ok || !isArray) {
+    napi_throw_error(env, nullptr, "Expected a subscription id and companion handles on the macOS main thread");
+    return nullptr;
+  }
+  NSHashTable<NSWindow *> *companions = [NSHashTable weakObjectsHashTable];
+  napi_get_array_length(env, args[1], &count);
+  for (uint32_t index = 0; index < count; index++) {
+    napi_value handle;
+    void *data = nullptr;
+    size_t size = 0;
+    napi_get_element(env, args[1], index, &handle);
+    if (napi_get_buffer_info(env, handle, &data, &size) != napi_ok || size != sizeof(void *)) {
+      napi_throw_error(env, nullptr, "Expected an Electron companion window handle");
+      return nullptr;
+    }
+    NSView *view = (__bridge NSView *)*(void **)data;
+    if (view.window) [companions addObject:view.window];
+  }
+  const auto subscription = clickSubscriptions.find(id);
+  if (subscription != clickSubscriptions.end()) subscription->second->monitor->SetCompanions(companions);
+  napi_get_undefined(env, &result);
+  return result;
+}
+
 static napi_value UnwatchOutsideClicks(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argument, result;
@@ -95,8 +127,9 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"track", nullptr, Track, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"untrack", nullptr, Untrack, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"watchOutsideClicks", nullptr, WatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
-      {"unwatchOutsideClicks", nullptr, UnwatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr}};
-  napi_define_properties(env, exports, 4, methods);
+      {"unwatchOutsideClicks", nullptr, UnwatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"setOutsideClickCompanions", nullptr, SetOutsideClickCompanions, nullptr, nullptr, nullptr, napi_default, nullptr}};
+  napi_define_properties(env, exports, 5, methods);
   napi_add_env_cleanup_hook(env, [](void *) { clickSubscriptions.clear(); trackers.clear(); }, nullptr);
   return exports;
 }

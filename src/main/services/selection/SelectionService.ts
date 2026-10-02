@@ -1256,6 +1256,7 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
+    wm.behavior.setAlwaysOnTop(windowId, application.get('PreferenceService').get('feature.selection.auto_pin'))
     this.showActionWindow(actionWindow)
   }
 
@@ -1334,6 +1335,8 @@ export class SelectionService extends BaseService implements Activatable {
     }
 
     actionWindow.show()
+    // showInactive orders a macOS panel above other apps without changing the key window or its level.
+    if (isMac) actionWindow.showInactive()
   }
 
   /**
