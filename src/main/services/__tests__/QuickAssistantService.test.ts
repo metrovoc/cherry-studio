@@ -4,17 +4,34 @@ import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceServi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BaseService } from '@main/core/lifecycle'
+import { WindowType } from '@main/core/window/types'
 
 const { platform, outsideClicks, windowManager } = vi.hoisted(() => ({
   platform: { isMac: true, isWin: false },
-  outsideClicks: new Set<() => void>(),
-  windowManager: { open: vi.fn(), close: vi.fn(), getWindow: vi.fn(), onWindowCreatedByType: vi.fn() }
+  outsideClicks: new Set<(target?: Buffer) => void>(),
+  windowManager: {
+    open: vi.fn(),
+    close: vi.fn(),
+    getWindow: vi.fn(),
+    onWindowCreatedByType: vi.fn(),
+    onWindowDestroyedByType: vi.fn(() => ({ dispose: vi.fn() })),
+    getWindowsByType: vi.fn<(_type: WindowType) => TestWindow[]>(() => [])
+  }
 }))
 
 vi.mock('@cherrystudio/macos-panel', () => ({
   watchOutsideClicks: (_handle: Buffer, callback: () => void) => {
-    outsideClicks.add(callback)
-    return () => outsideClicks.delete(callback)
+    let companions: Buffer[] = []
+    const click = (target?: Buffer) => {
+      if (!target || !companions.some((handle) => handle.equals(target))) callback()
+    }
+    outsideClicks.add(click)
+    return {
+      dispose: () => outsideClicks.delete(click),
+      setCompanions: (handles: Buffer[]) => {
+        companions = handles
+      }
+    }
   }
 }))
 
@@ -43,6 +60,7 @@ vi.mock('electron', () => ({
 import { QuickAssistantService } from '../QuickAssistantService'
 
 class TestWindow extends EventEmitter {
+  public readonly handle = Buffer.from(String(Math.random()))
   public focused = false
   public visible = false
   public destroyed = false
@@ -95,7 +113,7 @@ class TestWindow extends EventEmitter {
   }
 
   public getNativeWindowHandle() {
-    return Buffer.alloc(8)
+    return this.handle
   }
 
   public getBounds() {
@@ -108,9 +126,10 @@ describe('QuickAssistantService window lifecycle', () => {
   let mainWindow: TestWindow
   let quickWindow: TestWindow
   const windows = new Map<string, TestWindow>()
-  const createdListeners = new Set<(event: { window: TestWindow }) => void>()
+  const createdListeners = new Map<WindowType, Set<(event: { window: TestWindow }) => void>>()
+  const companions = new Map<WindowType, TestWindow[]>()
 
-  const clickOutside = () => outsideClicks.forEach((callback) => callback())
+  const clickOutside = (target?: TestWindow) => outsideClicks.forEach((callback) => callback(target?.handle))
   const start = async () => {
     service = new QuickAssistantService()
     await service._doInit()
@@ -127,17 +146,26 @@ describe('QuickAssistantService window lifecycle', () => {
     outsideClicks.clear()
     windows.clear()
     createdListeners.clear()
+    companions.clear()
     mainWindow = new TestWindow()
     mainWindow.show()
-    windowManager.onWindowCreatedByType.mockImplementation((_type, listener) => {
-      createdListeners.add(listener)
-      return { dispose: () => createdListeners.delete(listener) }
+    windowManager.onWindowCreatedByType.mockImplementation((type, listener) => {
+      const listeners = createdListeners.get(type) ?? new Set()
+      listeners.add(listener)
+      createdListeners.set(type, listeners)
+      return {
+        dispose: () => {
+          listeners.delete(listener)
+          if (listeners.size === 0) createdListeners.delete(type)
+        }
+      }
     })
+    windowManager.getWindowsByType.mockImplementation((type) => companions.get(type) ?? [])
     windowManager.open.mockImplementation(() => {
       quickWindow = new TestWindow()
       const id = `quick-assistant-${windows.size}`
       windows.set(id, quickWindow)
-      createdListeners.forEach((listener) => listener({ window: quickWindow }))
+      createdListeners.get(WindowType.QuickAssistant)?.forEach((listener) => listener({ window: quickWindow }))
       return id
     })
     windowManager.getWindow.mockImplementation((id) => windows.get(id))
@@ -157,6 +185,24 @@ describe('QuickAssistantService window lifecycle', () => {
     vi.runAllTimers()
 
     expect(quickWindow.visible).toBe(true)
+  })
+
+  it('keeps Selection Assistant companions exempt across creation and reuse without exempting unrelated windows', async () => {
+    await start()
+    for (const type of [WindowType.SelectionToolbar, WindowType.SelectionAction]) {
+      const companion = new TestWindow()
+      companions.set(type, [companion])
+      createdListeners.get(type)?.forEach((listener) => listener({ window: companion }))
+      companion.show()
+      clickOutside(companion)
+      expect(quickWindow.visible).toBe(true)
+      companion.hide()
+      companion.show()
+      clickOutside(companion)
+      expect(quickWindow.visible).toBe(true)
+    }
+    clickOutside(mainWindow)
+    expect(quickWindow.visible).toBe(false)
   })
 
   it('dismisses on an outside click regardless of main-window focus', async () => {

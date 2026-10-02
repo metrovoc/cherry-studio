@@ -2,4 +2,10 @@
 export function trackAuxiliaryPanels(handle: Buffer): () => void
 
 /** Observe clicks outside this window and its native children without taking focus. */
-export function watchOutsideClicks(handle: Buffer, callback: () => void): () => void
+export function watchOutsideClicks(
+  handle: Buffer,
+  callback: () => void
+): {
+  setCompanions(handles: Buffer[]): void
+  dispose(): void
+}
