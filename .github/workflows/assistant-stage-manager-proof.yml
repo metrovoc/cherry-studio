@@ -29,6 +29,16 @@ jobs:
           osascript -e 'tell application "System Events" to return UI elements enabled' > evidence/automation.txt 2>&1
           osascript -e 'tell application "System Events" to tell process "ControlCenter" to return properties of every menu bar item of menu bar 1' > evidence/control-center.txt 2>&1
           screencapture -x evidence/desktop.png
+      - name: Inspect Stage Manager control
+        run: |
+          evidence/desktop-probe ax-press com.apple.controlcenter "Control Center"
+          sleep 1
+          evidence/desktop-probe ax-tree com.apple.controlcenter > evidence/control-center-open.json
+          evidence/desktop-probe ax-press com.apple.controlcenter "Stage Manager" || true
+          sleep 1
+          evidence/desktop-probe ax-tree com.apple.controlcenter > evidence/stage-manager-control.json
+          screencapture -x evidence/stage-manager-control.png
+          defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
