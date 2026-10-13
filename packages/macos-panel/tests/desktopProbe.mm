@@ -1,5 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <ImageIO/ImageIO.h>
+#include <vector>
 
 static void Print(id value) {
   NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:nil];
@@ -70,6 +72,28 @@ int main(int argc, const char **argv) {
               @"windows": windows ?: @[]});
       return 0;
     }
+    if ([command isEqualToString:@"image-metrics"] && argc == 3) {
+      CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)[NSURL fileURLWithPath:@(argv[2])], nullptr);
+      if (!source) return 8;
+      CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, nullptr);
+      size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
+      std::vector<uint8_t> pixels(width * height * 4);
+      CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+      CGContextRef context = CGBitmapContextCreate(pixels.data(), width, height, 8, width * 4, colors,
+          kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+      CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
+      size_t count = 0, minX = width, maxX = 0, minY = height, maxY = 0;
+      for (size_t y = 100; y + 100 < height; ++y) for (size_t x = 0; x < width; ++x) {
+        const uint8_t *pixel = pixels.data() + (y * width + x) * 4;
+        if (pixel[0] > 170 && pixel[1] < 100 && pixel[2] > 30 && pixel[2] < 150) {
+          ++count; minX = MIN(minX, x); maxX = MAX(maxX, x); minY = MIN(minY, y); maxY = MAX(maxY, y);
+        }
+      }
+      Print(@{@"count": @(count), @"minX": @(minX), @"maxX": @(maxX), @"minY": @(minY),
+              @"maxY": @(maxY), @"width": @(width), @"height": @(height)});
+      CGContextRelease(context); CGColorSpaceRelease(colors); CGImageRelease(image); CFRelease(source);
+      return 0;
+    }
     if (![@"true" isEqualToString:NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"]]) return 78;
     if (([command isEqualToString:@"ax-tree"] || [command isEqualToString:@"ax-press"]) && argc >= 3) {
       NSRunningApplication *target = [NSRunningApplication runningApplicationsWithBundleIdentifier:@(argv[2])].firstObject;
@@ -83,7 +107,7 @@ int main(int argc, const char **argv) {
     }
     if ([command isEqualToString:@"activate"] && argc == 3) {
       NSRunningApplication *target = [NSRunningApplication runningApplicationWithProcessIdentifier:atoi(argv[2])];
-      return [target activateWithOptions:NSApplicationActivateIgnoringOtherApps] ? 0 : 4;
+      return [target activateWithOptions:0] ? 0 : 4;
     }
     if (([command isEqualToString:@"click"] || [command isEqualToString:@"drag"]) && argc >= 4) {
       if (!CGPreflightPostEventAccess()) return 5;

@@ -20,7 +20,7 @@ jobs:
       - name: Compile desktop capability probe
         run: |
           mkdir -p evidence
-          xcrun clang++ -std=c++17 -fobjc-arc -framework AppKit -framework ApplicationServices packages/macos-panel/tests/desktopProbe.mm -o evidence/desktop-probe
+          xcrun clang++ -std=c++17 -fobjc-arc -framework AppKit -framework ApplicationServices -framework ImageIO packages/macos-panel/tests/desktopProbe.mm -o evidence/desktop-probe
       - name: Inspect isolated desktop
         run: |
           test "$(uname -m)" = arm64
@@ -38,7 +38,14 @@ jobs:
           sleep 1
           evidence/desktop-probe ax-tree com.apple.controlcenter > evidence/stage-manager-control.json
           screencapture -x evidence/stage-manager-control.png
+          evidence/desktop-probe ax-press com.apple.controlcenter "com.apple.menuextra.controlcenter"
+          evidence/desktop-probe ax-tree com.apple.WindowManager > evidence/stage-manager-intro.json
+          evidence/desktop-probe ax-press com.apple.WindowManager "Turn On Stage Manager"
+          sleep 2
           defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
+      - uses: ./.github/actions/setup-validation
+      - name: Run real desktop toolbar comparison
+        run: pnpm exec electron packages/macos-panel/tests/desktopProof.cjs evidence
       - uses: actions/upload-artifact@v7
         if: always()
         with:
