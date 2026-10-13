@@ -364,9 +364,21 @@
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "AIOnly - AI model provider",
       "endpointConfigs": {
+        "anthropic-messages": {
+          "adapterFamily": "newapi"
+        },
+        "google-generate-content": {
+          "adapterFamily": "newapi"
+        },
         "openai-chat-completions": {
-          "adapterFamily": "openai-compatible",
-          "baseUrl": "https://api.aiionly.com"
+          "adapterFamily": "newapi",
+          "baseUrl": "https://api.aiionly.com",
+          "reasoningFormat": {
+            "type": "openai-chat"
+          }
+        },
+        "openai-responses": {
+          "adapterFamily": "newapi"
         }
       },
       "id": "aionly",
@@ -763,6 +775,12 @@
             "type": "openai-chat"
           }
         },
+        "openai-image-edit": {
+          "adapterFamily": "newapi"
+        },
+        "openai-image-generation": {
+          "adapterFamily": "newapi"
+        },
         "openai-responses": {
           "adapterFamily": "newapi"
         }
@@ -815,6 +833,30 @@
         }
       },
       "name": "LM Studio"
+    },
+    {
+      "authOptional": true,
+      "availableInEditions": ["global", "cn"],
+      "defaultChatEndpoint": "openai-chat-completions",
+      "description": "LiteLLM - AI model provider",
+      "endpointConfigs": {
+        "openai-chat-completions": {
+          "adapterFamily": "openai-compatible",
+          "baseUrl": "http://localhost:4000",
+          "reasoningFormat": {
+            "type": "openai-chat"
+          }
+        }
+      },
+      "id": "litellm",
+      "metadata": {
+        "website": {
+          "apiKey": "https://docs.litellm.ai/docs/proxy/virtual_keys",
+          "docs": "https://docs.litellm.ai/docs/proxy/quick_start",
+          "official": "https://www.litellm.ai/"
+        }
+      },
+      "name": "LiteLLM"
     },
     {
       "availableInEditions": ["global"],
@@ -2678,5 +2720,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "7eec5affe110908f"
+  "version": "ef7a9154a36cc77a"
 }
