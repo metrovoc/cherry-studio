@@ -95,6 +95,17 @@ int main(int argc, const char **argv) {
       return 0;
     }
     if (![@"true" isEqualToString:NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"]]) return 78;
+    if ([command isEqualToString:@"ax-tree-all"]) {
+      NSMutableArray *trees = [NSMutableArray new];
+      for (NSRunningApplication *target in NSWorkspace.sharedWorkspace.runningApplications) {
+        AXUIElementRef element = AXUIElementCreateApplication(target.processIdentifier);
+        [trees addObject:@{@"bundle": target.bundleIdentifier ?: @"", @"pid": @(target.processIdentifier),
+            @"tree": Tree(element, 12)}];
+        CFRelease(element);
+      }
+      Print(trees);
+      return 0;
+    }
     if (([command isEqualToString:@"ax-tree"] || [command isEqualToString:@"ax-press"]) && argc >= 3) {
       NSRunningApplication *target = [NSRunningApplication runningApplicationsWithBundleIdentifier:@(argv[2])].firstObject;
       if (!target) return 6;

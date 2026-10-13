@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: assistant-desktop-proof
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   desktop-proof:
@@ -40,7 +40,12 @@ jobs:
           screencapture -x evidence/stage-manager-control.png
           evidence/desktop-probe ax-press com.apple.controlcenter "com.apple.menuextra.controlcenter"
           evidence/desktop-probe ax-tree com.apple.WindowManager > evidence/stage-manager-intro.json
-          evidence/desktop-probe ax-press com.apple.WindowManager "Turn On Stage Manager"
+          evidence/desktop-probe ax-tree-all > evidence/intro-all-apps.json
+          evidence/desktop-probe snapshot > evidence/intro-windows.json
+          evidence/desktop-probe ax-press com.apple.WindowManager "Turn On Stage Manager" || evidence/desktop-probe click 720 645
+          sleep 1
+          evidence/desktop-probe click 720 645
+          screencapture -x evidence/stage-manager-enabled.png
           sleep 2
           defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
       - uses: ./.github/actions/setup-validation
