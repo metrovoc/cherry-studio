@@ -6,22 +6,15 @@ const { join } = require('node:path')
 if (process.platform === 'darwin') {
   const directory = mkdtempSync(join(tmpdir(), 'macos-panel-test-'))
   try {
-    const binary = join(directory, 'panel-test')
-    execFileSync(
-      'xcrun',
-      [
-        'clang++',
-        '-std=c++17',
-        '-fobjc-arc',
-        '-framework',
-        'AppKit',
-        join(__dirname, 'auxiliaryPanels.mm'),
-        '-o',
-        binary
-      ],
-      { stdio: 'inherit' }
-    )
-    execFileSync(binary, [], { stdio: 'inherit' })
+    for (const name of ['auxiliaryPanels', 'windowActivation']) {
+      const binary = join(directory, name)
+      execFileSync(
+        'xcrun',
+        ['clang++', '-std=c++17', '-fobjc-arc', '-framework', 'AppKit', join(__dirname, `${name}.mm`), '-o', binary],
+        { stdio: 'inherit' }
+      )
+      execFileSync(binary, [], { stdio: 'inherit' })
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

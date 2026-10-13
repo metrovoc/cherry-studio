@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 
-import { trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
+import { preventWindowActivation, trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
 import { isMac } from '@main/core/platform'
 import type { AlwaysOnTopLevel, WindowBehavior, WindowQuirks } from '@main/core/window/types'
 
@@ -37,6 +37,10 @@ export function applyWindowQuirks(
   getLevelOverride?: () => AlwaysOnTopLevel | undefined
 ): void {
   if (!quirks) return
+
+  if (isMac && quirks.macPreventActivation) {
+    window.once('closed', preventWindowActivation(window.getNativeWindowHandle()))
+  }
 
   if (isMac && quirks.macAttachAuxiliaryPanels) {
     window.once('closed', trackAuxiliaryPanels(window.getNativeWindowHandle()))
