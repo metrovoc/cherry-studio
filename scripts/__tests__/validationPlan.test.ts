@@ -134,6 +134,14 @@ describe('validation selection', () => {
     expect(selectedGroups(plan).i18n).toBe(true)
     expect(() => verifyResults(plan, { i18n: 'skipped' }, ['i18n'])).toThrow('i18n: expected success')
   })
+  it.each(['tests/e2e/smoke/quick-assistant-scroll.spec.ts', 'playwright.config.ts'])(
+    'requires the browser regression job after changes to %s',
+    (file) => {
+      const plan = createPlan([file])
+      expect(selectedGroups(plan).renderer).toBe(true)
+      expect(plan.tasks).toContain('types-e2e')
+    }
+  )
   it('rejects missing, failed, cancelled or unexpectedly skipped planned jobs', () => {
     const plan = createPlan(['src/main/service.ts'])
     const results = Object.fromEntries(

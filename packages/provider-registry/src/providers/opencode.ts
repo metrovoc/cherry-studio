@@ -68,7 +68,9 @@ const chatEffortModels: Array<{
   },
   { modelId: 'hy3', values: ['none', 'low', 'high'] },
   { modelId: 'kimi-k3', values: ['max'] },
-  { modelId: 'space-bunny', values: ['low', 'medium', 'high', 'xhigh', 'max'] }
+  { modelId: 'space-bunny', values: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { modelId: 'ox-alpha', values: ['low', 'high', 'max'] },
+  { modelId: 'omen-alpha', values: ['low', 'high'] }
 ]
 
 const anthropicFixedModels = ['minimax-m2-5', 'minimax-m2-7']
