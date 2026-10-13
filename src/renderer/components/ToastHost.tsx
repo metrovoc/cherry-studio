@@ -11,7 +11,7 @@ import { ToastViewport } from '@cherrystudio/ui'
  * drains. Wiring both to that one store is what fixes viewport-less windows where
  * the imperative toast used to vanish into a store nothing rendered.
  */
-export default function ToastHost() {
+export default function ToastHost({ className }: { className?: string }) {
   const { t } = useTranslation()
   const labels = useMemo(
     () => ({
@@ -24,5 +24,5 @@ export default function ToastHost() {
     [t]
   )
 
-  return <ToastViewport labels={labels} />
+  return <ToastViewport className={className} labels={labels} />
 }
