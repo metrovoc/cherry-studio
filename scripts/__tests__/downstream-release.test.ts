@@ -3,7 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
 
 import {
@@ -27,7 +27,8 @@ import {
   SIGNING_CERTIFICATE_SHA1,
   SIGNING_TEAM_ID,
   validateDeveloperIdRequirement,
-  validateMacBundleMetadata
+  validateMacBundleMetadata,
+  verifyDownstreamSignature
 } from '../release/verify-downstream-signature'
 
 const sha = 'a'.repeat(40)
@@ -55,6 +56,8 @@ const candidate = {
 const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
 })
 
 describe('downstream publication gates', () => {
@@ -461,26 +464,38 @@ describe('safe signing diagnostics', () => {
     expect(diagnostic).toContain('[redacted signing identity]')
     expect(diagnostic).not.toContain('Example Person')
   })
-  it('keeps useful stderr while removing secrets, certificate names, stdout and command arguments', () => {
+  it('keeps both native output streams while removing secrets, signer names and command arguments', () => {
     const secrets = {
       CSC_LINK: 'base64-export-placeholder',
       CSC_KEY_PASSWORD: 'p12-password-placeholder',
       APPLE_ID: 'account@example.com',
       APPLE_APP_SPECIFIC_PASSWORD: 'notary-password-placeholder',
       APPLE_TEAM_ID: 'SECRETTEAM',
-      KEYCHAIN_PASSWORD: 'keychain-password-placeholder'
+      KEYCHAIN_PASSWORD: 'keychain-password-placeholder',
+      MAC_SIGNING_REQUIREMENT: 'private-requirement-placeholder',
+      MAC_SIGNING_CERTIFICATE_SHA1: 'private-fingerprint-placeholder'
     }
     const error = Object.assign(new Error('Command failed: codesign --sign raw-command-value'), {
-      stdout: 'never-log-stdout',
+      stdout: Buffer.from(`Ticket service returned an unexpected response. ${Object.values(secrets).join(' ')}`),
       stderr: Buffer.from(
         `Unable to use Developer ID Application: Example Person (SECRETTEAM)\nThe specified item could not be found in the keychain. ${Object.values(secrets).join(' ')}`
       )
     })
     const diagnostic = sanitizeSigningDiagnostic(error, secrets)
     expect(diagnostic).toContain('The specified item could not be found in the keychain.')
-    for (const value of [...Object.values(secrets), 'Example Person', 'raw-command-value', 'never-log-stdout']) {
+    expect(diagnostic).toContain('Ticket service returned an unexpected response.')
+    for (const value of [...Object.values(secrets), 'Example Person', 'raw-command-value']) {
       expect(diagnostic).not.toContain(value)
     }
+  })
+
+  it('preserves a stdout-only stapler failure without leaking credentials', () => {
+    expect(
+      sanitizeSigningDiagnostic(
+        { stdout: Buffer.from('Ticket lookup failed for account@example.com'), stderr: Buffer.alloc(0) },
+        { APPLE_ID: 'account@example.com' }
+      )
+    ).toBe('Ticket lookup failed for [redacted]')
   })
 
   it('strips execFile command headers and retains safe message-only errors', () => {
@@ -520,5 +535,107 @@ describe('safe signing diagnostics', () => {
       })
     ).toThrow(`Temporary signing probe failed before app packaging (${stage}): native stage diagnostic`)
     expect(fs.readdirSync(directory)).toEqual([])
+  })
+})
+
+describe('stapled ticket verification', () => {
+  function fixture(staplerStatuses: number[], gatekeeperStatus = 0) {
+    const appPath = fs.mkdtempSync(path.join(os.tmpdir(), 'stapled-ticket-'))
+    roots.push(appPath)
+    const resources = path.join(appPath, 'Contents/Resources')
+    fs.mkdirSync(resources, { recursive: true })
+    fs.writeFileSync(
+      path.join(resources, 'app-update.yml'),
+      stringify({ provider: 'github', owner: 'metrovoc', repo: 'cherry-studio' })
+    )
+    const version = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')).version
+    const stages: string[] = []
+    const execute = (command: string) => {
+      if (command === 'plutil') {
+        return JSON.stringify({
+          CFBundleIdentifier: 'com.kangfenmao.CherryStudio',
+          CFBundleShortVersionString: version,
+          LSMinimumSystemVersion: '13.0'
+        })
+      }
+      if (command === 'lipo') return 'arm64'
+      if (command !== 'xcrun' && command !== 'spctl') throw new Error(`Unexpected command: ${command}`)
+      stages.push(command === 'xcrun' ? 'ticket' : 'gatekeeper')
+      const status = command === 'xcrun' ? staplerStatuses.shift() : gatekeeperStatus
+      if (status !== 0) {
+        throw Object.assign(new Error('Command failed: private-command-arguments'), {
+          status,
+          stdout: Buffer.from('Ticket lookup failed for account@example.com'),
+          stderr: Buffer.alloc(0)
+        })
+      }
+      return ''
+    }
+    const verifyIdentity = () => stages.push('identity')
+    return { appPath, execute, verifyIdentity, stages }
+  }
+
+  it('waits for ticket retry success before Gatekeeper or completion', async () => {
+    vi.useFakeTimers()
+    const { appPath, stages, ...dependencies } = fixture([68, 0])
+    let complete = false
+    const verification = verifyDownstreamSignature(appPath, dependencies).then(() => {
+      complete = true
+    })
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(complete).toBe(false)
+    expect(stages).toEqual(['identity', 'ticket'])
+    await vi.advanceTimersByTimeAsync(1)
+    await verification
+    expect(complete).toBe(true)
+    expect(stages).toEqual(['identity', 'ticket', 'ticket', 'gatekeeper'])
+  })
+
+  it('rejects a missing or invalid ticket without retrying', async () => {
+    vi.useFakeTimers()
+    const { appPath, stages, ...dependencies } = fixture([66])
+    await expect(verifyDownstreamSignature(appPath, dependencies)).rejects.toThrow('exit 66')
+    expect(stages).toEqual(['identity', 'ticket'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('fails after two retries and exposes only sanitized diagnostics', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('APPLE_ID', 'account@example.com')
+    const { appPath, stages, ...dependencies } = fixture([68, 68, 68])
+    const verification = verifyDownstreamSignature(appPath, dependencies).catch((error) => error)
+    await vi.runAllTimersAsync()
+    const error = await verification
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain('exit 68')
+    expect(error.message).toContain('Ticket lookup failed for [redacted]')
+    expect(error.message).not.toContain('account@example.com')
+    expect(error.message).not.toContain('private-command-arguments')
+    expect(error.cause).toBeUndefined()
+    expect(error.stdout).toBeUndefined()
+    expect(error.stderr).toBeUndefined()
+    expect(stages).toEqual(['identity', 'ticket', 'ticket', 'ticket'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not retry or bypass Gatekeeper rejection even when its exit code is 68', async () => {
+    vi.useFakeTimers()
+    const { appPath, stages, ...dependencies } = fixture([0], 68)
+    await expect(verifyDownstreamSignature(appPath, dependencies)).rejects.toThrow('spctl (exit 68)')
+    expect(stages).toEqual(['identity', 'ticket', 'gatekeeper'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stops before ticket validation when signing identity verification fails', async () => {
+    const { appPath, execute, stages } = fixture([0])
+    await expect(
+      verifyDownstreamSignature(appPath, {
+        execute,
+        verifyIdentity: () => {
+          throw new Error('Signing certificate changed')
+        }
+      })
+    ).rejects.toThrow('Signing certificate changed')
+    expect(stages).toEqual([])
   })
 })
