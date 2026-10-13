@@ -9,8 +9,14 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const { preventWindowActivation } = require('../panel.cjs')
 const { configurePanel, moveToActiveSpace } = require('../../../resources/binaries/darwin-arm64/selection-panel.node')
 const output = resolve(process.argv[2])
+const mode = process.argv[3] || 'comparison'
+if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications'].includes(mode))
+  throw new Error('Unknown native candidate mode')
+const candidate = ['prevents-activation', 'join-all-applications'].includes(mode)
+  ? require(join(output, 'candidateOptions.node'))
+  : null
 const helper = join(output, 'desktop-probe')
-const results = { scope: 'Electron toolbar with production macos-panel guard; synthetic action renderer', trials: [] }
+const results = { scope: 'Electron toolbar with synthetic action renderer and OS-posted clicks', mode, trials: [] }
 let source
 let actionCount = 0
 let result
@@ -107,6 +113,7 @@ app
     watch(toolbar, 'toolbar')
     toolbar.setAlwaysOnTop(true, 'screen-saver')
     toolbar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+    if (candidate) results.candidateBeforeShow = JSON.parse(candidate.apply(toolbar.getNativeWindowHandle(), mode))
     await load(
       toolbar,
       `<body style="margin:0;background:white"><div style="display:flex;height:43px"><div style="width:70px;-webkit-app-region:drag">Drag</div><button style="width:180px" onclick="require('electron').ipcRenderer.send('proof-action')">Translate</button></div><script>document.addEventListener('mousedown', e=>require('electron').ipcRenderer.send('proof-down',{trusted:e.isTrusted}));</script></body>`
@@ -144,13 +151,15 @@ app
       result.showInactive()
       record('result.opened')
     })
-    for (const guarded of [false, true, false, true]) {
+    for (const guarded of mode === 'comparison'
+      ? [false, true, false, true]
+      : [mode !== 'baseline', mode !== 'baseline']) {
       if (result) {
         result.destroy()
         result = null
       }
       unguard?.()
-      unguard = guarded ? preventWindowActivation(toolbar.getNativeWindowHandle()) : null
+      unguard = mode === 'comparison' && guarded ? preventWindowActivation(toolbar.getNativeWindowHandle()) : null
       main.show()
       await delay(500)
       native('activate', source.pid)
@@ -160,6 +169,7 @@ app
       await delay(500)
       const name = `${results.trials.length}-${guarded ? 'guarded' : 'baseline'}`
       const before = state()
+      if (candidate) before.candidate = JSON.parse(candidate.snapshot(toolbar.getNativeWindowHandle()))
       const beforeRed = screenshot(`${name}-before`)
       const previousActions = actionCount
       const timelineStart = timeline.length

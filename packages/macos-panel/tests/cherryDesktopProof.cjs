@@ -45,7 +45,8 @@ async function poll(label, operation, timeout = 20000) {
   let lastError
   while (Date.now() < deadline) {
     if (cherry?.spawnError) throw cherry.spawnError
-    if (cherry && cherry.exitCode !== null) throw new Error(`Cherry exited with ${cherry.exitCode}`)
+    if (cherry && (cherry.exitCode !== null || cherry.signalCode !== null))
+      throw new Error(`Cherry exited with ${cherry.signalCode || cherry.exitCode}`)
     try {
       const value = await operation()
       if (value) return value
@@ -371,7 +372,7 @@ async function run() {
     save('cherry-results.json', results)
     if (!trial.sourceInitiallyActive || !trial.mainInitiallyInStrip)
       throw new Error('Trial did not start with the external source active and Main visibly in the Stage Manager strip')
-    if (results.trials.length === 4) {
+    if (process.env.TRACE_ACTIVATION === '1' && results.trials.length === 4) {
       await inspector.evaluate(`(() => {
         const probe = __cherryDesktopProof;
         probe.trace = process.mainModule.require(${JSON.stringify(join(output, 'activationTrace.node'))});
@@ -390,7 +391,8 @@ async function run() {
       app: await inspector.evaluate('__cherryDesktopProof.inspect()')
     }
     trial.afterRed = screenshot(`${trial.name}-after`)
-    if (results.trials.length === 4) await inspector.evaluate(`__cherryDesktopProof.trace.checkpoint('after-result')`)
+    if (process.env.TRACE_ACTIVATION === '1' && results.trials.length === 4)
+      await inspector.evaluate(`__cherryDesktopProof.trace.checkpoint('after-result')`)
 
     const newInput = trial.after.app.input.slice(trial.before.app.input.length)
     trial.trustedMouseDown = newInput.some(
@@ -466,6 +468,15 @@ run()
       for (const name of readdirSync(logs)) {
         if (name.startsWith('app.') && name.endsWith('.log') && statSync(join(logs, name)).mtimeMs >= startedAt)
           copyFileSync(join(logs, name), join(output, `cherry-${name}`))
+      }
+    const reports = join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
+    if (startedAt && existsSync(reports))
+      for (const name of readdirSync(reports)) {
+        if (
+          /^(Cherry Studio|Electron)[_-].*\.(ips|crash)$/.test(name) &&
+          statSync(join(reports, name)).mtimeMs >= startedAt
+        )
+          copyFileSync(join(reports, name), join(output, name))
       }
     results.ownedProcessesStopped = [cherry, source].every(
       (child) => !child || child.exitCode !== null || child.signalCode !== null
