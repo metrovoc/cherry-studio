@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include "auxiliaryPanels.h"
 #include "outsideClicks.h"
+#include "windowActivation.h"
 
 static std::unordered_map<uint32_t, std::unique_ptr<AuxiliaryPanels>> trackers;
 struct ClickSubscription {
@@ -15,6 +16,7 @@ struct ClickSubscription {
   }
 };
 static std::unordered_map<uint32_t, std::unique_ptr<ClickSubscription>> clickSubscriptions;
+static std::unordered_map<uint32_t, std::unique_ptr<WindowActivation>> activationGuards;
 static uint32_t nextId = 0;
 
 static napi_value Track(napi_env env, napi_callback_info info) {
@@ -122,15 +124,47 @@ static napi_value UnwatchOutsideClicks(napi_env env, napi_callback_info info) {
   return result;
 }
 
+static napi_value PreventWindowActivation(napi_env env, napi_callback_info info) {
+  size_t argc = 1, size = 0;
+  napi_value handle, result;
+  void *data = nullptr;
+  napi_get_cb_info(env, info, &argc, &handle, nullptr, nullptr);
+  if (!NSThread.isMainThread || argc != 1 ||
+      napi_get_buffer_info(env, handle, &data, &size) != napi_ok || size != sizeof(void *)) {
+    napi_throw_error(env, nullptr, "Expected an Electron window handle on the macOS main thread");
+    return nullptr;
+  }
+  NSView *view = (__bridge NSView *)*(void **)data;
+  const uint32_t id = ++nextId;
+  activationGuards.emplace(id, std::make_unique<WindowActivation>(view.window));
+  napi_create_uint32(env, id, &result);
+  return result;
+}
+
+static napi_value AllowWindowActivation(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argument, result;
+  uint32_t id = 0;
+  napi_get_cb_info(env, info, &argc, &argument, nullptr, nullptr);
+  napi_get_value_uint32(env, argument, &id);
+  activationGuards.erase(id);
+  napi_get_undefined(env, &result);
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
       {"track", nullptr, Track, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"untrack", nullptr, Untrack, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"watchOutsideClicks", nullptr, WatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"unwatchOutsideClicks", nullptr, UnwatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
-      {"setOutsideClickCompanions", nullptr, SetOutsideClickCompanions, nullptr, nullptr, nullptr, napi_default, nullptr}};
-  napi_define_properties(env, exports, 5, methods);
-  napi_add_env_cleanup_hook(env, [](void *) { clickSubscriptions.clear(); trackers.clear(); }, nullptr);
+      {"setOutsideClickCompanions", nullptr, SetOutsideClickCompanions, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"preventWindowActivation", nullptr, PreventWindowActivation, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"allowWindowActivation", nullptr, AllowWindowActivation, nullptr, nullptr, nullptr, napi_default, nullptr}};
+  napi_define_properties(env, exports, 7, methods);
+  napi_add_env_cleanup_hook(env, [](void *) {
+    activationGuards.clear(); clickSubscriptions.clear(); trackers.clear();
+  }, nullptr);
   return exports;
 }
 NAPI_MODULE(NODE_GYP_MODULE_NAME, Init)

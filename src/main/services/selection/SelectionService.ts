@@ -19,6 +19,7 @@ import { WindowType } from '@main/core/window/types'
 import { getApplicationId } from '@main/utils/appEdition'
 import { SelectionTriggerMode } from '@shared/data/preference/preferenceTypes'
 import { isAgentSelectionAction, type SelectionAction, type SelectionActionSession } from '@shared/types/selection'
+import type { SelectionActionWindowData } from '@shared/ipc/schemas/selection'
 
 import { SELECTION_FINETUNED_LIST, SELECTION_PREDEFINED_BLACKLIST } from './selectionConfig'
 import { getSelectionToolbarSize, type SelectionToolbarSize } from './selectionToolbarSize'
@@ -93,6 +94,9 @@ export class SelectionService extends BaseService implements Activatable {
   // querying WindowManager at each call site. Kept in sync via onWindowCreated/Destroyed.
   private toolbarWindow: BrowserWindow | null = null
   private toolbarWindowId: string | null = null
+  private actionWindows = new Map<string, { data: SelectionActionWindowData; pinned: boolean; ready: boolean }>()
+  private actionWindowCleanups = new Map<string, () => void>()
+  private quickAssistantCleanup: (() => void) | null = null
 
   private isHideByMouseKeyListenerActive: boolean = false
   private isCtrlkeyListenerActive: boolean = false
@@ -239,12 +243,6 @@ export class SelectionService extends BaseService implements Activatable {
   protected async onInit(): Promise<void> {
     const wm = application.get('WindowManager')
 
-    const actionWindowListeners = new Map<string, () => void>()
-    this.registerDisposable(() => {
-      for (const dispose of actionWindowListeners.values()) dispose()
-      actionWindowListeners.clear()
-    })
-
     // Inject behavior into newly-created Selection windows. onWindowCreatedByType fires
     // synchronously before content loads, so listeners here attach before the renderer
     // can start sending IPC messages.
@@ -263,29 +261,43 @@ export class SelectionService extends BaseService implements Activatable {
     // or accumulate duplicates across reuses.
     this.registerDisposable(
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
+        const clearSession = () => this.actionWindows.delete(mw.id)
         const onHide = () => {
-          const session = wm.getInitData(mw.id) as SelectionActionSession | null
+          const session = wm.getInitData(mw.id) as SelectionActionWindowData | null
           if (session) {
             application.get('IpcApiService').send(mw.id, 'selection.action_dismissed', { sessionId: session.sessionId })
           }
+          clearSession()
         }
-        const dispose = () => {
-          mw.window.removeListener('hide', onHide)
-          mw.window.removeListener('closed', dispose)
-          actionWindowListeners.delete(mw.id)
-        }
-        actionWindowListeners.set(mw.id, dispose)
-        mw.window.on('hide', onHide)
-        mw.window.once('closed', dispose)
-        mw.window.on('resized', () => {
+        const resized = () => {
           if (mw.window.isDestroyed()) return
           if (this.isRemeberWinSize) {
             const { width, height } = mw.window.getNormalBounds()
             this.lastActionWindowSize = { width, height }
           }
-        })
+        }
+        const dispose = () => {
+          mw.window.removeListener('hide', onHide)
+          mw.window.removeListener('resized', resized)
+          mw.window.removeListener('closed', dispose)
+          this.actionWindowCleanups.delete(mw.id)
+          clearSession()
+        }
+        mw.window.on('hide', onHide)
+        mw.window.on('resized', resized)
+        mw.window.once('closed', dispose)
+        this.actionWindowCleanups.set(mw.id, dispose)
       })
     )
+    this.registerDisposable(() => {
+      for (const dispose of this.actionWindowCleanups.values()) dispose()
+    })
+
+    this.registerDisposable(
+      wm.onWindowCreatedByType(WindowType.QuickAssistant, ({ window }) => this.observeQuickAssistant(window))
+    )
+    wm.getWindowsByType(WindowType.QuickAssistant).forEach((window) => this.observeQuickAssistant(window))
+    this.registerDisposable(() => this.quickAssistantCleanup?.())
 
     // Destruction: keep the cached toolbar reference in sync.
     this.registerDisposable(
@@ -354,6 +366,7 @@ export class SelectionService extends BaseService implements Activatable {
     }
     this.selectionHook = null
     this.initStatus = false
+    this.actionWindows.clear()
     this.logInfo('SelectionService stopped via lifecycle', true)
   }
 
@@ -1214,6 +1227,11 @@ export class SelectionService extends BaseService implements Activatable {
   }
 
   public closeActionWindows(): void {
+    const wm = application.get('WindowManager')
+    for (const [id, session] of this.actionWindows) {
+      if (!session.ready) wm.close(id)
+    }
+    this.actionWindows.clear()
     application
       .get('IpcApiService')
       .broadcastToType(WindowType.SelectionAction, 'selection.close_action_window', undefined)
@@ -1233,17 +1251,10 @@ export class SelectionService extends BaseService implements Activatable {
     }
 
     const wm = application.get('WindowManager')
-
-    // open({ initData }) atomically stores the action payload and, for the
-    // pool-recycle path, emits window.reused with the same payload so
-    // the renderer can update in-place. For recycled windows the renderer has
-    // been mounted and its listener registered since warmup, so the DOM is
-    // ready on the next tick. For fresh windows the renderer mounts,
-    // `useWindowInitData` pulls the payload via `getInitData`, and React
-    // paints before the user notices. This mirrors the behavior of the
-    // pre-WindowManager SelectionService: push data, then show immediately.
+    const requestId = randomUUID()
+    const data: SelectionActionWindowData = { ...actionItem, requestId, sessionId: requestId }
     const windowId = wm.open(WindowType.SelectionAction, {
-      initData: { ...actionItem, sessionId: randomUUID() } satisfies SelectionActionSession,
+      initData: data,
       options: {
         width: this.isRemeberWinSize ? this.lastActionWindowSize.width : this.ACTION_WINDOW_WIDTH,
         height: this.isRemeberWinSize ? this.lastActionWindowSize.height : this.ACTION_WINDOW_HEIGHT
@@ -1256,16 +1267,82 @@ export class SelectionService extends BaseService implements Activatable {
       return
     }
 
-    wm.behavior.setAlwaysOnTop(windowId, application.get('PreferenceService').get('feature.selection.auto_pin'))
-    this.showActionWindow(actionWindow)
+    this.actionWindows.set(windowId, {
+      data,
+      pinned: application.get('PreferenceService').get('feature.selection.auto_pin'),
+      ready: false
+    })
+    this.updateActionWindowLevels()
+    this.positionActionWindow(actionWindow)
+  }
+
+  public markActionWindowReady(windowId: string, requestId: string): void {
+    const session = this.actionWindows.get(windowId)
+    if (!session || session.ready || session.data.requestId !== requestId) return
+    const wm = application.get('WindowManager')
+    if (wm.getInitData(windowId) !== session.data) {
+      this.actionWindows.delete(windowId)
+      return
+    }
+    const window = wm.getWindow(windowId)
+    if (!window) return
+    session.ready = true
+    this.updateActionWindowLevels()
+    window.show()
+    if (isMac) window.showInactive()
+  }
+
+  public setActionWindowPinned(windowId: string, pinned: boolean): void {
+    const session = this.actionWindows.get(windowId)
+    if (!session) return
+    session.pinned = pinned
+    this.updateActionWindowLevels()
+  }
+
+  private observeQuickAssistant(window: BrowserWindow): void {
+    this.quickAssistantCleanup?.()
+    const update = () => this.updateActionWindowLevels()
+    const closed = () => {
+      this.quickAssistantCleanup?.()
+      update()
+    }
+    window.on('show', update)
+    window.on('hide', update)
+    window.on('minimize', update)
+    window.on('restore', update)
+    window.on('closed', closed)
+    this.quickAssistantCleanup = () => {
+      window.removeListener('show', update)
+      window.removeListener('hide', update)
+      window.removeListener('minimize', update)
+      window.removeListener('restore', update)
+      window.removeListener('closed', closed)
+      this.quickAssistantCleanup = null
+    }
+  }
+
+  private updateActionWindowLevels(): void {
+    const wm = application.get('WindowManager')
+    const quickVisible = wm
+      .getWindowsByType(WindowType.QuickAssistant)
+      .some((window) => !window.isDestroyed() && window.isVisible() && !window.isMinimized())
+    for (const [id, session] of this.actionWindows) {
+      const window = wm.getWindow(id)
+      if (quickVisible && isMac) {
+        // Quick reasserts its floating level after show; results must stay above it.
+        window?.setAlwaysOnTop(true, 'floating', 1)
+      } else {
+        wm.behavior.setAlwaysOnTop(id, session.pinned || quickVisible)
+      }
+    }
   }
 
   /**
-   * Show action window with proper positioning relative to toolbar
+   * Position the action window before its renderer becomes ready.
    * Ensures window stays within screen boundaries
-   * @param actionWindow Window to position and show
+   * @param actionWindow Window to position
    */
-  private showActionWindow(actionWindow: BrowserWindow): void {
+  private positionActionWindow(actionWindow: BrowserWindow): void {
     let actionWindowWidth = this.ACTION_WINDOW_WIDTH
     let actionWindowHeight = this.ACTION_WINDOW_HEIGHT
 
@@ -1333,10 +1410,6 @@ export class SelectionService extends BaseService implements Activatable {
         y: posY
       })
     }
-
-    actionWindow.show()
-    // showInactive orders a macOS panel above other apps without changing the key window or its level.
-    if (isMac) actionWindow.showInactive()
   }
 
   /**

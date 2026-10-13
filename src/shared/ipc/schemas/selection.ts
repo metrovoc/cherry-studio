@@ -6,8 +6,12 @@ import {
   SelectionAgentSummarySchema,
   SelectionAgentWindowLayoutSchema
 } from '@shared/types/selection'
+import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
+import type { SelectionActionSession } from '@shared/types/selection'
 
 import { defineRoute } from '../define'
+
+export type SelectionActionWindowData = SelectionActionSession & { requestId: string }
 
 /**
  * Selection-feature IPC schemas — the first domain migrated onto IpcApi.
@@ -58,6 +62,7 @@ export const selectionRequestSchemas = {
   }),
   'selection.restore_agent_window': defineRoute({ input: z.string(), output: z.void() }),
   'selection.close_agent_window': defineRoute({ input: z.string(), output: z.void() }),
+  'selection.action_window_ready': defineRoute({ input: z.object({ requestId: z.string() }), output: z.void() }),
   'selection.get_linux_env_info': defineRoute({ input: z.void(), output: linuxEnvInfoSchema })
 }
 
