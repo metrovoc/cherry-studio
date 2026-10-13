@@ -121,9 +121,9 @@ async function main() {
     branchHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: catalogDirectory, encoding: 'utf8' }).trim()
   })
   const root = path.resolve(__dirname, '../..')
-  const loader = fs.readFileSync(path.join(root, 'packages/provider-registry/src/registry-loader.ts'), 'utf8')
-  const currentVersion = Number(/REGISTRY_SCHEMA_VERSION = (\d+)/.exec(loader)?.[1])
-  const minAppVersion = /REGISTRY_MIN_APP_VERSION = '([^']+)'/.exec(loader)?.[1]
+  const catalog = fs.readFileSync(path.join(root, 'packages/provider-registry/src/catalog.ts'), 'utf8')
+  const currentVersion = Number(/REGISTRY_SCHEMA_VERSION = (\d+)/.exec(catalog)?.[1])
+  const minAppVersion = /REGISTRY_MIN_APP_VERSION = '([^']+)'/.exec(catalog)?.[1]
   if (!Number.isSafeInteger(currentVersion) || !minAppVersion) throw new Error('Cannot resolve registry baseline')
   await verifyCatalogContents({
     catalogDirectory,

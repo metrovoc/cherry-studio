@@ -10,6 +10,7 @@
     "test": "node tests/run.cjs"
   },
   "dependencies": {
+    "node-gyp": "12.4.0",
     "node-gyp-build": "4.8.4"
   },
   "gypfile": true

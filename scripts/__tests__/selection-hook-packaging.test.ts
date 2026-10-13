@@ -4,7 +4,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-import { selectionHookFilters } from '../before-pack'
+import { selectionHookFilters } from '../packaging/before-pack'
 
 const projectRoot = path.join(import.meta.dirname, '..', '..')
 

@@ -38,6 +38,10 @@ vi.mock('@main/core/platform', () => ({
 }))
 
 class NativeWindow extends EventEmitter {
+  handle = Buffer.alloc(1)
+  configured = false
+  space = 0
+  getNativeWindowHandle = () => this.handle
   visible = false
   destroyed = false
   minimized = false
@@ -148,6 +152,20 @@ describe('selection action presentation', () => {
       windows.get(id)?.setAlwaysOnTop(enabled)
     })
     service = new SelectionService()
+    Object.assign(service, {
+      nativePanel: {
+        configurePanel: (handle: Buffer) => {
+          const window = [...windows.values()].find((item) => item.handle === handle)!
+          window.configured = true
+        },
+        moveToActiveSpace: (handle: Buffer) => {
+          const window = [...windows.values()].find((item) => item.handle === handle)!
+          if (!window.configured) throw new Error('Unconfigured native panel')
+          window.visible = true
+          window.space = 1
+        }
+      }
+    })
   })
 
   afterEach(async () => {
@@ -175,6 +193,7 @@ describe('selection action presentation', () => {
       service.markActionWindowReady('result', requestId)
       expect(window.visible).toBe(true)
       expect(window.showCount).toBe(previousShows + 1)
+      expect(window.space).toBe(1)
       service.markActionWindowReady('result', requestId)
       expect(window.showCount).toBe(previousShows + 1)
     }
