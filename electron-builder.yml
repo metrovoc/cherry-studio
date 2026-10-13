@@ -198,7 +198,7 @@ artifactBuildCompleted: scripts/packaging/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.7 - Assistant Windows and Agent Connections
+    Cherry Studio 2.1.8 - Assistant Windows and Agent Connections
 
     🐛 Bug Fixes
     - [Selection Assistant] Prepare the title bar before showing a result, keep notifications below it, and prevent double-clicking it from maximizing the window.
@@ -224,7 +224,7 @@ releaseInfo:
     - [MCP] OAuth connections may require authorization again after a restart when secure credential storage is unavailable.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.7 - 助手窗口与 Agent 连接
+    Cherry Studio 2.1.8 - 助手窗口与 Agent 连接
 
     🐛 问题修复
     - [划词助手] 结果显示前完成标题栏准备，将通知移至标题栏下方，并禁止双击标题栏最大化窗口。
