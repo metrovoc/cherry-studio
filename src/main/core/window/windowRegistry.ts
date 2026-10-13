@@ -407,6 +407,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
     // so that business calls to window.hide() / window.showInactive() / window.close()
     // transparently invoke the required pre/post hooks. See WindowQuirks in types.ts.
     quirks: {
+      macPreventActivation: true,
       macClearHoverOnHide: true,
       reapplyAlwaysOnTop: true
     }
@@ -419,7 +420,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
     lifecycle: 'pooled',
     htmlPath: 'windows/selection/action/index.html',
     // preload omitted → defaults to 'preload.js'.
-    // SelectionService positions and shows the result panel via showActionWindow.
+    // SelectionService positions the panel and shows it after the renderer's readiness acknowledgment.
     showMode: 'manual',
     windowOptions: {
       width: 500,
@@ -427,6 +428,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       minWidth: 300,
       minHeight: 200,
       frame: false,
+      maximizable: false,
       transparent: true,
       autoHideMenuBar: true,
       hasShadow: false,

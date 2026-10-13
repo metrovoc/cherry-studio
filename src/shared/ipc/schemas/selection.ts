@@ -5,6 +5,8 @@ import type { SelectionActionItem } from '@shared/data/preference/preferenceType
 
 import { defineRoute } from '../define'
 
+export type SelectionActionWindowData = SelectionActionItem & { requestId: string }
+
 /**
  * Selection-feature IPC schemas — the first domain migrated onto IpcApi.
  *
@@ -58,6 +60,7 @@ export const selectionRequestSchemas = {
     output: z.void()
   }),
   'selection.pin_action_window': defineRoute({ input: z.boolean(), output: z.void() }),
+  'selection.action_window_ready': defineRoute({ input: z.object({ requestId: z.string() }), output: z.void() }),
   'selection.get_linux_env_info': defineRoute({ input: z.void(), output: linuxEnvInfoSchema })
 }
 

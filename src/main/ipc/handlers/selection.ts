@@ -5,9 +5,7 @@ import type { IpcHandlersFor } from '@shared/ipc/types'
 /**
  * Thin adapters for the selection request routes: each one translates a parsed
  * route call into a `SelectionService` method (business logic + resource lifecycle
- * stay in that service). `pin_action_window` is the exception — pinning is a pure
- * WindowManager operation with no selection-specific state, so it routes straight
- * to `wm.behavior`, the by-id home for alwaysOnTop.
+ * stay in that service).
  */
 export const selectionHandlers: IpcHandlersFor<typeof selectionRequestSchemas> = {
   'selection.close_action_windows': async () => {
@@ -25,11 +23,10 @@ export const selectionHandlers: IpcHandlersFor<typeof selectionRequestSchemas> =
     application.get('SelectionService').processAction(actionItem)
   },
   'selection.pin_action_window': async (isPinned, ctx) => {
-    // The caller IS the action window; pin it by its own id. `behavior.setAlwaysOnTop`
-    // already no-ops on a missing/destroyed window, so no BrowserWindow round-trip or
-    // isDestroyed guard is needed. A null senderId (caller is not a managed window) is
-    // an accepted no-op (see ipc-overview.md, "senderId: null semantics").
-    if (ctx.senderId) application.get('WindowManager').behavior.setAlwaysOnTop(ctx.senderId, isPinned)
+    if (ctx.senderId) application.get('SelectionService').setActionWindowPinned(ctx.senderId, isPinned)
+  },
+  'selection.action_window_ready': async ({ requestId }, { senderId }) => {
+    if (senderId) application.get('SelectionService').markActionWindowReady(senderId, requestId)
   },
   'selection.get_linux_env_info': async () => application.get('SelectionService').getLinuxEnvInfo()
 }

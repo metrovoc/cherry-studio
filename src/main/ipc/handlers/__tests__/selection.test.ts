@@ -10,6 +10,8 @@ const selectionService = {
   writeToClipboard: vi.fn(() => true),
   determineToolbarSize: vi.fn(),
   processAction: vi.fn(),
+  setActionWindowPinned: vi.fn(),
+  markActionWindowReady: vi.fn(),
   getLinuxEnvInfo: vi.fn(() => ({
     isLinuxWaylandDisplay: false,
     isLinuxXWaylandMode: false,
@@ -17,14 +19,11 @@ const selectionService = {
     isLinuxCompositorCompatible: true
   }))
 }
-const setAlwaysOnTop = vi.fn()
-const windowManager = { behavior: { setAlwaysOnTop } }
 
 beforeEach(() => {
   vi.clearAllMocks()
   appGetMock.mockImplementation((name: string) => {
     if (name === 'SelectionService') return selectionService
-    if (name === 'WindowManager') return windowManager
     throw new Error(`Unexpected application.get(${name})`)
   })
 })
@@ -54,14 +53,21 @@ describe('selectionHandlers', () => {
     expect(selectionService.determineToolbarSize).toHaveBeenCalledWith(800, 40)
   })
 
-  it('pin_action_window pins the caller window by its own id via WindowManager.behavior', async () => {
+  it('pin_action_window updates only the caller’s pin choice', async () => {
     await selectionHandlers['selection.pin_action_window'](true, ctx('action-7'))
-    expect(setAlwaysOnTop).toHaveBeenCalledWith('action-7', true)
+    expect(selectionService.setActionWindowPinned).toHaveBeenCalledWith('action-7', true)
   })
 
   it('pin_action_window is a no-op when the caller is not a tracked window (senderId null)', async () => {
     await selectionHandlers['selection.pin_action_window'](true, ctx(null))
-    expect(setAlwaysOnTop).not.toHaveBeenCalled()
+    expect(selectionService.setActionWindowPinned).not.toHaveBeenCalled()
+  })
+
+  it('accepts readiness only from a tracked sender', async () => {
+    await selectionHandlers['selection.action_window_ready']({ requestId: 'session-1' }, ctx(null))
+    expect(selectionService.markActionWindowReady).not.toHaveBeenCalled()
+    await selectionHandlers['selection.action_window_ready']({ requestId: 'session-1' }, ctx('action-7'))
+    expect(selectionService.markActionWindowReady).toHaveBeenCalledWith('action-7', 'session-1')
   })
 
   it('get_linux_env_info returns the service env probe', async () => {

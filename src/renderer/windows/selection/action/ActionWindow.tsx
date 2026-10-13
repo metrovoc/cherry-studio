@@ -3,7 +3,7 @@ import Minus from 'lucide-react/dist/esm/icons/minus'
 import Pin from 'lucide-react/dist/esm/icons/pin'
 import X from 'lucide-react/dist/esm/icons/x'
 import type { ComponentProps, FC } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button, Slider, Tooltip } from '@cherrystudio/ui'
@@ -13,7 +13,7 @@ import { useWindowInitData } from '@renderer/hooks/useWindowInitData'
 import { ipcApi } from '@renderer/ipc'
 import { isMac } from '@renderer/utils/platform'
 import { cn } from '@renderer/utils/style'
-import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
+import type { SelectionActionWindowData } from '@shared/ipc/schemas/selection'
 
 import ActionGeneral from './components/ActionGeneral'
 import ActionTranslate from './components/ActionTranslate'
@@ -27,7 +27,7 @@ import ActionTranslate from './components/ActionTranslate'
  * `useEffect([action])` inside the content component.
  */
 const ActionWindow: FC = () => {
-  const action = useWindowInitData<SelectionActionItem>()
+  const action = useWindowInitData<SelectionActionWindowData>()
   if (!action) return null
   return <SelectionActionContent action={action} />
 }
@@ -40,7 +40,7 @@ const ActionWindow: FC = () => {
  * slider, scroll) so old state doesn't bleed into the new session, even when
  * the next action happens to be the same type as the previous one.
  */
-const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action }) => {
+const SelectionActionContent: FC<{ action: SelectionActionWindowData }> = ({ action }) => {
   const { t } = useTranslation()
 
   const [isAutoClose] = usePreference('feature.selection.auto_close')
@@ -64,9 +64,16 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   }
 
   const shouldCloseWhenBlur = useRef(false)
+  const titleBarRef = useRef<HTMLDivElement>(null)
   const contentElementRef = useRef<HTMLDivElement>(null)
   const isAutoScrollEnabled = useRef(true)
   const lastScrollHeight = useRef(0)
+
+  useLayoutEffect(() => {
+    // Chromium publishes app-region geometry during layout, including for hidden pooled windows.
+    titleBarRef.current?.getBoundingClientRect()
+    void ipcApi.request('selection.action_window_ready', { requestId: action.requestId })
+  }, [action.requestId])
 
   useEffect(() => {
     window.addEventListener('focus', handleWindowFocus)
@@ -212,6 +219,7 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
       className="relative m-0.5 flex h-[calc(100%-6px)] w-[calc(100%-6px)] flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-[0_0_2px_var(--border)]"
       style={{ opacity: opacity / 100 }}>
       <div
+        ref={titleBarRef}
         className={cn(
           'flex h-8 flex-row items-center px-2 transition-colors duration-300 [-webkit-app-region:drag]',
           isWindowFocus ? 'bg-muted' : 'bg-secondary'
