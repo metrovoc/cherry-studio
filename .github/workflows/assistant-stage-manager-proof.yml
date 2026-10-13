@@ -1,0 +1,38 @@
+name: Assistant desktop proof
+
+on:
+  push:
+    branches: [assistant-stage-manager-proof]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assistant-desktop-proof
+  cancel-in-progress: true
+
+jobs:
+  desktop-proof:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compile desktop capability probe
+        run: |
+          mkdir -p evidence
+          xcrun clang++ -std=c++17 -fobjc-arc -framework AppKit -framework ApplicationServices packages/macos-panel/tests/desktopProbe.mm -o evidence/desktop-probe
+      - name: Inspect isolated desktop
+        run: |
+          test "$(uname -m)" = arm64
+          evidence/desktop-probe capabilities > evidence/capabilities.json
+          defaults read com.apple.WindowManager > evidence/window-manager-preferences.txt 2>&1 || true
+          osascript -e 'tell application "System Events" to return UI elements enabled' > evidence/automation.txt 2>&1
+          osascript -e 'tell application "System Events" to tell process "ControlCenter" to return properties of every menu bar item of menu bar 1' > evidence/control-center.txt 2>&1
+          screencapture -x evidence/desktop.png
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: assistant-desktop-proof-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
