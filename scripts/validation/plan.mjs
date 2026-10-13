@@ -114,6 +114,7 @@ export function createPlan(files, fullReason) {
     add('lint', file)
     if (scope === 'e2e') {
       add('types-e2e', file)
+      projects.add('renderer')
       continue
     }
     add('knowledge', file)

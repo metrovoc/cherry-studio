@@ -663,10 +663,6 @@
         {
           "id": "web-search",
           "modelScope": "all-chat-models"
-        },
-        {
-          "id": "url-context",
-          "modelScope": "all-chat-models"
         }
       ]
     },
@@ -1027,7 +1023,13 @@
         }
       },
       "modelListSource": "registry",
-      "name": "OpenAI Codex"
+      "name": "OpenAI Codex",
+      "serverTools": [
+        {
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authMethods": ["oauth"],
@@ -2718,5 +2720,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "932c0006165e4fcb"
+  "version": "ef7a9154a36cc77a"
 }

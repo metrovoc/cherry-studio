@@ -436,7 +436,6 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       platformOverrides: {
         mac: {
           type: 'panel',
-          fullscreenable: false,
           hiddenInMissionControl: true,
           // Results float over the source Space instead of becoming a fullscreen primary window.
           fullscreenable: false,

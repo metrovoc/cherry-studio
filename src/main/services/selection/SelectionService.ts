@@ -55,6 +55,15 @@ type RelativeOrientation =
 @ServicePhase(Phase.WhenReady)
 export class SelectionService extends BaseService implements Activatable {
   private selectionHook: SelectionHookInstance | null = null
+  private nativePanel?: {
+    configurePanel(handle: Buffer): void
+    moveToActiveSpace(handle: Buffer): void
+  }
+
+  private getNativePanel(): NonNullable<SelectionService['nativePanel']> {
+    return (this.nativePanel ??= require(application.getPath('feature.selection.native_panel_file')))
+  }
+
   /** Latest desired running state — mirrors the `feature.selection.enabled` preference. */
   private desiredEnabled = false
   /**
@@ -262,6 +271,7 @@ export class SelectionService extends BaseService implements Activatable {
     // or accumulate duplicates across reuses.
     this.registerDisposable(
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
+        if (isMac) this.getNativePanel().configurePanel(mw.window.getNativeWindowHandle())
         const clearSession = () => this.actionWindows.delete(mw.id)
         const resized = () => {
           if (mw.window.isDestroyed()) return
@@ -1284,6 +1294,7 @@ export class SelectionService extends BaseService implements Activatable {
     if (!window) return
     session.ready = true
     this.updateActionWindowLevels()
+    if (isMac) this.getNativePanel().moveToActiveSpace(window.getNativeWindowHandle())
     window.show()
     if (isMac) window.showInactive()
   }

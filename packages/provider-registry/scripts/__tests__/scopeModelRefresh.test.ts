@@ -50,10 +50,24 @@ describe('scoped model refresh', () => {
     expect(result.overrides).toEqual([...current.overrides, { providerId: 'new-host', modelId: 'new', price: 4 }])
   })
 
+  it('refreshes a standalone provider offer without requiring a canonical model', () => {
+    const offer = { providerId: 'host', modelId: 'standalone', price: 3 }
+    const result = scopeModelRefresh(current, { ...generated, overrides: [...generated.overrides, offer] }, [
+      'standalone'
+    ])
+    expect(result.models).toEqual(current.models)
+    expect(result.overrides).toEqual([...current.overrides, offer])
+  })
+
+  it('retains a bundled canonical model when only its provider offers are available', () => {
+    const offer = { providerId: 'host', modelId: 'argon', price: 3 }
+    const result = scopeModelRefresh(current, { models: [], overrides: [offer] }, ['argon'])
+    expect(result.models).toEqual(current.models)
+    expect(result.overrides).toEqual([current.overrides[0], offer])
+  })
+
   it('rejects unknown IDs instead of silently dropping current models', () => {
-    expect(() => scopeModelRefresh(current, generated, ['unknown'])).toThrow('unknown canonical model: unknown')
-    expect(() => scopeModelRefresh(current, { models: [], overrides: [] }, ['argon'])).toThrow(
-      'unknown canonical model: argon'
-    )
+    expect(() => scopeModelRefresh(current, generated, ['unknown'])).toThrow('unknown model: unknown')
+    expect(() => scopeModelRefresh(current, { models: [], overrides: [] }, ['argon'])).toThrow('unknown model: argon')
   })
 })

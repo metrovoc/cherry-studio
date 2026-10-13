@@ -75,6 +75,14 @@ describe('validation selection', () => {
     expect(createPlan(['migrations/sqlite-drizzle/0001.sql']).projects).toContain('main')
     expect(createPlan(['.agents/skills/example/SKILL.md']).tasks).toContain('skills')
   })
+  it.each(['tests/e2e/smoke/quick-assistant-scroll.spec.ts', 'playwright.config.ts'])(
+    'requires the browser regression job after changes to %s',
+    (file) => {
+      const plan = createPlan([file])
+      expect(selectedGroups(plan).renderer).toBe(true)
+      expect(plan.tasks).toContain('types-e2e')
+    }
+  )
   it('rejects missing, failed, cancelled or unexpectedly skipped planned jobs', () => {
     const plan = createPlan(['src/main/service.ts'])
     const results = Object.fromEntries(
