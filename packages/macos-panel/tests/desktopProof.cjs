@@ -197,9 +197,12 @@ app
       results.trials.every(
         (t) =>
           t.delivered &&
+          t.sourceInitiallyActive &&
           t.trustedMouseDown &&
           t.mainInitiallyInStrip &&
-          (t.guarded ? t.mainRemainedInStrip && !t.mainPromoted : t.mainPromoted)
+          (t.guarded
+            ? t.mainRemainedInStrip && !t.mainPromoted
+            : t.mainPromoted && t.afterRed.count > activePixels * 0.3)
       )
     if (!results.passed)
       throw new Error('Stage Manager baseline/guarded proof did not satisfy all assertions; inspect evidence')

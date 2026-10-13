@@ -53,3 +53,29 @@ jobs:
           path: evidence/
           if-no-files-found: error
           retention-days: 14
+
+  release-startup:
+    runs-on: macos-26
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v2.1.7
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download published arm64 release
+        run: |
+          mkdir -p evidence/release
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > evidence/release/assets.json
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir evidence/release
+      - name: Verify and smoke test packaged startup
+        run: python3 packages/macos-panel/tests/releaseSmoke.py evidence/release
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-startup-${{ github.sha }}
+          path: |
+            evidence/release/*.json
+            evidence/release/*.log
+            evidence/release/*.png
+          if-no-files-found: error
+          retention-days: 14
