@@ -7,6 +7,7 @@ const { setTimeout: delay } = require('node:timers/promises')
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Desktop input proof runs only in isolated GitHub Actions')
 const { app, BrowserWindow, ipcMain } = require('electron')
 const { preventWindowActivation } = require('../panel.cjs')
+const { configurePanel, moveToActiveSpace } = require('../../../resources/binaries/darwin-arm64/selection-panel.node')
 const output = resolve(process.argv[2])
 const helper = join(output, 'desktop-probe')
 const results = { scope: 'Electron toolbar with production macos-panel guard; synthetic action renderer', trials: [] }
@@ -133,11 +134,14 @@ app
       })
       watch(result, 'result')
       result.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+      configurePanel(result.getNativeWindowHandle())
       await load(
         result,
         '<body style="margin:0;background:#fff3ad"><div style="height:38px;-webkit-app-region:drag">Result title</div><p>Translated fixture text</p></body>'
       )
+      moveToActiveSpace(result.getNativeWindowHandle())
       result.show()
+      result.showInactive()
       record('result.opened')
     })
     for (const guarded of [false, true, false, true]) {

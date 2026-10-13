@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   desktop-proof:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -50,7 +50,9 @@ jobs:
           defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
       - uses: ./.github/actions/setup-validation
       - name: Run real desktop toolbar comparison
-        run: pnpm exec electron packages/macos-panel/tests/desktopProof.cjs evidence
+        run: |
+          node native/darwin/build.js arm64
+          pnpm exec electron packages/macos-panel/tests/desktopProof.cjs evidence
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -64,7 +66,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: v2.1.7
+      RELEASE_TAG: v2.1.6
     steps:
       - uses: actions/checkout@v7
       - name: Download published arm64 release
