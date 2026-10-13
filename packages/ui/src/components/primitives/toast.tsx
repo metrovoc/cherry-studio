@@ -462,9 +462,11 @@ const ToastItem = ({ labels, store, toast }: { labels: ToastLabels; store: Toast
 }
 
 export const ToastViewport = ({
+  className,
   labels,
   store = defaultToastStore
 }: {
+  className?: string
   labels?: ToastLabelsInput
   store?: ToastStore
 }) => {
@@ -499,7 +501,8 @@ export const ToastViewport = ({
       aria-label="notifications"
       className={cn(
         'pointer-events-auto fixed top-5 left-1/2 z-[10000] -translate-x-1/2 [-webkit-app-region:no-drag]',
-        expanded ? 'flex max-h-[calc(100vh-2.5rem)] flex-col items-center gap-2 overflow-y-auto p-2' : 'grid pb-4'
+        expanded ? 'flex max-h-[calc(100vh-2.5rem)] flex-col items-center gap-2 overflow-y-auto p-2' : 'grid pb-4',
+        className
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

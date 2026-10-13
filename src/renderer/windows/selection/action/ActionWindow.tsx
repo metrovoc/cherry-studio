@@ -222,7 +222,7 @@ const SelectionActionContent: FC<{ action: SelectionActionWindowData }> = ({ act
       <div
         ref={titleBarRef}
         className={cn(
-          'flex h-8 flex-row items-center px-2 transition-colors duration-300 [-webkit-app-region:drag]',
+          'flex h-8 shrink-0 flex-row items-center px-2 transition-colors duration-300 [-webkit-app-region:drag]',
           isWindowFocus ? 'bg-muted' : 'bg-secondary'
         )}
         style={isMac ? { paddingLeft: '78px' } : {}}>

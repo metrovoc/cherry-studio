@@ -40,7 +40,7 @@ const SelectionActionApp: FC = () => {
             <ActionWindow />
           </ErrorBoundary>
           <PopupHost />
-          <ToastHost />
+          <ToastHost className="top-12 max-h-[calc(100vh-4rem)]" />
           <VoicePlaybackHost />
         </CodeStyleProvider>
       </ThemeProvider>
