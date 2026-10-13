@@ -12,8 +12,11 @@ const SECRET_NAMES = [
 ]
 
 function sanitizeSigningDiagnostic(error, environment = process.env) {
-  const stderr = Buffer.isBuffer(error?.stderr) ? error.stderr.toString('utf8') : error?.stderr
-  let detail = typeof stderr === 'string' && stderr.trim() ? stderr : error?.message
+  const output = [error?.stderr, error?.stdout]
+    .map((value) => (Buffer.isBuffer(value) ? value.toString('utf8') : value))
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join('\n')
+  let detail = output || error?.message
   if (typeof detail !== 'string' || !detail.trim()) return 'No native diagnostic was returned'
   detail = stripVTControlCharacters(detail).replace(/^Command failed:[^\r\n]*(?:\r?\n|$)/, '')
   for (const value of SECRET_NAMES.map((name) => environment[name])
