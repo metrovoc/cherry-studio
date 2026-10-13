@@ -89,6 +89,16 @@ and matching bundled catalog. Only the ZIP, DMG, `latest-mac.yml`, and fork-only
 `release-history.json` become release assets. Prior notes lacking the app's
 English/Chinese language sections are omitted from the history asset.
 
+Before publication, `verify-packaged-startup.js` launches the verified ZIP's app
+on the isolated GitHub-hosted macOS runner. It requires an unused Cherry profile,
+a fresh lifecycle bootstrap log and matching packaged version record, and three
+seconds of continued process health without fatal startup or renderer errors.
+The gate applies to new builds and resumed drafts. It stops its app and helpers
+and removes the profile afterward. Failure artifacts contain only that blank
+runner profile's startup logs, stdout/stderr, a desktop screenshot, and the result;
+signing and GitHub credentials are excluded from the app environment. The verifier
+refuses local execution and never uploads profile databases or signing material.
+
 The workflow never overwrites published releases or moves tags. A complete draft
 can resume only for the exact source commit and expected asset set: its existing
 assets are downloaded, SHA256-checked against GitHub's asset records, and fully
