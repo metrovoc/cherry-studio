@@ -27,11 +27,12 @@ jobs:
           evidence/desktop-probe capabilities > evidence/capabilities.json
           defaults read com.apple.WindowManager > evidence/window-manager-preferences.txt 2>&1 || true
           osascript -e 'tell application "System Events" to return UI elements enabled' > evidence/automation.txt 2>&1
-          osascript -e 'tell application "System Events" to tell process "ControlCenter" to return properties of every menu bar item of menu bar 1' > evidence/control-center.txt 2>&1
+          osascript -e 'tell application "System Events" to tell process "ControlCenter" to return properties of every menu bar item of menu bar 1' > evidence/control-center.txt 2>&1 || true
+          evidence/desktop-probe ax-tree-all > evidence/desktop-accessibility.json
           screencapture -x evidence/desktop.png
       - name: Inspect Stage Manager control
         run: |
-          evidence/desktop-probe ax-press com.apple.controlcenter "Control Center"
+          evidence/desktop-probe ax-press-all "Control Center"
           sleep 1
           evidence/desktop-probe ax-tree com.apple.controlcenter > evidence/control-center-open.json
           evidence/desktop-probe ax-press com.apple.controlcenter "Stage Manager" || true
