@@ -157,9 +157,10 @@ async function installProbe() {
     };
     const probe = globalThis.__cherryDesktopProof = {
       application, service, preferences, wm, main, timeline, listeners, originals, preferenceValues,
-      record, unguard:null, css:null, toolbar:null, actions:[],
+      record, unguard:null, trace:null, css:null, toolbar:null, actions:[],
       async cleanup() {
         this.unguard?.(); this.unguard = null;
+        this.trace?.stop(); this.trace = null;
         service.hideToolbar();
         if (this.toolbar && !this.toolbar.isDestroyed()) await this.toolbar.webContents.executeJavaScript(
           'window.removeEventListener("mousedown", window.__desktopInputHandler, true);' +
@@ -366,10 +367,18 @@ async function run() {
     }
     trial.beforeRed = screenshot(`${trial.name}-before`)
     trial.sourceInitiallyActive = trial.before.native.frontmostPid === source.pid && source.exitCode === null
-    trial.mainInitiallyInStrip = inStrip(trial.before.native)
+    trial.mainInitiallyInStrip = trial.before.app.main.visible && inStrip(trial.before.native)
     save('cherry-results.json', results)
     if (!trial.sourceInitiallyActive || !trial.mainInitiallyInStrip)
       throw new Error('Trial did not start with the external source active and Main visibly in the Stage Manager strip')
+    if (results.trials.length === 4) {
+      await inspector.evaluate(`(() => {
+        const probe = __cherryDesktopProof;
+        probe.trace = process.mainModule.require(${JSON.stringify(join(output, 'activationTrace.node'))});
+        probe.trace.start(probe.toolbar.getNativeWindowHandle(), ${JSON.stringify(join(output, 'cherry-guarded-native.jsonl'))}, 60000);
+        probe.trace.checkpoint('before-native-click');
+      })()`)
+    }
     await nativeAsync('click', trial.button.x, trial.button.y)
     await poll('Actual Translate result', () =>
       inspector.evaluate(`__cherryDesktopProof.wm.getWindowsByType('selectionAction')
@@ -381,6 +390,8 @@ async function run() {
       app: await inspector.evaluate('__cherryDesktopProof.inspect()')
     }
     trial.afterRed = screenshot(`${trial.name}-after`)
+    if (results.trials.length === 4) await inspector.evaluate(`__cherryDesktopProof.trace.checkpoint('after-result')`)
+
     const newInput = trial.after.app.input.slice(trial.before.app.input.length)
     trial.trustedMouseDown = newInput.some(
       (event) => event.type === 'mousedown' && event.trusted && event.label === trial.button.label
@@ -401,7 +412,7 @@ async function run() {
       .some((event) => event.event === 'main.focus')
     trial.mainPromoted =
       mainGeometry(trial.after.native)?.Width >= 500 || trial.after.app.main.focused || trial.mainFocusedDuringClick
-    trial.mainRemainedInStrip = inStrip(trial.after.native)
+    trial.mainRemainedInStrip = trial.after.app.main.visible && inStrip(trial.after.native)
     trial.passed =
       trial.delivered &&
       trial.trustedMouseDown &&
