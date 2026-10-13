@@ -292,6 +292,15 @@ async function run() {
   native('activate', cherry.pid)
   await delay(1500)
   results.mainActive = { native: JSON.parse(native('snapshot')), red: screenshot('cherry-main-active') }
+  results.mainWindowNumber = results.mainActive.native.windows.find(
+    (window) =>
+      window.kCGWindowOwnerPID === cherry.pid &&
+      window.kCGWindowBounds.X === 260 &&
+      window.kCGWindowBounds.Y === 150 &&
+      window.kCGWindowBounds.Width === 650 &&
+      window.kCGWindowBounds.Height === 460
+  )?.kCGWindowNumber
+  if (!results.mainWindowNumber) throw new Error('Cannot identify Main in WindowServer state')
   if (results.mainActive.red.count < 50000)
     throw new Error('Main window marker is not visible enough for strip comparison')
   const contents = join(output, 'Cherry External Source.app', 'Contents')
@@ -357,7 +366,7 @@ async function run() {
     }
     trial.beforeRed = screenshot(`${trial.name}-before`)
     trial.sourceInitiallyActive = trial.before.native.frontmostPid === source.pid && source.exitCode === null
-    trial.mainInitiallyInStrip = inStrip(trial.beforeRed)
+    trial.mainInitiallyInStrip = inStrip(trial.before.native)
     save('cherry-results.json', results)
     if (!trial.sourceInitiallyActive || !trial.mainInitiallyInStrip)
       throw new Error('Trial did not start with the external source active and Main visibly in the Stage Manager strip')
@@ -391,25 +400,28 @@ async function run() {
       .slice(trial.before.app.timeline.length)
       .some((event) => event.event === 'main.focus')
     trial.mainPromoted =
-      trial.afterRed.count > results.mainActive.red.count * 0.3 ||
-      trial.after.app.main.focused ||
-      trial.mainFocusedDuringClick
-    trial.mainRemainedInStrip = inStrip(trial.afterRed)
+      mainGeometry(trial.after.native)?.Width >= 500 || trial.after.app.main.focused || trial.mainFocusedDuringClick
+    trial.mainRemainedInStrip = inStrip(trial.after.native)
     trial.passed =
       trial.delivered &&
       trial.trustedMouseDown &&
       trial.trustedClick &&
       (guarded
         ? trial.mainRemainedInStrip && !trial.mainPromoted
-        : trial.mainPromoted && trial.afterRed.count > results.mainActive.red.count * 0.3)
+        : trial.mainPromoted && mainGeometry(trial.after.native)?.Width >= 500)
     save('cherry-results.json', results)
   }
   results.passed = results.trials.length === 4 && results.trials.every((trial) => trial.passed)
   if (!results.passed) throw new Error('Actual Cherry baseline/guard comparison failed; inspect per-trial evidence')
 }
 
-function inStrip(red) {
-  return red.count > 100 && red.count < results.mainActive.red.count * 0.25 && red.maxX < 250
+function mainGeometry(snapshot) {
+  return snapshot.windows.find((window) => window.kCGWindowNumber === results.mainWindowNumber)?.kCGWindowBounds
+}
+
+function inStrip(snapshot) {
+  const bounds = mainGeometry(snapshot)
+  return bounds && bounds.Width > 20 && bounds.Width < 200 && bounds.Height < 200 && bounds.X < 150
 }
 
 run()
