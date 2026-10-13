@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { retry } = require('builder-util-runtime')
 const { parse } = require('yaml')
 
 const { sanitizeSigningDiagnostic } = require('./signing-diagnostics')
@@ -33,12 +34,15 @@ function validateDeveloperIdRequirement(requirement) {
   }
 }
 
-function run(command, args, options) {
+function run(command, args, options, execute = execFileSync) {
   try {
-    return execFileSync(command, args, options)
+    return execute(command, args, options)
   } catch (error) {
     const status = typeof error.status === 'number' ? error.status : 'unknown'
-    throw new Error(`macOS verification failed: ${command} (exit ${status}): ${sanitizeSigningDiagnostic(error)}`)
+    throw Object.assign(
+      new Error(`macOS verification failed: ${command} (exit ${status}): ${sanitizeSigningDiagnostic(error)}`),
+      { status }
+    )
   }
 }
 
@@ -65,22 +69,35 @@ function validateMacBundleMetadata({ feed, info, arch, version }) {
   }
 }
 
-function verifyDownstreamSignature(appPath) {
+async function verifyDownstreamSignature(
+  appPath,
+  { execute = execFileSync, verifyIdentity = verifyMacSignatureIdentity } = {}
+) {
   validateMacBundleMetadata({
     feed: parse(fs.readFileSync(path.join(appPath, 'Contents/Resources/app-update.yml'), 'utf8')),
     info: JSON.parse(
-      run('plutil', ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents/Info.plist')], {
-        encoding: 'utf8'
-      })
+      run(
+        'plutil',
+        ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents/Info.plist')],
+        { encoding: 'utf8' },
+        execute
+      )
     ),
-    arch: run('lipo', ['-archs', path.join(appPath, 'Contents/MacOS/Cherry Studio')], {
-      encoding: 'utf8'
-    }).trim(),
+    arch: run(
+      'lipo',
+      ['-archs', path.join(appPath, 'Contents/MacOS/Cherry Studio')],
+      { encoding: 'utf8' },
+      execute
+    ).trim(),
     version: require('../../package.json').version
   })
-  verifyMacSignatureIdentity(appPath)
-  run('xcrun', ['stapler', 'validate', appPath], { stdio: 'pipe' })
-  run('spctl', ['--assess', '--type', 'execute', appPath], { stdio: 'pipe' })
+  verifyIdentity(appPath)
+  await retry(async () => run('xcrun', ['stapler', 'validate', appPath], { stdio: 'pipe' }, execute), {
+    retries: 2,
+    interval: 5000,
+    shouldRetry: (error) => error.status === 68
+  })
+  run('spctl', ['--assess', '--type', 'execute', appPath], { stdio: 'pipe' }, execute)
 }
 
 function verifyMacSignatureIdentity(appPath) {
@@ -114,7 +131,7 @@ function verifyMacSignatureIdentity(appPath) {
 
 exports.default = async (context) => {
   if (context.electronPlatformName !== 'darwin') throw new Error('Only macOS is supported')
-  verifyDownstreamSignature(path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`))
+  await verifyDownstreamSignature(path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`))
 }
 exports.verifyDownstreamSignature = verifyDownstreamSignature
 exports.verifyMacSignatureIdentity = verifyMacSignatureIdentity
@@ -122,4 +139,9 @@ exports.validateMacBundleMetadata = validateMacBundleMetadata
 exports.validateDeveloperIdRequirement = validateDeveloperIdRequirement
 exports.SIGNING_CERTIFICATE_SHA1 = SIGNING_CERTIFICATE_SHA1
 exports.SIGNING_TEAM_ID = SIGNING_TEAM_ID
-if (require.main === module) verifyDownstreamSignature(process.argv[2])
+if (require.main === module) {
+  verifyDownstreamSignature(process.argv[2]).catch((error) => {
+    console.error(sanitizeSigningDiagnostic(error))
+    process.exitCode = 1
+  })
+}
