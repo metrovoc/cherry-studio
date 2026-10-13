@@ -241,6 +241,19 @@ jobs:
             cp resources/cherry-studio/release-history.json dist/release-history.json
           fi
 
+      - name: Require a stable startup from the shipped signed ZIP
+        id: startup
+        run: node scripts/release/verify-packaged-startup.js "$RUNNER_TEMP/zip-check/Cherry Studio.app" "$RUNNER_TEMP/startup-evidence"
+
+      - name: Preserve isolated startup failure evidence
+        if: failure() && steps.startup.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: downstream-startup-failure-${{ github.sha }}
+          path: ${{ runner.temp }}/startup-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Check out the immutable signed downstream catalog
         uses: actions/checkout@v7
         with:
