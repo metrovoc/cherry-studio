@@ -14,6 +14,8 @@ concurrency:
 jobs:
   desktop-proof:
     runs-on: xcode-27
+    env:
+      GH_TOKEN: ${{ github.token }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -39,7 +41,7 @@ jobs:
           sleep 1
           evidence/desktop-probe ax-tree com.apple.controlcenter > evidence/stage-manager-control.json
           screencapture -x evidence/stage-manager-control.png
-          evidence/desktop-probe ax-press com.apple.controlcenter "com.apple.menuextra.controlcenter"
+          evidence/desktop-probe ax-press-all "com.apple.menuextra.controlcenter"
           evidence/desktop-probe ax-tree com.apple.WindowManager > evidence/stage-manager-intro.json
           evidence/desktop-probe ax-tree-all > evidence/intro-all-apps.json
           evidence/desktop-probe snapshot > evidence/intro-windows.json
@@ -49,16 +51,50 @@ jobs:
           screencapture -x evidence/stage-manager-enabled.png
           sleep 2
           defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
+      - name: Download signed comparison application
+        run: |
+          mkdir -p "$RUNNER_TEMP/cherry-control" evidence/actual
+          gh release view v2.1.6 --repo "$GITHUB_REPOSITORY" --json assets > evidence/actual/assets.json
+          gh release download v2.1.6 --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir "$RUNNER_TEMP/cherry-control"
+          python3 - "$RUNNER_TEMP/cherry-control" <<'PYTHON'
+          import hashlib, json, pathlib, subprocess, sys
+          directory = pathlib.Path(sys.argv[1])
+          archive = next(directory.glob('*.zip'))
+          assets = json.loads(pathlib.Path('evidence/actual/assets.json').read_text())['assets']
+          asset = next(item for item in assets if item['name'] == archive.name)
+          with archive.open('rb') as stream:
+              digest = 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
+          assert digest == asset['digest'], 'Published checksum mismatch'
+          subprocess.run(['ditto', '-x', '-k', str(archive), str(directory)], check=True)
+          subprocess.run(['codesign', '--verify', '--deep', '--strict', str(directory / 'Cherry Studio.app')], check=True)
+          PYTHON
       - uses: ./.github/actions/setup-validation
-      - name: Run real desktop toolbar comparison
+        id: dependencies
+      - name: Run actual Cherry toolbar comparison
+        run: |
+          cp evidence/desktop-probe evidence/actual/desktop-probe
+          node packages/macos-panel/tests/cherryDesktopProof.cjs "$RUNNER_TEMP/cherry-control/Cherry Studio.app" evidence/actual
+      - name: Compare synthetic native fixture
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        continue-on-error: true
         run: |
           node native/darwin/build.js arm64
-          pnpm exec electron packages/macos-panel/tests/desktopProof.cjs evidence
+          mkdir -p evidence/synthetic
+          cp evidence/desktop-probe evidence/synthetic/desktop-probe
+          pnpm exec electron packages/macos-panel/tests/desktopProof.cjs evidence/synthetic
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: assistant-desktop-proof-${{ github.sha }}
-          path: evidence/
+          path: |
+            evidence/*.json
+            evidence/*.txt
+            evidence/*.png
+            evidence/actual/*.json
+            evidence/actual/*.log
+            evidence/actual/*.png
+            evidence/synthetic/*.json
+            evidence/synthetic/*.png
           if-no-files-found: error
           retention-days: 14
 
