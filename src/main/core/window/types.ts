@@ -247,6 +247,9 @@ export interface WindowQuirks {
   /** Configure a fresh mouse-only panel to handle clicks without activating the application. */
   macPreventActivation?: boolean
 
+  /** Block title-bar double-click Fill, which bypasses Electron's maximizable flag, without disabling resizing. */
+  macPreventDoubleClickFill?: boolean
+
   /** Keep native non-key panels, including IME candidates, on their focused editor's Space. */
   macAttachAuxiliaryPanels?: boolean
 

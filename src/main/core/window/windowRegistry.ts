@@ -455,7 +455,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       visibleOnAllWorkspaces: { enabled: true, visibleOnFullScreen: true, skipTransformProcessType: true },
       macShowInDock: false
     },
-    quirks: { macAttachAuxiliaryPanels: true },
+    quirks: { macAttachAuxiliaryPanels: true, macPreventDoubleClickFill: true },
     poolConfig: {
       // Producer axis: always keep one pre-warmed idle window. On every open(),
       // an async setImmediate replacement is scheduled so the next action recycles
