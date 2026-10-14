@@ -14,16 +14,21 @@ const { homedir } = require('node:os')
 const { join, resolve, sep } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const { promisify } = require('node:util')
+const { runInteractionChecks } = require('./cherryInteractionChecks.cjs')
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Desktop proof runs only in isolated GitHub Actions')
-if (!process.argv[2] || !process.argv[3]) throw new Error('Usage: cherryDesktopProof.cjs <app bundle> <evidence>')
+if (!process.argv[2] || !process.argv[3])
+  throw new Error('Usage: cherryDesktopProof.cjs <app bundle or source root> <evidence> [mode]')
 const bundle = resolve(process.argv[2])
+const sourceRoot = existsSync(join(bundle, 'package.json')) ? bundle : null
 const output = resolve(process.argv[3])
 const mode = process.argv[4] || 'comparison'
-if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications'].includes(mode))
+if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications', 'fixed'].includes(mode))
   throw new Error('Unknown actual-app candidate mode')
 const profile = join(output, 'cherry-profile')
-const executable = join(bundle, 'Contents', 'MacOS', 'Cherry Studio')
+const executable = sourceRoot
+  ? require(require.resolve('electron', { paths: [sourceRoot] }))
+  : join(bundle, 'Contents', 'MacOS', 'Cherry Studio')
 const bootConfigDirectory = join(homedir(), '.cherrystudio')
 const bootConfigPath = join(bootConfigDirectory, 'boot-config.json')
 const helper = join(output, 'desktop-probe')
@@ -31,8 +36,7 @@ const native = (...args) => execFileSync(helper, args.map(String), { encoding: '
 const nativeAsync = (...args) => promisify(execFile)(helper, args.map(String), { encoding: 'utf8' })
 const save = (name, data) => writeFileSync(join(output, name), JSON.stringify(data, null, 2))
 const results = {
-  scope:
-    'Published Cherry application, actual managed toolbar and Translate action, repository native activation guard',
+  scope: `${sourceRoot ? 'Built Cherry source' : 'Published Cherry application'}, actual managed toolbar and Translate action, ${mode === 'fixed' ? 'production window behavior' : 'native activation comparison'}`,
   selectionSource: 'selection.text_selected IPC; native selection hook remains disabled',
   mode,
   trials: []
@@ -143,7 +147,7 @@ async function installProbe() {
     const expectedProfile = ${JSON.stringify(profile)};
     const actualProfile = application.getPath('app.userdata');
     if (actualProfile !== expectedProfile && !actualProfile.startsWith(expectedProfile + ${JSON.stringify(sep)}))
-      throw Error('Packaged app did not honor the isolated user-data-dir: ' + actualProfile);
+      throw Error('App did not honor its isolated profile: ' + actualProfile);
     const originals = new Map();
     const preferenceValues = new Map();
     const timeline = [];
@@ -202,7 +206,7 @@ async function installProbe() {
     probe.id = id;
     if (!toolbar || service.toolbarWindow !== toolbar) throw Error('Managed toolbar service binding is missing');
     service.toolbarWindowId = id;
-    if (${JSON.stringify(mode)} !== 'comparison' && ${JSON.stringify(mode)} !== 'baseline') {
+    if (${['prevents-activation', 'join-all-applications'].includes(mode)}) {
       probe.candidate = require(${JSON.stringify(join(output, 'candidateOptions.node'))});
       probe.candidateBeforeShow = JSON.parse(probe.candidate.apply(toolbar.getNativeWindowHandle(), ${JSON.stringify(mode)}));
     }
@@ -221,7 +225,7 @@ async function installProbe() {
       candidate:probe.candidate && JSON.parse(probe.candidate.snapshot(toolbar.getNativeWindowHandle()))
     });
     return {pid:process.pid, version:electron.app.getVersion(), electron:process.versions.electron,
-      profile:actualProfile, toolbarId:id, toolbarBrowserWindowId:toolbar.id,
+      profile:actualProfile, logs:application.getPath('app.logs'), toolbarId:id, toolbarBrowserWindowId:toolbar.id,
       mainBrowserWindowId:main.id, selectionEnabled:preferences.get('feature.selection.enabled'),
       candidateBeforeShow:probe.candidateBeforeShow};
   })()`)
@@ -237,11 +241,13 @@ async function run() {
     execFileSync('defaults', ['read', 'com.apple.WindowManager', 'GloballyEnabled'], { encoding: 'utf8' }).trim() ===
     '1'
   if (!results.stageManagerEnabled) throw new Error('Stage Manager is not enabled')
-  if (existsSync(bootConfigPath)) throw new Error('Hosted runner already has a Cherry boot configuration')
-  createdBootConfigDirectory = !existsSync(bootConfigDirectory)
-  mkdirSync(bootConfigDirectory, { recursive: true })
-  writeFileSync(bootConfigPath, JSON.stringify({ 'app.user_data_path': { [executable]: profile } }))
-  createdBootConfig = true
+  if (!sourceRoot) {
+    if (existsSync(bootConfigPath)) throw new Error('Hosted runner already has a Cherry boot configuration')
+    createdBootConfigDirectory = !existsSync(bootConfigDirectory)
+    mkdirSync(bootConfigDirectory, { recursive: true })
+    writeFileSync(bootConfigPath, JSON.stringify({ 'app.user_data_path': { [executable]: profile } }))
+    createdBootConfig = true
+  }
   startedAt = Date.now()
   const stdout = openSync(join(output, 'cherry-stdout.log'), 'w')
   const stderr = openSync(join(output, 'cherry-stderr.log'), 'w')
@@ -249,12 +255,17 @@ async function run() {
     cherry = spawn(
       executable,
       [
+        ...(sourceRoot ? [sourceRoot] : []),
         '--inspect=9230',
         '--remote-debugging-port=9444',
         '--remote-debugging-address=127.0.0.1',
         `--user-data-dir=${profile}`
       ],
-      { stdio: ['ignore', stdout, stderr] }
+      {
+        stdio: ['ignore', stdout, stderr],
+        cwd: sourceRoot || undefined,
+        env: sourceRoot ? { ...process.env, CS_DEV_PROFILE_ROOT: profile } : process.env
+      }
     )
   } finally {
     closeSync(stdout)
@@ -434,11 +445,25 @@ async function run() {
       (guarded
         ? trial.mainRemainedInStrip && !trial.mainPromoted
         : trial.mainPromoted && mainGeometry(trial.after.native)?.Width >= 500)
+    if (mode === 'fixed' && trial.passed) {
+      trial.resultInteraction = await interactWithResult(trial)
+      trial.passed = trial.resultInteraction.passed
+    }
     save('cherry-results.json', results)
   }
   results.passed =
     results.trials.length === (mode === 'comparison' ? 4 : 2) && results.trials.every((trial) => trial.passed)
-  if (!results.passed) throw new Error('Actual Cherry baseline/guard comparison failed; inspect per-trial evidence')
+  if (!results.passed) throw new Error('Actual Cherry window behavior checks failed; inspect per-trial evidence')
+  if (mode === 'fixed') {
+    results.interactions = await runInteractionChecks({
+      evaluate: inspector.evaluate.bind(inspector),
+      nativeAsync,
+      native,
+      screenshot,
+      output
+    })
+    results.passed = results.interactions.passed
+  }
 }
 
 function mainGeometry(snapshot) {
@@ -450,8 +475,101 @@ function inStrip(snapshot) {
   return bounds && bounds.Width > 20 && bounds.Width < 200 && bounds.Height < 200 && bounds.X < 150
 }
 
+async function interactWithResult(trial) {
+  const result = trial.after.app.results.find((window) => window.visible && window.initData?.id === 'translate')
+  const evidence = (trial.resultInteraction = { resultId: result.id, steps: [] })
+  const windowExpression = `__cherryDesktopProof.wm.getWindow(${JSON.stringify(result.id)})`
+  const renderer = (expression) =>
+    inspector.evaluate(`${windowExpression}.webContents.executeJavaScript(${JSON.stringify(expression)})`)
+  const capture = async (name) => {
+    const step = {
+      name,
+      native: JSON.parse(native('snapshot')),
+      app: await inspector.evaluate('__cherryDesktopProof.inspect()'),
+      image: screenshot(`${trial.name}-result-${name}`)
+    }
+    step.mainRemainedInStrip =
+      step.app.main.visible &&
+      inStrip(step.native) &&
+      !step.app.main.focused &&
+      !step.app.timeline.slice(trial.after.app.timeline.length).some((event) => event.event === 'main.focus')
+    evidence.steps.push(step)
+    save('cherry-results.json', results)
+  }
+  try {
+    evidence.input = await poll('Editable Translate language search', () =>
+      inspector.evaluate(`(async () => {
+      const window = ${windowExpression};
+      const rect = await window.webContents.executeJavaScript(${JSON.stringify(`(() => {
+        const input = document.querySelector('[data-ui="selection.action"] input[role="combobox"]:not(:disabled)');
+        if (!input) return false;
+        const rect = input.getBoundingClientRect();
+        return rect.width && rect.height ? {x:rect.x,y:rect.y,width:rect.width,height:rect.height} : false;
+      })()`)});
+      if (!rect) return false;
+      const bounds = window.getBounds(), zoom = window.webContents.getZoomFactor();
+      return {x:Math.round(bounds.x+(rect.x+rect.width/2)*zoom),y:Math.round(bounds.y+(rect.y+rect.height/2)*zoom)};
+    })()`)
+    )
+    await renderer(`window.__ordinaryInput = [];
+      window.__ordinaryInputHandler = event => {
+        if (event.target.matches?.('input[role="combobox"]')) window.__ordinaryInput.push({
+          type:event.type,trusted:event.isTrusted,value:event.target.value,at:Date.now()
+        });
+      };
+      for (const type of ['mousedown','click','input']) window.addEventListener(type,window.__ordinaryInputHandler,true);`)
+    await nativeAsync('click', evidence.input.x, evidence.input.y)
+    await poll('Translate search keyboard focus', () =>
+      renderer(`
+      document.activeElement?.matches('[data-ui="selection.action"] input[role="combobox"][aria-expanded="true"]')`)
+    )
+    await capture('input-focused')
+    await nativeAsync('type', 'French')
+    await poll('Native text input', () => renderer(`document.activeElement?.value === 'French'`))
+    evidence.typed = await renderer(`({value:document.activeElement.value,events:window.__ordinaryInput})`)
+    await capture('typed')
+    await nativeAsync('click', result.bounds.x + 30, result.bounds.y + result.bounds.height - 80)
+    await poll('Language popup closed', () =>
+      renderer(`
+      !document.querySelector('[data-ui="selection.action"] input[role="combobox"][aria-expanded="true"]')`)
+    )
+    await capture('popup-closed')
+    evidence.drag = await inspector.evaluate(`(() => {
+      const before = ${windowExpression}.getBounds();
+      const area = process.mainModule.require('electron').screen.getDisplayMatching(before).workArea;
+      return {before,dx:before.x+before.width+60<=area.x+area.width?60:-60,
+        dy:before.y+before.height+45<=area.y+area.height?45:-45};
+    })()`)
+    await nativeAsync(
+      'drag',
+      evidence.drag.before.x + 180,
+      evidence.drag.before.y + 16,
+      evidence.drag.dx,
+      evidence.drag.dy
+    )
+    evidence.drag.after = await inspector.evaluate(`${windowExpression}.getBounds()`)
+    await capture('dragged')
+    evidence.passed =
+      evidence.typed.value === 'French' &&
+      ['mousedown', 'click', 'input'].every((type) =>
+        evidence.typed.events.some((event) => event.type === type && event.trusted)
+      ) &&
+      evidence.steps.every((step) => step.mainRemainedInStrip) &&
+      Math.abs(evidence.drag.after.x - evidence.drag.before.x - evidence.drag.dx) <= 2 &&
+      Math.abs(evidence.drag.after.y - evidence.drag.before.y - evidence.drag.dy) <= 2 &&
+      evidence.drag.after.width === evidence.drag.before.width &&
+      evidence.drag.after.height === evidence.drag.before.height
+    return evidence
+  } finally {
+    await renderer(`for (const type of ['mousedown','click','input'])
+      window.removeEventListener(type,window.__ordinaryInputHandler,true);
+      delete window.__ordinaryInput; delete window.__ordinaryInputHandler;`)
+  }
+}
+
 run()
   .catch((error) => {
+    results.passed = false
     results.error = error.stack
     try {
       screenshot('cherry-failure')
@@ -466,31 +584,41 @@ run()
         results.cleanup = await inspector.evaluate('globalThis.__cherryDesktopProof?.cleanup()')
       } catch (error) {
         results.cleanupError = error.message
+        results.passed = false
         process.exitCode = 1
       }
       inspector.close()
     }
     await stop(cherry)
     await stop(source)
-    rmSync(profile, { recursive: true, force: true })
-    if (createdBootConfig) rmSync(bootConfigPath, { force: true })
-    if (createdBootConfigDirectory) rmSync(bootConfigDirectory, { recursive: true, force: true })
-    rmSync(join(output, 'Cherry External Source.app'), { recursive: true, force: true })
-    const logs = join(homedir(), 'Library', 'Logs', 'CherryStudio')
-    if (startedAt && existsSync(logs))
-      for (const name of readdirSync(logs)) {
-        if (name.startsWith('app.') && name.endsWith('.log') && statSync(join(logs, name)).mtimeMs >= startedAt)
-          copyFileSync(join(logs, name), join(output, `cherry-${name}`))
-      }
-    const reports = join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
-    if (startedAt && existsSync(reports))
-      for (const name of readdirSync(reports)) {
-        if (
-          /^(Cherry Studio|Electron)[_-].*\.(ips|crash)$/.test(name) &&
-          statSync(join(reports, name)).mtimeMs >= startedAt
-        )
-          copyFileSync(join(reports, name), join(output, name))
-      }
+    try {
+      const logs =
+        results.application?.logs ||
+        (sourceRoot ? join(profile, 'logs') : join(homedir(), 'Library', 'Logs', 'CherryStudio'))
+      if (startedAt && existsSync(logs))
+        for (const name of readdirSync(logs)) {
+          if (name.startsWith('app.') && name.endsWith('.log') && statSync(join(logs, name)).mtimeMs >= startedAt)
+            copyFileSync(join(logs, name), join(output, `cherry-${name}`))
+        }
+      const reports = join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
+      if (startedAt && existsSync(reports))
+        for (const name of readdirSync(reports)) {
+          if (
+            /^(Cherry Studio|Electron)[_-].*\.(ips|crash)$/.test(name) &&
+            statSync(join(reports, name)).mtimeMs >= startedAt
+          )
+            copyFileSync(join(reports, name), join(output, name))
+        }
+    } catch (error) {
+      results.evidenceError = error.stack
+      results.passed = false
+      process.exitCode = 1
+    } finally {
+      rmSync(profile, { recursive: true, force: true })
+      if (createdBootConfig) rmSync(bootConfigPath, { force: true })
+      if (createdBootConfigDirectory) rmSync(bootConfigDirectory, { recursive: true, force: true })
+      rmSync(join(output, 'Cherry External Source.app'), { recursive: true, force: true })
+    }
     results.ownedProcessesStopped = [cherry, source].every(
       (child) => !child || child.exitCode !== null || child.signalCode !== null
     )

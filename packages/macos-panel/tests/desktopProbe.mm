@@ -129,6 +129,21 @@ int main(int argc, const char **argv) {
       NSRunningApplication *target = [NSRunningApplication runningApplicationWithProcessIdentifier:atoi(argv[2])];
       return [target activateWithOptions:0] ? 0 : 4;
     }
+    if ([command isEqualToString:@"type"] && argc == 3) {
+      if (!CGPreflightPostEventAccess()) return 5;
+      NSString *text = @(argv[2]);
+      if (!text.length || text.length > 20) return 2;
+      std::vector<UniChar> characters(text.length);
+      [text getCharacters:characters.data() range:NSMakeRange(0, text.length)];
+      for (bool down : {true, false}) {
+        CGEventRef event = CGEventCreateKeyboardEvent(nullptr, 0, down);
+        CGEventKeyboardSetUnicodeString(event, characters.size(), characters.data());
+        CGEventPost(kCGHIDEventTap, event);
+        CFRelease(event);
+        usleep(100000);
+      }
+      return 0;
+    }
     if (([command isEqualToString:@"click"] || [command isEqualToString:@"drag"]) && argc >= 4) {
       if (!CGPreflightPostEventAccess()) return 5;
       CGPoint start = CGPointMake(atof(argv[2]), atof(argv[3]));

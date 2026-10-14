@@ -91,6 +91,34 @@ jobs:
             node packages/macos-panel/tests/cherryDesktopProof.cjs "$RUNNER_TEMP/cherry-control/Cherry Studio.app" "evidence/actual-$candidate" "$candidate" || failed=1
           done
           exit "$failed"
+      - name: Build integrated application
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          CONCURRENTLY_MAX_PROCESSES: "1"
+        run: |
+          pnpm download:binaries
+          pnpm rebuild:electron
+          pnpm run build
+      - name: Verify integrated assistant interactions
+        run: |
+          original=$(defaults read -g AppleActionOnDoubleClick 2>/dev/null || true)
+          restore_preference() {
+            if [ -n "$original" ]; then
+              defaults write -g AppleActionOnDoubleClick -string "$original"
+            else
+              defaults delete -g AppleActionOnDoubleClick 2>/dev/null || true
+            fi
+          }
+          trap restore_preference EXIT
+          failed=0
+          for action in Maximize Fill; do
+            defaults write -g AppleActionOnDoubleClick -string "$action"
+            directory="evidence/fixed-$action"
+            mkdir -p "$directory"
+            cp evidence/desktop-probe evidence/candidateOptions.node "$directory/"
+            node packages/macos-panel/tests/cherryDesktopProof.cjs "$PWD" "$directory" fixed || failed=1
+          done
+          exit "$failed"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -118,6 +146,11 @@ jobs:
             evidence/actual-*/*.png
             evidence/actual-*/*.ips
             evidence/actual-*/*.crash
+            evidence/fixed-*/*.json
+            evidence/fixed-*/*.log
+            evidence/fixed-*/*.png
+            evidence/fixed-*/*.ips
+            evidence/fixed-*/*.crash
           if-no-files-found: error
           retention-days: 14
 
