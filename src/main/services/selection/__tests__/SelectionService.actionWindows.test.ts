@@ -144,8 +144,8 @@ describe('selection action presentation', () => {
       return nextId
     })
     vi.mocked(wm.close).mockImplementation((id) => {
-      data.delete(id)
       windows.get(id)?.hide()
+      data.delete(id)
       return true
     })
     vi.mocked(wm.behavior.setAlwaysOnTop).mockImplementation((id, enabled) => {
@@ -211,22 +211,42 @@ describe('selection action presentation', () => {
     expect(next.window.visible).toBe(true)
   })
 
-  it.each(['close', 'close all', 'hide', 'destroy'] as const)(
-    'does not resurrect an action after %s',
-    async (operation) => {
+  it.each(['before', 'after'] as const)(
+    'ignores a previous session’s delayed hide %s the next readiness',
+    async (timing) => {
       await service._doInit()
-      const { window, requestId } = openAction()
-      if (operation === 'close') wm.close('result')
-      if (operation === 'close all') service.closeActionWindows()
-      if (operation === 'hide') {
-        window.show()
-        window.hide()
-      }
-      if (operation === 'destroy') window.close()
-      service.markActionWindowReady('result', requestId)
-      expect(window.visible).toBe(false)
+      quick = createWindow('quick', WindowType.QuickAssistant)
+      const first = openAction()
+      service.markActionWindowReady('result', first.requestId)
+      vi.spyOn(first.window, 'hide').mockImplementation(() => {
+        first.window.visible = false
+      })
+      wm.close('result')
+      const next = openAction()
+      expect(next.requestId).not.toBe(first.requestId)
+      if (timing === 'after') service.markActionWindowReady('result', next.requestId)
+
+      next.window.emit('hide')
+
+      if (timing === 'before') service.markActionWindowReady('result', next.requestId)
+      expect(next.window.visible).toBe(true)
+      expect(next.window.showCount).toBe(2)
+      service.setActionWindowPinned('result', true)
+      quick.show()
+      quick.hide()
+      expect(next.window.level).toBe(3)
     }
   )
+
+  it.each(['close', 'close all', 'destroy'] as const)('does not resurrect an action after %s', async (operation) => {
+    await service._doInit()
+    const { window, requestId } = openAction()
+    if (operation === 'close') wm.close('result')
+    if (operation === 'close all') service.closeActionWindows()
+    if (operation === 'destroy') window.close()
+    service.markActionWindowReady('result', requestId)
+    expect(window.visible).toBe(false)
+  })
 
   it.each([false, true])('sets auto-pin %s before the first presentation', async (autoPin) => {
     MockMainPreferenceServiceUtils.setPreferenceValue('feature.selection.auto_pin', autoPin)

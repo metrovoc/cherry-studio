@@ -190,6 +190,7 @@ releaseInfo:
 
     🐛 Bug Fixes
     - [Selection Assistant] Prepare the title bar before showing a result, keep notifications below it, and prevent double-clicking it from maximizing the window.
+    - [Selection Assistant] Show new results reliably when reusing a recently closed window.
     - [Selection Assistant] Keep results above Quick Assistant while preserving each result's pin setting.
     - [Selection Assistant] Prevent opening selection results from bringing the main window forward on macOS 27.
     - [Chat] Keep the response already received when streaming fails.
@@ -217,6 +218,7 @@ releaseInfo:
 
     🐛 问题修复
     - [划词助手] 结果显示前完成标题栏准备，将通知移至标题栏下方，并禁止双击标题栏最大化窗口。
+    - [划词助手] 修复快速复用刚关闭的窗口时新结果无法显示的问题。
     - [划词助手] 结果窗口保持在快捷助手上方，同时保留各结果窗口的置顶设置。
     - [划词助手] 修复 macOS 27 上打开划词结果时主窗口被带到前台的问题。
     - [聊天] 流式响应失败时保留已接收的内容。
