@@ -410,6 +410,38 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
     save()
     check(doubleClick.passed, 'Native title-bar double-click changed result geometry or presentation')
 
+    await app((id) => {
+      const { wm, interactions: fixture } = globalThis.__cherryDesktopProof
+      fixture.drag(wm.getWindow(id), 'after-double-click-drag', 'ordinary-header-drag')
+    }, report.toast.id)
+    await finishDrag('after-double-click-drag')
+
+    const resize = { name: 'native-edge-resize', before: await state() }
+    report.checks.push(resize)
+    const resizeBefore = resize.before.results.find((window) => window.id === report.toast.id)
+    try {
+      const bounds = resizeBefore.bounds
+      await nativeAsync('drag', bounds.x + bounds.width - 1, bounds.y + bounds.height / 2, 40, 0)
+      resize.after = await capture('interaction-edge-resize')
+      const resized = resize.after.app.results.find((window) => window.id === report.toast.id)
+      resize.passed =
+        resized?.visible &&
+        Math.abs(resized.bounds.width - bounds.width - 40) <= 2 &&
+        ['x', 'y', 'height'].every((key) => resized.bounds[key] === bounds[key]) &&
+        !resized.maximized &&
+        !resized.fullscreen &&
+        !resized.simpleFullscreen
+    } finally {
+      await app(
+        (id, bounds) => globalThis.__cherryDesktopProof.wm.getWindow(id).setBounds(bounds),
+        report.toast.id,
+        resizeBefore.bounds
+      )
+      resize.restored = await state()
+      save()
+    }
+    check(resize.passed, 'Ordinary native edge drag did not resize the result after a title-bar double-click')
+
     await app(async () => {
       const { application, preferences, interactions: fixture } = globalThis.__cherryDesktopProof
       fixture.closeResults()
