@@ -272,13 +272,11 @@ export class SelectionService extends BaseService implements Activatable {
     this.registerDisposable(
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
         if (isMac) this.getNativePanel().configurePanel(mw.window.getNativeWindowHandle())
-        const clearSession = () => this.actionWindows.delete(mw.id)
         const onHide = () => {
           const session = wm.getInitData(mw.id) as SelectionActionWindowData | null
           if (session) {
             application.get('IpcApiService').send(mw.id, 'selection.action_dismissed', { sessionId: session.sessionId })
           }
-          clearSession()
         }
         const resized = () => {
           if (mw.window.isDestroyed()) return
@@ -292,7 +290,7 @@ export class SelectionService extends BaseService implements Activatable {
           mw.window.removeListener('resized', resized)
           mw.window.removeListener('closed', dispose)
           this.actionWindowCleanups.delete(mw.id)
-          clearSession()
+          this.actionWindows.delete(mw.id)
         }
         mw.window.on('hide', onHide)
         mw.window.on('resized', resized)
