@@ -272,7 +272,6 @@ export class SelectionService extends BaseService implements Activatable {
     this.registerDisposable(
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
         if (isMac) this.getNativePanel().configurePanel(mw.window.getNativeWindowHandle())
-        const clearSession = () => this.actionWindows.delete(mw.id)
         const resized = () => {
           if (mw.window.isDestroyed()) return
           if (this.isRemeberWinSize) {
@@ -281,13 +280,11 @@ export class SelectionService extends BaseService implements Activatable {
           }
         }
         const dispose = () => {
-          mw.window.removeListener('hide', clearSession)
           mw.window.removeListener('resized', resized)
           mw.window.removeListener('closed', dispose)
           this.actionWindowCleanups.delete(mw.id)
-          clearSession()
+          this.actionWindows.delete(mw.id)
         }
-        mw.window.on('hide', clearSession)
         mw.window.on('resized', resized)
         mw.window.once('closed', dispose)
         this.actionWindowCleanups.set(mw.id, dispose)
