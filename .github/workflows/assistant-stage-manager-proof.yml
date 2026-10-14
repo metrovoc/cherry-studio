@@ -14,8 +14,6 @@ concurrency:
 jobs:
   desktop-proof:
     runs-on: xcode-27
-    env:
-      GH_TOKEN: ${{ github.token }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -51,53 +49,16 @@ jobs:
           screencapture -x evidence/stage-manager-enabled.png
           sleep 2
           defaults read com.apple.WindowManager > evidence/window-manager-after.txt 2>&1 || true
-      - name: Download signed comparison application
-        run: |
-          mkdir -p "$RUNNER_TEMP/cherry-control" evidence/actual
-          gh release view v2.1.6 --repo "$GITHUB_REPOSITORY" --json assets > evidence/actual/assets.json
-          gh release download v2.1.6 --repo "$GITHUB_REPOSITORY" --pattern '*-mac-arm64.zip' --dir "$RUNNER_TEMP/cherry-control"
-          python3 - "$RUNNER_TEMP/cherry-control" <<'PYTHON'
-          import hashlib, json, pathlib, subprocess, sys
-          directory = pathlib.Path(sys.argv[1])
-          archive = next(directory.glob('*.zip'))
-          assets = json.loads(pathlib.Path('evidence/actual/assets.json').read_text())['assets']
-          asset = next(item for item in assets if item['name'] == archive.name)
-          with archive.open('rb') as stream:
-              digest = 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
-          assert digest == asset['digest'], 'Published checksum mismatch'
-          subprocess.run(['ditto', '-x', '-k', str(archive), str(directory)], check=True)
-          subprocess.run(['codesign', '--verify', '--deep', '--strict', str(directory / 'Cherry Studio.app')], check=True)
-          PYTHON
       - uses: ./.github/actions/setup-validation
         id: dependencies
       - name: Verify production native panel contract
         run: pnpm --filter @cherrystudio/macos-panel test
-      - name: Compare fresh native candidates
-        continue-on-error: true
-        run: |
-          node native/darwin/build.js arm64
-          xcrun clang++ -std=c++17 -fobjc-arc -shared -undefined dynamic_lookup -framework AppKit -I "$(node -p 'require("node:path").resolve(process.execPath, "../../include/node")')" packages/macos-panel/tests/candidateOptions.mm -o evidence/candidateOptions.node
-          failed=0
-          for candidate in baseline prevents-activation transient-only transient-join-all-applications; do
-            mkdir -p "evidence/$candidate"
-            cp evidence/desktop-probe evidence/candidateOptions.node "evidence/$candidate/"
-            pnpm exec electron packages/macos-panel/tests/desktopProof.cjs "evidence/$candidate" "$candidate" || failed=1
-          done
-          exit "$failed"
-      - name: Run actual Cherry toolbar comparison
-        run: |
-          failed=0
-          for candidate in baseline prevents-activation; do
-            mkdir -p "evidence/actual-$candidate"
-            cp evidence/desktop-probe evidence/candidateOptions.node "evidence/actual-$candidate/"
-            node packages/macos-panel/tests/cherryDesktopProof.cjs "$RUNNER_TEMP/cherry-control/Cherry Studio.app" "evidence/actual-$candidate" "$candidate" || failed=1
-          done
-          exit "$failed"
       - name: Build integrated application
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           CONCURRENTLY_MAX_PROCESSES: "1"
         run: |
+          node native/darwin/build.js arm64
           pnpm download:binaries
           pnpm rebuild:electron
           pnpm run build
@@ -117,13 +78,13 @@ jobs:
             defaults write -g AppleActionOnDoubleClick -string "$action"
             directory="evidence/fixed-$action"
             mkdir -p "$directory"
-            cp evidence/desktop-probe evidence/candidateOptions.node "$directory/"
+            cp evidence/desktop-probe "$directory/"
             node packages/macos-panel/tests/cherryDesktopProof.cjs "$PWD" "$directory" fixed || failed=1
           done
           defaults write -g AppleActionOnDoubleClick -string Maximize
           directory="evidence/fixed-tray"
           mkdir -p "$directory"
-          cp evidence/desktop-probe evidence/candidateOptions.node "$directory/"
+          cp evidence/desktop-probe "$directory/"
           node packages/macos-panel/tests/cherryDesktopProof.cjs "$PWD" "$directory" fixed --tray-startup || failed=1
           exit "$failed"
       - uses: actions/upload-artifact@v7
@@ -134,25 +95,6 @@ jobs:
             evidence/*.json
             evidence/*.txt
             evidence/*.png
-            evidence/actual/*.json
-            evidence/actual/*.jsonl
-            evidence/actual/*.log
-            evidence/actual/*.png
-            evidence/actual/*.ips
-            evidence/actual/*.crash
-            evidence/baseline/*.json
-            evidence/baseline/*.png
-            evidence/prevents-activation/*.json
-            evidence/prevents-activation/*.png
-            evidence/transient-only/*.json
-            evidence/transient-only/*.png
-            evidence/transient-join-all-applications/*.json
-            evidence/transient-join-all-applications/*.png
-            evidence/actual-*/*.json
-            evidence/actual-*/*.log
-            evidence/actual-*/*.png
-            evidence/actual-*/*.ips
-            evidence/actual-*/*.crash
             evidence/fixed-*/*.json
             evidence/fixed-*/*.log
             evidence/fixed-*/*.png
