@@ -11,13 +11,7 @@ exports.trackAuxiliaryPanels = (handle) => {
 
 exports.preventWindowActivation = (handle) => {
   const native = require('node-gyp-build')(__dirname)
-  const id = native.preventWindowActivation(handle)
-  let active = true
-  return () => {
-    if (!active) return
-    active = false
-    native.allowWindowActivation(id)
-  }
+  native.preventWindowActivation(handle)
 }
 
 exports.watchOutsideClicks = (handle, callback) => {

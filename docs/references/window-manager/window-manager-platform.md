@@ -24,6 +24,7 @@ Some OS-specific behaviors are tedious to hand-roll at every call site (e.g. cle
 
 | Quirk | Patches | Behavior |
 |---|---|---|
+| `macPreventActivation: boolean` | Native creation settings | On macOS 27+, configure a mouse-only panel before its first display so toolbar clicks do not activate the application. The setting lasts for the window's lifetime. |
 | `macAttachAuxiliaryPanels: boolean` | Native notifications | Attach non-key native panels (including IME candidates) to their focused editor so they inherit its Space. Release observers and restore relationships when the owner closes. |
 | `macClearHoverOnHide: boolean` | `hide()` | After invoking the native `hide()`, send `webContents.sendInputEvent({ type: 'mouseMove', x: -1, y: -1 })` to clear any residual hover state. |
 | `reapplyAlwaysOnTop: boolean` | `show()`, `showInactive()` | After invoking the native method, call `setAlwaysOnTop(true, level, relativeLevel)` with values read from `behavior.alwaysOnTop` (single source of truth). When `behavior.alwaysOnTop.level` is unset, falls back to `'floating'`. Compensates for macOS level resets between hide/show, and for Windows' last-writer-wins topmost z-order (the `level` argument is ignored there). |
