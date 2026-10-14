@@ -70,6 +70,8 @@ jobs:
           PYTHON
       - uses: ./.github/actions/setup-validation
         id: dependencies
+      - name: Verify production native panel contract
+        run: pnpm --filter @cherrystudio/macos-panel test
       - name: Compare fresh native candidates
         continue-on-error: true
         run: |
@@ -118,6 +120,11 @@ jobs:
             cp evidence/desktop-probe evidence/candidateOptions.node "$directory/"
             node packages/macos-panel/tests/cherryDesktopProof.cjs "$PWD" "$directory" fixed || failed=1
           done
+          defaults write -g AppleActionOnDoubleClick -string Maximize
+          directory="evidence/fixed-tray"
+          mkdir -p "$directory"
+          cp evidence/desktop-probe evidence/candidateOptions.node "$directory/"
+          node packages/macos-panel/tests/cherryDesktopProof.cjs "$PWD" "$directory" fixed --tray-startup || failed=1
           exit "$failed"
       - uses: actions/upload-artifact@v7
         if: always()

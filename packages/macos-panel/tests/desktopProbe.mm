@@ -65,6 +65,13 @@ int main(int argc, const char **argv) {
               @"os": NSProcessInfo.processInfo.operatingSystemVersionString});
       return screens.count ? 0 : 3;
     }
+    if ([command isEqualToString:@"application"] && argc == 3) {
+      NSRunningApplication *target = [NSRunningApplication runningApplicationWithProcessIdentifier:atoi(argv[2])];
+      if (!target) return 6;
+      Print(@{@"pid": @(target.processIdentifier), @"activationPolicy": @(target.activationPolicy),
+              @"active": @(target.active), @"terminated": @(target.terminated)});
+      return 0;
+    }
     if ([command isEqualToString:@"snapshot"]) {
       NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID));
       Print(@{@"uptime": @(NSProcessInfo.processInfo.systemUptime),

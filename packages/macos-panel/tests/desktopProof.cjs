@@ -6,13 +6,11 @@ const { setTimeout: delay } = require('node:timers/promises')
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Desktop input proof runs only in isolated GitHub Actions')
 const { app, BrowserWindow, ipcMain } = require('electron')
-const { preventWindowActivation } = require('../panel.cjs')
 const { configurePanel, moveToActiveSpace } = require('../../../resources/binaries/darwin-arm64/selection-panel.node')
 const output = resolve(process.argv[2])
-const mode = process.argv[3] || 'comparison'
+const mode = process.argv[3] || 'baseline'
 if (
   ![
-    'comparison',
     'baseline',
     'prevents-activation',
     'join-all-applications',
@@ -21,7 +19,7 @@ if (
   ].includes(mode)
 )
   throw new Error('Unknown native candidate mode')
-const candidate = !['comparison', 'baseline'].includes(mode) ? require(join(output, 'candidateOptions.node')) : null
+const candidate = mode !== 'baseline' ? require(join(output, 'candidateOptions.node')) : null
 const helper = join(output, 'desktop-probe')
 const results = { scope: 'Electron toolbar with synthetic action renderer and OS-posted clicks', mode, trials: [] }
 let source
@@ -29,7 +27,6 @@ let actionCount = 0
 let result
 let main
 let toolbar
-let unguard
 const timeline = []
 const record = (event, detail = {}) => timeline.push({ event, uptime: process.uptime(), ...detail })
 const nativeAsync = (...args) => promisify(execFile)(helper, args.map(String), { encoding: 'utf8' })
@@ -166,15 +163,11 @@ app
       result.showInactive()
       record('result.opened')
     })
-    for (const guarded of mode === 'comparison'
-      ? [false, true, false, true]
-      : [mode !== 'baseline', mode !== 'baseline']) {
+    for (const guarded of [mode !== 'baseline', mode !== 'baseline']) {
       if (result) {
         result.destroy()
         result = null
       }
-      unguard?.()
-      unguard = mode === 'comparison' && guarded ? preventWindowActivation(toolbar.getNativeWindowHandle()) : null
       main.show()
       await delay(500)
       native('activate', source.pid)
@@ -242,7 +235,6 @@ app
   .finally(() => {
     save('timeline.json', timeline)
     save('results.json', results)
-    unguard?.()
     source?.kill('SIGTERM')
     app.exit(process.exitCode || 0)
   })

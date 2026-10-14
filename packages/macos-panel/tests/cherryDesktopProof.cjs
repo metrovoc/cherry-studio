@@ -18,13 +18,16 @@ const { runInteractionChecks } = require('./cherryInteractionChecks.cjs')
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Desktop proof runs only in isolated GitHub Actions')
 if (!process.argv[2] || !process.argv[3])
-  throw new Error('Usage: cherryDesktopProof.cjs <app bundle or source root> <evidence> [mode]')
+  throw new Error('Usage: cherryDesktopProof.cjs <app bundle or source root> <evidence> [mode] [--tray-startup]')
 const bundle = resolve(process.argv[2])
 const sourceRoot = existsSync(join(bundle, 'package.json')) ? bundle : null
 const output = resolve(process.argv[3])
-const mode = process.argv[4] || 'comparison'
-if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications', 'fixed'].includes(mode))
+const mode = process.argv[4] || 'baseline'
+if (!['baseline', 'prevents-activation', 'join-all-applications', 'fixed'].includes(mode))
   throw new Error('Unknown actual-app candidate mode')
+const trayStartup = process.argv[5] === '--tray-startup'
+if (process.argv[5] && !trayStartup) throw new Error('Unknown startup option')
+if (trayStartup && (!sourceRoot || mode !== 'fixed')) throw new Error('Tray startup requires source/fixed mode')
 const profile = join(output, 'cherry-profile')
 const executable = sourceRoot
   ? require(require.resolve('electron', { paths: [sourceRoot] }))
@@ -46,7 +49,10 @@ let source
 let inspector
 let createdBootConfig = false
 let createdBootConfigDirectory = false
+let createdProfile = false
 let startedAt
+const applicationExpression = `Object.values(process.mainModule.require('module')._cache)
+  .map(module => module.exports?.application).find(value => value?.get && value?.getPath)`
 
 async function poll(label, operation, timeout = 20000) {
   const deadline = Date.now() + timeout
@@ -130,6 +136,125 @@ async function stop(child) {
   }
 }
 
+async function launchCherry(logPrefix = 'cherry') {
+  const stdout = openSync(join(output, `${logPrefix}-stdout.log`), 'w')
+  const stderr = openSync(join(output, `${logPrefix}-stderr.log`), 'w')
+  try {
+    cherry = spawn(
+      executable,
+      [
+        ...(sourceRoot ? [sourceRoot] : []),
+        '--inspect=9230',
+        '--remote-debugging-port=9444',
+        '--remote-debugging-address=127.0.0.1',
+        `--user-data-dir=${profile}`
+      ],
+      {
+        stdio: ['ignore', stdout, stderr],
+        cwd: sourceRoot || undefined,
+        env: sourceRoot ? { ...process.env, CS_DEV_PROFILE_ROOT: profile } : process.env
+      }
+    )
+  } finally {
+    closeSync(stdout)
+    closeSync(stderr)
+  }
+  cherry.on('error', (error) => {
+    cherry.spawnError = error
+  })
+  const target = await poll(
+    'Main-process inspector',
+    async () => {
+      const targets = await fetch('http://127.0.0.1:9230/json/list').then((response) => response.json())
+      return targets.find((target) => target.webSocketDebuggerUrl)
+    },
+    60000
+  )
+  inspector = await connect(target.webSocketDebuggerUrl)
+  await poll(
+    'Cherry bootstrap',
+    () =>
+      inspector.evaluate(`(() => {
+    const application = ${applicationExpression};
+    const main = application?.isReady() && application.get('WindowManager').getWindowsByType('main')[0];
+    return !!main && !main.webContents.isLoadingMainFrame();
+  })()`),
+    60000
+  )
+}
+
+async function prepareTrayStartup() {
+  await launchCherry('cherry-tray-prepare')
+  results.trayStartup = {
+    prepared: await inspector.evaluate(`(async () => {
+    const application = ${applicationExpression};
+    const actualProfile = application.getPath('app.userdata');
+    if (!actualProfile.startsWith(${JSON.stringify(profile + sep)})) throw Error('Preparation profile is not isolated');
+    const preferences = application.get('PreferenceService');
+    await preferences.set('app.tray.enabled', true);
+    await preferences.set('app.tray.on_launch', true);
+    return {pid:process.pid, profile:actualProfile, enabled:preferences.get('app.tray.enabled'), onLaunch:preferences.get('app.tray.on_launch')};
+  })()`)
+  }
+  await inspector.evaluate(`(() => {
+    const application = ${applicationExpression};
+    setTimeout(() => application.quit(), 100);
+    return true;
+  })()`)
+  inspector.close()
+  inspector = null
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cherry.removeListener('exit', exited)
+      reject(new Error('Tray preparation did not quit cleanly'))
+    }, 20000)
+    const exited = (code, signal) => {
+      clearTimeout(timer)
+      results.trayStartup.preparationExit = { code, signal }
+      if (code === 0 && !signal) resolve()
+      else reject(new Error(`Tray preparation exited with ${signal || code}`))
+    }
+    if (cherry.exitCode !== null || cherry.signalCode !== null) exited(cherry.exitCode, cherry.signalCode)
+    else cherry.once('exit', exited)
+  })
+}
+
+async function captureTrayStartup() {
+  await poll('Tray launch suppression completed', () =>
+    inspector.evaluate(`(() => {
+    const application = ${applicationExpression};
+    return application.get('MainWindowService').suppressInitialLaunchShow === false;
+  })()`)
+  )
+  results.trayStartup.native = await poll('Native accessory startup policy', () => {
+    const state = JSON.parse(native('application', cherry.pid))
+    results.trayStartup.native = state
+    return state.activationPolicy === 1 && !state.terminated ? state : false
+  })
+  results.trayStartup.started = await inspector.evaluate(`(() => {
+    const application = ${applicationExpression};
+    const preferences = application.get('PreferenceService'), tray = application.get('TrayService');
+    const main = application.get('WindowManager').getWindowsByType('main')[0];
+    return {pid:process.pid, enabled:preferences.get('app.tray.enabled'), onLaunch:preferences.get('app.tray.on_launch'),
+      trayActivated:tray.isActivated, trayPresent:!!tray.tray && !tray.tray.isDestroyed(), mainVisible:main.isVisible(),
+      dockVisible:process.mainModule.require('electron').app.dock.isVisible()};
+  })()`)
+  results.trayStartup.windows = JSON.parse(native('snapshot'))
+  results.trayStartup.image = screenshot('cherry-tray-startup')
+  save('cherry-results.json', results)
+  const started = results.trayStartup.started
+  if (
+    !started.enabled ||
+    !started.onLaunch ||
+    !started.trayActivated ||
+    !started.trayPresent ||
+    started.mainVisible ||
+    started.dockVisible ||
+    results.trayStartup.native.activationPolicy !== 1
+  )
+    throw new Error('Relaunch did not enter the real accessory tray startup state')
+}
+
 async function installProbe() {
   return inspector.evaluate(`(async () => {
     const require = process.mainModule.require.bind(process.mainModule);
@@ -166,10 +291,8 @@ async function installProbe() {
     };
     const probe = globalThis.__cherryDesktopProof = {
       application, service, preferences, wm, main, timeline, listeners, originals, preferenceValues,
-      record, unguard:null, trace:null, css:null, toolbar:null, actions:[],
+      record, css:null, toolbar:null, actions:[],
       async cleanup() {
-        this.unguard?.(); this.unguard = null;
-        this.trace?.stop(); this.trace = null;
         service.hideToolbar();
         if (this.toolbar && !this.toolbar.isDestroyed()) await this.toolbar.webContents.executeJavaScript(
           'window.removeEventListener("mousedown", window.__desktopInputHandler, true);' +
@@ -233,7 +356,9 @@ async function installProbe() {
 
 async function run() {
   mkdirSync(output, { recursive: true })
+  if (existsSync(profile)) throw new Error('Owned proof profile must be fresh')
   mkdirSync(profile, { recursive: true })
+  createdProfile = true
   results.capabilities = JSON.parse(native('capabilities'))
   if (!results.capabilities.postEvents || !results.capabilities.accessibility || !results.capabilities.screenCapture)
     throw new Error('Runner lacks existing native input, accessibility, or capture permissions')
@@ -249,52 +374,9 @@ async function run() {
     createdBootConfig = true
   }
   startedAt = Date.now()
-  const stdout = openSync(join(output, 'cherry-stdout.log'), 'w')
-  const stderr = openSync(join(output, 'cherry-stderr.log'), 'w')
-  try {
-    cherry = spawn(
-      executable,
-      [
-        ...(sourceRoot ? [sourceRoot] : []),
-        '--inspect=9230',
-        '--remote-debugging-port=9444',
-        '--remote-debugging-address=127.0.0.1',
-        `--user-data-dir=${profile}`
-      ],
-      {
-        stdio: ['ignore', stdout, stderr],
-        cwd: sourceRoot || undefined,
-        env: sourceRoot ? { ...process.env, CS_DEV_PROFILE_ROOT: profile } : process.env
-      }
-    )
-  } finally {
-    closeSync(stdout)
-    closeSync(stderr)
-  }
-  cherry.on('error', (error) => {
-    cherry.spawnError = error
-  })
-  const target = await poll(
-    'Main-process inspector',
-    async () => {
-      const targets = await fetch('http://127.0.0.1:9230/json/list').then((response) => response.json())
-      return targets.find((target) => target.webSocketDebuggerUrl)
-    },
-    60000
-  )
-  inspector = await connect(target.webSocketDebuggerUrl)
-  await poll(
-    'Cherry bootstrap',
-    () =>
-      inspector.evaluate(`(() => {
-    const require = process.mainModule?.require.bind(process.mainModule);
-    if (!require) return false;
-    const app = Object.values(require('module')._cache).map(module => module.exports?.application).find(value => value?.get && value?.getPath);
-    return !!app?.isReady() && !!app.get('WindowManager').getWindowsByType('main')[0] &&
-      !app.get('WindowManager').getWindowsByType('main')[0].webContents.isLoadingMainFrame();
-  })()`),
-    60000
-  )
+  if (trayStartup) await prepareTrayStartup()
+  await launchCherry()
+  if (trayStartup) await captureTrayStartup()
   results.application = await installProbe()
   await poll('Actual toolbar renderer', () =>
     inspector.evaluate(`!__cherryDesktopProof.toolbar.webContents.isLoadingMainFrame() &&
@@ -311,7 +393,7 @@ async function run() {
     window.addEventListener('click', window.__desktopInputHandler, true);
   `)})`
   )
-  await inspector.evaluate('__cherryDesktopProof.main.show()')
+  await inspector.evaluate('__cherryDesktopProof.application.get("MainWindowService").showMainWindow()')
   native('activate', cherry.pid)
   await delay(1500)
   results.mainActive = { native: JSON.parse(native('snapshot')), red: screenshot('cherry-main-active') }
@@ -341,17 +423,12 @@ async function run() {
   })
   await delay(1500)
   if (source.spawnError) throw source.spawnError
-  const guardModule = resolve(__dirname, '../panel.cjs')
-  for (const guarded of mode === 'comparison'
-    ? [false, true, false, true]
-    : [mode !== 'baseline', mode !== 'baseline']) {
+  for (const guarded of [mode !== 'baseline', mode !== 'baseline']) {
     const trial = { guarded, name: `cherry-${results.trials.length}-${guarded ? 'guarded' : 'baseline'}` }
     results.trials.push(trial)
     await inspector.evaluate(`(() => {
       const probe = __cherryDesktopProof;
       probe.service.closeActionWindows();
-      probe.unguard?.(); probe.unguard = null;
-      if (${mode === 'comparison' && guarded}) probe.unguard = process.mainModule.require(${JSON.stringify(guardModule)}).preventWindowActivation(probe.toolbar.getNativeWindowHandle());
       probe.main.show();
     })()`)
     await poll('Previous action windows closed', () =>
@@ -395,14 +472,6 @@ async function run() {
     save('cherry-results.json', results)
     if (!trial.sourceInitiallyActive || !trial.mainInitiallyInStrip)
       throw new Error('Trial did not start with the external source active and Main visibly in the Stage Manager strip')
-    if (process.env.TRACE_ACTIVATION === '1' && results.trials.length === 4) {
-      await inspector.evaluate(`(() => {
-        const probe = __cherryDesktopProof;
-        probe.trace = process.mainModule.require(${JSON.stringify(join(output, 'activationTrace.node'))});
-        probe.trace.start(probe.toolbar.getNativeWindowHandle(), ${JSON.stringify(join(output, 'cherry-guarded-native.jsonl'))}, 60000);
-        probe.trace.checkpoint('before-native-click');
-      })()`)
-    }
     await nativeAsync('click', trial.button.x, trial.button.y)
     await poll('Actual Translate result', () =>
       inspector.evaluate(`__cherryDesktopProof.wm.getWindowsByType('selectionAction')
@@ -414,8 +483,6 @@ async function run() {
       app: await inspector.evaluate('__cherryDesktopProof.inspect()')
     }
     trial.afterRed = screenshot(`${trial.name}-after`)
-    if (process.env.TRACE_ACTIVATION === '1' && results.trials.length === 4)
-      await inspector.evaluate(`__cherryDesktopProof.trace.checkpoint('after-result')`)
 
     const newInput = trial.after.app.input.slice(trial.before.app.input.length)
     trial.trustedMouseDown = newInput.some(
@@ -451,8 +518,7 @@ async function run() {
     }
     save('cherry-results.json', results)
   }
-  results.passed =
-    results.trials.length === (mode === 'comparison' ? 4 : 2) && results.trials.every((trial) => trial.passed)
+  results.passed = results.trials.length === 2 && results.trials.every((trial) => trial.passed)
   if (!results.passed) throw new Error('Actual Cherry window behavior checks failed; inspect per-trial evidence')
   if (mode === 'fixed') {
     results.interactions = await runInteractionChecks({
@@ -614,7 +680,7 @@ run()
       results.passed = false
       process.exitCode = 1
     } finally {
-      rmSync(profile, { recursive: true, force: true })
+      if (createdProfile) rmSync(profile, { recursive: true, force: true })
       if (createdBootConfig) rmSync(bootConfigPath, { force: true })
       if (createdBootConfigDirectory) rmSync(bootConfigDirectory, { recursive: true, force: true })
       rmSync(join(output, 'Cherry External Source.app'), { recursive: true, force: true })
