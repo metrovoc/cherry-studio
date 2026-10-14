@@ -76,7 +76,7 @@ jobs:
           node native/darwin/build.js arm64
           xcrun clang++ -std=c++17 -fobjc-arc -shared -undefined dynamic_lookup -framework AppKit -I "$(node -p 'require("node:path").resolve(process.execPath, "../../include/node")')" packages/macos-panel/tests/candidateOptions.mm -o evidence/candidateOptions.node
           failed=0
-          for candidate in baseline prevents-activation join-all-applications; do
+          for candidate in baseline prevents-activation transient-only transient-join-all-applications; do
             mkdir -p "evidence/$candidate"
             cp evidence/desktop-probe evidence/candidateOptions.node "evidence/$candidate/"
             pnpm exec electron packages/macos-panel/tests/desktopProof.cjs "evidence/$candidate" "$candidate" || failed=1
@@ -84,9 +84,13 @@ jobs:
           exit "$failed"
       - name: Run actual Cherry toolbar comparison
         run: |
-          xcrun clang++ -std=c++17 -fobjc-arc -shared -undefined dynamic_lookup -framework AppKit -I "$(node -p 'require("node:path").resolve(process.execPath, "../../include/node")')" packages/macos-panel/tests/activationTrace.mm -o evidence/actual/activationTrace.node
-          cp evidence/desktop-probe evidence/actual/desktop-probe
-          node packages/macos-panel/tests/cherryDesktopProof.cjs "$RUNNER_TEMP/cherry-control/Cherry Studio.app" evidence/actual
+          failed=0
+          for candidate in baseline prevents-activation; do
+            mkdir -p "evidence/actual-$candidate"
+            cp evidence/desktop-probe evidence/candidateOptions.node "evidence/actual-$candidate/"
+            node packages/macos-panel/tests/cherryDesktopProof.cjs "$RUNNER_TEMP/cherry-control/Cherry Studio.app" "evidence/actual-$candidate" "$candidate" || failed=1
+          done
+          exit "$failed"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -105,8 +109,15 @@ jobs:
             evidence/baseline/*.png
             evidence/prevents-activation/*.json
             evidence/prevents-activation/*.png
-            evidence/join-all-applications/*.json
-            evidence/join-all-applications/*.png
+            evidence/transient-only/*.json
+            evidence/transient-only/*.png
+            evidence/transient-join-all-applications/*.json
+            evidence/transient-join-all-applications/*.png
+            evidence/actual-*/*.json
+            evidence/actual-*/*.log
+            evidence/actual-*/*.png
+            evidence/actual-*/*.ips
+            evidence/actual-*/*.crash
           if-no-files-found: error
           retention-days: 14
 

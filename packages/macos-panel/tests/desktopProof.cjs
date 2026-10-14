@@ -10,11 +10,18 @@ const { preventWindowActivation } = require('../panel.cjs')
 const { configurePanel, moveToActiveSpace } = require('../../../resources/binaries/darwin-arm64/selection-panel.node')
 const output = resolve(process.argv[2])
 const mode = process.argv[3] || 'comparison'
-if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications'].includes(mode))
+if (
+  ![
+    'comparison',
+    'baseline',
+    'prevents-activation',
+    'join-all-applications',
+    'transient-only',
+    'transient-join-all-applications'
+  ].includes(mode)
+)
   throw new Error('Unknown native candidate mode')
-const candidate = ['prevents-activation', 'join-all-applications'].includes(mode)
-  ? require(join(output, 'candidateOptions.node'))
-  : null
+const candidate = !['comparison', 'baseline'].includes(mode) ? require(join(output, 'candidateOptions.node')) : null
 const helper = join(output, 'desktop-probe')
 const results = { scope: 'Electron toolbar with synthetic action renderer and OS-posted clicks', mode, trials: [] }
 let source
@@ -74,6 +81,14 @@ app
     await delay(1500)
     results.mainActive = statePlaceholder()
     results.mainActive.red = screenshot('main-active')
+    results.mainWindowNumber = results.mainActive.native.windows.find(
+      (window) =>
+        window.kCGWindowOwnerPID === process.pid &&
+        window.kCGWindowName === 'Assistant Main' &&
+        window.kCGWindowBounds.Width === 650 &&
+        window.kCGWindowBounds.Height === 460
+    )?.kCGWindowNumber
+    if (!results.mainWindowNumber) throw new Error('Cannot identify Main in WindowServer state')
     const sourceBundle = join(output, 'External Source.app', 'Contents')
     mkdirSync(join(sourceBundle, 'MacOS'), { recursive: true })
     execFileSync('cp', [helper, join(sourceBundle, 'MacOS', 'source')])
@@ -166,6 +181,7 @@ app
       await delay(1500)
       toolbar.showInactive()
       toolbar.setAlwaysOnTop(true, 'screen-saver')
+      if (mode.startsWith('transient-')) candidate.normalizeVisibleCollection(toolbar.getNativeWindowHandle(), mode)
       await delay(500)
       const name = `${results.trials.length}-${guarded ? 'guarded' : 'baseline'}`
       const before = state()
@@ -197,14 +213,12 @@ app
     results.stageManagerEnabled =
       execFileSync('defaults', ['read', 'com.apple.WindowManager', 'GloballyEnabled'], { encoding: 'utf8' }).trim() ===
       '1'
-    const activePixels = results.mainActive.red.count
     for (const trial of results.trials) {
-      trial.mainInitiallyInStrip =
-        trial.beforeRed.count > 100 && trial.beforeRed.count < activePixels * 0.25 && trial.beforeRed.maxX < 250
-      trial.mainPromoted =
-        trial.afterRed.count > activePixels * 0.3 || trial.after.main.focused || trial.mainFocusedDuringClick
-      trial.mainRemainedInStrip =
-        trial.afterRed.count > 100 && trial.afterRed.count < activePixels * 0.25 && trial.afterRed.maxX < 250
+      const before = mainGeometry(trial.before.native),
+        after = mainGeometry(trial.after.native)
+      trial.mainInitiallyInStrip = trial.before.main.visible && inStrip(before)
+      trial.mainPromoted = after?.Width >= 500 || trial.after.main.focused || trial.mainFocusedDuringClick
+      trial.mainRemainedInStrip = trial.after.main.visible && inStrip(after)
     }
     results.passed =
       results.stageManagerEnabled &&
@@ -216,7 +230,7 @@ app
           t.mainInitiallyInStrip &&
           (t.guarded
             ? t.mainRemainedInStrip && !t.mainPromoted
-            : t.mainPromoted && t.afterRed.count > activePixels * 0.3)
+            : t.mainPromoted && mainGeometry(t.after.native)?.Width >= 500)
       )
     if (!results.passed)
       throw new Error('Stage Manager baseline/guarded proof did not satisfy all assertions; inspect evidence')
@@ -234,4 +248,13 @@ app
   })
 function statePlaceholder() {
   return { native: JSON.parse(native('snapshot')), main: { bounds: main.getBounds() } }
+}
+
+function mainGeometry(snapshot) {
+  return snapshot.windows.find(
+    (window) => window.kCGWindowNumber === results.mainWindowNumber && window.kCGWindowIsOnscreen === true
+  )?.kCGWindowBounds
+}
+function inStrip(bounds) {
+  return bounds && bounds.Width > 20 && bounds.Width < 200 && bounds.Height < 200 && bounds.X < 150
 }

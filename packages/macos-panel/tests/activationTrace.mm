@@ -54,60 +54,34 @@ static bool InScope(id receiver, NSEvent *event) {
 
 static void TraceViews(NSView *view);
 
-static Class TraceClass(Class original, bool application, bool window) {
+static Class TraceClass(Class original) {
   static std::unordered_map<Class, Class> classes;
   const auto found = classes.find(original);
   if (found != classes.end()) return found->second;
   NSString *name = [NSString stringWithFormat:@"CherryActivationTrace_%s", class_getName(original)];
   Class traced = objc_allocateClassPair(original, name.UTF8String, 0);
   objc_setAssociatedObject(traced, &traceClassKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  auto eventMethod = [&](SEL selector) {
+  for (NSString *methodName in @[@"shouldDelayWindowOrderingForEvent:", @"acceptsFirstMouse:"]) {
+    const SEL selector = NSSelectorFromString(methodName);
     Method method = class_getInstanceMethod(original, selector);
-    if (!method) return;
-    auto invoke = (void (*)(id, SEL, NSEvent *))method_getImplementation(method);
-    NSString *label = NSStringFromSelector(selector);
-    class_addMethod(traced, selector, imp_implementationWithBlock(^(id receiver, NSEvent *event) {
-      const bool scoped = InScope(receiver, event);
-      if (scoped) Record([label stringByAppendingString:@".enter"], receiver, event);
-      if (scoped && window) TraceViews(owner.contentView.superview ?: owner.contentView);
-      invoke(receiver, selector, event);
-      if (scoped) Record([label stringByAppendingString:@".exit"], receiver, event);
+    if (!method) continue;
+    const auto invoke = (BOOL (*)(id, SEL, NSEvent *))method_getImplementation(method);
+    class_addMethod(traced, selector, imp_implementationWithBlock(^BOOL(NSView *view, NSEvent *event) {
+      const BOOL value = invoke(view, selector, event);
+      if (InScope(view, event)) Record(methodName, view, event, @{@"result": @(value)});
+      return value;
     }), method_getTypeEncoding(method));
-  };
-  if (application || window) eventMethod(@selector(sendEvent:));
-  if (!application && !window) {
-    for (NSString *methodName in @[@"shouldDelayWindowOrderingForEvent:", @"acceptsFirstMouse:"]) {
-      SEL selector = NSSelectorFromString(methodName);
-      Method method = class_getInstanceMethod(original, selector);
-      if (!method) continue;
-      auto invoke = (BOOL (*)(id, SEL, NSEvent *))method_getImplementation(method);
-      class_addMethod(traced, selector, imp_implementationWithBlock(^BOOL(NSView *view, NSEvent *event) {
-        BOOL value = invoke(view, selector, event);
-        if (InScope(view, event)) Record(methodName, view, event, @{@"result": @(value)});
-        return value;
-      }), method_getTypeEncoding(method));
-    }
-    eventMethod(@selector(mouseDown:));
-    eventMethod(@selector(mouseUp:));
   }
-  if (application) {
-    for (NSString *methodName in @[@"activate", @"preventWindowOrdering"]) {
-      SEL selector = NSSelectorFromString(methodName);
-      Method method = class_getInstanceMethod(original, selector);
-      if (!method) continue;
-      auto invoke = (void (*)(id, SEL))method_getImplementation(method);
-      class_addMethod(traced, selector, imp_implementationWithBlock(^(id receiver) {
-        Record(methodName, receiver, NSApp.currentEvent, @{@"stack": NSThread.callStackSymbols});
-        invoke(receiver, selector);
-      }), method_getTypeEncoding(method));
-    }
-    SEL selector = @selector(activateIgnoringOtherApps:);
+  for (NSString *methodName in @[@"mouseDown:", @"mouseUp:"]) {
+    const SEL selector = NSSelectorFromString(methodName);
     Method method = class_getInstanceMethod(original, selector);
-    auto invoke = (void (*)(id, SEL, BOOL))method_getImplementation(method);
-    class_addMethod(traced, selector, imp_implementationWithBlock(^(id receiver, BOOL value) {
-      Record(@"activateIgnoringOtherApps:", receiver, NSApp.currentEvent,
-          @{@"argument": @(value), @"stack": NSThread.callStackSymbols});
-      invoke(receiver, selector, value);
+    if (!method) continue;
+    const auto invoke = (void (*)(id, SEL, NSEvent *))method_getImplementation(method);
+    class_addMethod(traced, selector, imp_implementationWithBlock(^(NSView *view, NSEvent *event) {
+      const bool scoped = InScope(view, event);
+      if (scoped) Record([methodName stringByAppendingString:@".enter"], view, event);
+      invoke(view, selector, event);
+      if (scoped) Record([methodName stringByAppendingString:@".exit"], view, event);
     }), method_getTypeEncoding(method));
   }
   objc_registerClassPair(traced);
@@ -115,14 +89,17 @@ static Class TraceClass(Class original, bool application, bool window) {
   return traced;
 }
 
-static void TraceObject(id object, bool application = false, bool window = false) {
-  if (!object) return;
-  Class original = object_getClass(object);
+static void TraceObject(NSView *view) {
+  if (!view) return;
+  Class original = object_getClass(view);
   if (objc_getAssociatedObject(original, &traceClassKey)) return;
-  Class traced = TraceClass(original, application, window);
-  [originalClasses setObject:[NSValue valueWithPointer:(__bridge void *)original] forKey:object];
-  [traceClasses setObject:[NSValue valueWithPointer:(__bridge void *)traced] forKey:object];
-  object_setClass(object, traced);
+  for (Class current = original; current; current = class_getSuperclass(current)) {
+    if ([NSStringFromClass(current) hasPrefix:@"NSKVONotifying_"]) return;
+  }
+  Class traced = TraceClass(original);
+  [originalClasses setObject:[NSValue valueWithPointer:(__bridge void *)original] forKey:view];
+  [traceClasses setObject:[NSValue valueWithPointer:(__bridge void *)traced] forKey:view];
+  object_setClass(view, traced);
 }
 
 static void TraceViews(NSView *view) {
@@ -195,8 +172,6 @@ static napi_value Start(napi_env env, napi_callback_info info) {
   originalClasses = [NSMapTable weakToStrongObjectsMapTable];
   traceClasses = [NSMapTable weakToStrongObjectsMapTable];
   observers = [NSMutableArray new];
-  TraceObject(NSApp, true);
-  TraceObject(owner, false, true);
   TraceViews(owner.contentView.superview ?: owner.contentView);
   monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
       handler:^NSEvent *(NSEvent *event) {

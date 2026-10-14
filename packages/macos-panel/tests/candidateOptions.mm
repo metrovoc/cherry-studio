@@ -55,7 +55,7 @@ static napi_value Snapshot(napi_env env, napi_callback_info info) {
   return window ? Json(env, State(window)) : nullptr;
 }
 
-static napi_value Apply(napi_env env, napi_callback_info info) {
+static napi_value ApplyCandidate(napi_env env, napi_callback_info info, bool normalizeVisible) {
   size_t argc = 2, size = 0;
   napi_value args[2];
   napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -66,16 +66,31 @@ static napi_value Apply(napi_env env, napi_callback_info info) {
   napi_get_value_string_utf8(env, args[1], mode.data(), mode.size(), &size);
   mode.resize(size);
   const bool prevent = mode == "prevents-activation" || mode == "combined";
-  const bool join = mode == "join-all-applications" || mode == "combined";
-  if (!prevent && !join) { napi_throw_type_error(env, nullptr, "Unknown candidate mode"); return nullptr; }
+  const bool transient = mode == "transient-only" || mode == "transient-join-all-applications";
+  const bool join = mode == "join-all-applications" || mode == "combined" ||
+      mode == "transient-join-all-applications";
+  if (!prevent && !join && !transient) { napi_throw_type_error(env, nullptr, "Unknown candidate mode"); return nullptr; }
+  if (normalizeVisible && !transient) {
+    napi_throw_type_error(env, nullptr, "Visible normalization accepts only transient candidate modes"); return nullptr;
+  }
   NSWindow *window = Window(env, args[0]);
   if (!window) return nullptr;
-  if (window.isVisible) { napi_throw_error(env, nullptr, "Apply only before the fresh window's first show"); return nullptr; }
+  if (normalizeVisible && !window.isVisible) {
+    napi_throw_error(env, nullptr, "Normalize after the normal show and level update"); return nullptr;
+  }
+  if (!normalizeVisible && window.isVisible) {
+    napi_throw_error(env, nullptr, "Apply only before the fresh window's first show"); return nullptr;
+  }
   SEL setter = NSSelectorFromString(@"_setPreventsActivation:");
   if (prevent && ![window respondsToSelector:setter]) {
     napi_throw_error(env, nullptr, "Native window lacks activation prevention setter"); return nullptr;
   }
   NSDictionary *before = State(window);
+  if (transient) {
+    window.collectionBehavior = (window.collectionBehavior &
+        ~(NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorStationary)) |
+        NSWindowCollectionBehaviorTransient;
+  }
   if (join) {
     if (@available(macOS 13.0, *)) {
       window.collectionBehavior = (window.collectionBehavior &
@@ -87,11 +102,20 @@ static napi_value Apply(napi_env env, napi_callback_info info) {
   return Json(env, @{ @"mode": [NSString stringWithUTF8String:mode.c_str()], @"before": before, @"after": State(window) });
 }
 
+static napi_value Apply(napi_env env, napi_callback_info info) {
+  return ApplyCandidate(env, info, false);
+}
+
+static napi_value NormalizeVisibleCollection(napi_env env, napi_callback_info info) {
+  return ApplyCandidate(env, info, true);
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
       {"apply", nullptr, Apply, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"normalizeVisibleCollection", nullptr, NormalizeVisibleCollection, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"snapshot", nullptr, Snapshot, nullptr, nullptr, nullptr, napi_default, nullptr}};
-  napi_define_properties(env, exports, 2, methods);
+  napi_define_properties(env, exports, 3, methods);
   return exports;
 }
 NAPI_MODULE(NODE_GYP_MODULE_NAME, Init)

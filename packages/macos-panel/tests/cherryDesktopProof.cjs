@@ -19,6 +19,9 @@ if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Desktop proof runs o
 if (!process.argv[2] || !process.argv[3]) throw new Error('Usage: cherryDesktopProof.cjs <app bundle> <evidence>')
 const bundle = resolve(process.argv[2])
 const output = resolve(process.argv[3])
+const mode = process.argv[4] || 'comparison'
+if (!['comparison', 'baseline', 'prevents-activation', 'join-all-applications'].includes(mode))
+  throw new Error('Unknown actual-app candidate mode')
 const profile = join(output, 'cherry-profile')
 const executable = join(bundle, 'Contents', 'MacOS', 'Cherry Studio')
 const bootConfigDirectory = join(homedir(), '.cherrystudio')
@@ -31,6 +34,7 @@ const results = {
   scope:
     'Published Cherry application, actual managed toolbar and Translate action, repository native activation guard',
   selectionSource: 'selection.text_selected IPC; native selection hook remains disabled',
+  mode,
   trials: []
 }
 let cherry
@@ -198,6 +202,10 @@ async function installProbe() {
     probe.id = id;
     if (!toolbar || service.toolbarWindow !== toolbar) throw Error('Managed toolbar service binding is missing');
     service.toolbarWindowId = id;
+    if (${JSON.stringify(mode)} !== 'comparison' && ${JSON.stringify(mode)} !== 'baseline') {
+      probe.candidate = require(${JSON.stringify(join(output, 'candidateOptions.node'))});
+      probe.candidateBeforeShow = JSON.parse(probe.candidate.apply(toolbar.getNativeWindowHandle(), ${JSON.stringify(mode)}));
+    }
     watch(toolbar, 'toolbar');
     main.setMinimumSize(500, 350);
     main.setBounds({x:260, y:150, width:650, height:460});
@@ -209,11 +217,13 @@ async function installProbe() {
         id:wm.getWindowId(window), visible:window.isVisible(), focused:window.isFocused(),
         url:window.webContents.getURL(), bounds:window.getBounds(), initData:wm.getInitData(wm.getWindowId(window))
       })),
-      actions:probe.actions, timeline, input:await toolbar.webContents.executeJavaScript('window.__desktopInput || []')
+      actions:probe.actions, timeline, input:await toolbar.webContents.executeJavaScript('window.__desktopInput || []'),
+      candidate:probe.candidate && JSON.parse(probe.candidate.snapshot(toolbar.getNativeWindowHandle()))
     });
     return {pid:process.pid, version:electron.app.getVersion(), electron:process.versions.electron,
       profile:actualProfile, toolbarId:id, toolbarBrowserWindowId:toolbar.id,
-      mainBrowserWindowId:main.id, selectionEnabled:preferences.get('feature.selection.enabled')};
+      mainBrowserWindowId:main.id, selectionEnabled:preferences.get('feature.selection.enabled'),
+      candidateBeforeShow:probe.candidateBeforeShow};
   })()`)
 }
 
@@ -321,14 +331,16 @@ async function run() {
   await delay(1500)
   if (source.spawnError) throw source.spawnError
   const guardModule = resolve(__dirname, '../panel.cjs')
-  for (const guarded of [false, true, false, true]) {
+  for (const guarded of mode === 'comparison'
+    ? [false, true, false, true]
+    : [mode !== 'baseline', mode !== 'baseline']) {
     const trial = { guarded, name: `cherry-${results.trials.length}-${guarded ? 'guarded' : 'baseline'}` }
     results.trials.push(trial)
     await inspector.evaluate(`(() => {
       const probe = __cherryDesktopProof;
       probe.service.closeActionWindows();
       probe.unguard?.(); probe.unguard = null;
-      if (${guarded}) probe.unguard = process.mainModule.require(${JSON.stringify(guardModule)}).preventWindowActivation(probe.toolbar.getNativeWindowHandle());
+      if (${mode === 'comparison' && guarded}) probe.unguard = process.mainModule.require(${JSON.stringify(guardModule)}).preventWindowActivation(probe.toolbar.getNativeWindowHandle());
       probe.main.show();
     })()`)
     await poll('Previous action windows closed', () =>
@@ -424,7 +436,8 @@ async function run() {
         : trial.mainPromoted && mainGeometry(trial.after.native)?.Width >= 500)
     save('cherry-results.json', results)
   }
-  results.passed = results.trials.length === 4 && results.trials.every((trial) => trial.passed)
+  results.passed =
+    results.trials.length === (mode === 'comparison' ? 4 : 2) && results.trials.every((trial) => trial.passed)
   if (!results.passed) throw new Error('Actual Cherry baseline/guard comparison failed; inspect per-trial evidence')
 }
 
