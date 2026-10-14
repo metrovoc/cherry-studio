@@ -79,6 +79,13 @@ int main(int argc, const char **argv) {
               @"windows": windows ?: @[]});
       return 0;
     }
+    if ([command isEqualToString:@"above"] && argc == 3) {
+      CGWindowID reference = static_cast<CGWindowID>(strtoul(argv[2], nullptr, 10));
+      NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenAboveWindow, reference));
+      if (!windows) return 6;
+      Print(windows);
+      return 0;
+    }
     if ([command isEqualToString:@"image-metrics"] && argc == 3) {
       CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)[NSURL fileURLWithPath:@(argv[2])], nullptr);
       if (!source) return 8;

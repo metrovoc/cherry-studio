@@ -92,8 +92,19 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
     }
     evidence.quick = cgWindow(evidence.native, quick)
     evidence.result = cgWindow(evidence.native, result)
+    evidence.aboveQuick = JSON.parse(native('above', evidence.quick.number))
+    evidence.aboveResult = JSON.parse(native('above', evidence.result.number))
+    evidence.resultAboveQuick = evidence.aboveQuick.some(
+      (window) => window.kCGWindowNumber === evidence.result.number && window.kCGWindowOwnerPID === report.pid
+    )
+    evidence.quickAboveResult = evidence.aboveResult.some(
+      (window) => window.kCGWindowNumber === evidence.quick.number && window.kCGWindowOwnerPID === report.pid
+    )
     evidence.passed =
-      evidence.overlap.width > 100 && evidence.overlap.height > 100 && evidence.result.index < evidence.quick.index
+      evidence.overlap.width > 100 &&
+      evidence.overlap.height > 100 &&
+      evidence.resultAboveQuick &&
+      !evidence.quickAboveResult
     save()
     check(evidence.passed, `${name}: result does not visibly overlap above Quick Assistant`)
     return evidence
