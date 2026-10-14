@@ -165,6 +165,10 @@ export function createRetryableWrap(options: CreateRetryableWrapOptions): WrapLa
   const backoffEnabled = options.retryPolicy.backoffEnabled
   const retryableError = error((failure) => {
     if (APICallError.isInstance(failure)) return failure.isRetryable
+    // Electron reports network changes as plain Errors, outside the AI SDK's network classification.
+    if (failure instanceof Error && failure.name === 'Error' && failure.message === 'net::ERR_NETWORK_CHANGED') {
+      return true
+    }
     if (failure === null || typeof failure !== 'object') return false
     const details = 'error' in failure ? failure.error : failure
     if (details === null || typeof details !== 'object') return false
