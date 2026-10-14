@@ -19,10 +19,20 @@ const platform = vi.hoisted(() => ({
 }))
 vi.mock('@main/core/platform', () => platform)
 
-const panelTracking = vi.hoisted(() => ({ track: vi.fn(), dispose: vi.fn(), preventActivation: vi.fn() }))
+const panelTracking = vi.hoisted(() => ({
+  track: vi.fn(),
+  dispose: vi.fn(),
+  preventActivation: vi.fn(),
+  fillGuards: new Set<Buffer>()
+}))
 vi.mock('@cherrystudio/macos-panel', () => ({
   trackAuxiliaryPanels: panelTracking.track.mockImplementation(() => panelTracking.dispose),
-  preventWindowActivation: panelTracking.preventActivation
+  preventWindowActivation: panelTracking.preventActivation,
+  preventWindowFill: (handle: Buffer) => {
+    if (panelTracking.fillGuards.has(handle)) throw new Error('Duplicate Fill guard')
+    panelTracking.fillGuards.add(handle)
+    return () => panelTracking.fillGuards.delete(handle)
+  }
 }))
 
 // ─── Mock BrowserWindow with quirks-related methods ────────────────
@@ -77,6 +87,7 @@ const allWindows: MockBrowserWindow[] = []
 
 function createMockBrowserWindow(): MockBrowserWindow {
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+  const nativeHandle = Buffer.alloc(8)
   let destroyed = false
   let loadedURL = ''
 
@@ -110,7 +121,7 @@ function createMockBrowserWindow(): MockBrowserWindow {
     setFocusable: vi.fn(),
     setVisibleOnAllWorkspaces: vi.fn(),
     center: vi.fn(),
-    getNativeWindowHandle: vi.fn(() => Buffer.alloc(8)),
+    getNativeWindowHandle: vi.fn(() => nativeHandle),
     getTitle: vi.fn(() => 'Test Window'),
     setTitleBarOverlay: vi.fn(),
     loadURL: vi.fn((url: string) => {
@@ -237,7 +248,7 @@ vi.mock('../windowRegistry', () => {
       htmlPath: 'action/index.html',
       windowOptions: { width: 500, height: 400 },
       poolConfig: basePool,
-      quirks: { macAttachAuxiliaryPanels: true }
+      quirks: { macAttachAuxiliaryPanels: true, macPreventDoubleClickFill: true }
     },
     // Plain window with no quirks — used for identity checks
     plain: {
@@ -346,6 +357,7 @@ describe('WindowManager quirks — applyQuirks monkey-patching', () => {
     uuidCounter = 0
     createdWindows.length = 0
     allWindows.length = 0
+    panelTracking.fillGuards.clear()
     vi.useFakeTimers()
     wm = new WindowManager()
     void wm._doInit()
@@ -414,6 +426,63 @@ describe('WindowManager quirks — applyQuirks monkey-patching', () => {
     expect(panelTracking.dispose).not.toHaveBeenCalled()
     wm.suspendPool('action' as never)
     expect(panelTracking.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('retains one Fill guard across pool reuse and releases it when the native window is destroyed', () => {
+    const id = wm.open('action' as never, { initData: { request: 'first' } })
+    const window = firstWindow()
+    const handle = window.getNativeWindowHandle()
+    expect(panelTracking.fillGuards).toEqual(new Set([handle]))
+
+    wm.close(id)
+    expect(window.isDestroyed()).toBe(false)
+    expect(panelTracking.fillGuards.has(handle)).toBe(true)
+
+    const reusedId = wm.open('action' as never, { initData: { request: 'second' } })
+    expect(reusedId).toBe(id)
+    expect(wm.getWindow(reusedId)).toBe(window)
+    expect(wm.getInitData(reusedId)).toEqual({ request: 'second' })
+    expect(panelTracking.fillGuards).toEqual(new Set([handle]))
+
+    wm.close(reusedId)
+    wm.suspendPool('action' as never)
+    expect(window.isDestroyed()).toBe(true)
+    expect(panelTracking.fillGuards.size).toBe(0)
+  })
+
+  it('releases the Fill guard after later quirk setup fails and permits a usable retry', () => {
+    const failure = new Error('Native panel tracking failed')
+    panelTracking.track.mockImplementationOnce(() => {
+      throw failure
+    })
+
+    expect(() => wm.open('action' as never)).toThrow(failure)
+    expect(firstWindow().isDestroyed()).toBe(true)
+    expect(wm.count).toBe(0)
+    expect(panelTracking.fillGuards.size).toBe(0)
+
+    const id = wm.open('action' as never, { initData: { request: 'retry' } })
+    const window = wm.getWindow(id)!
+    expect(window).not.toBe(firstWindow())
+    expect(window.webContents.getURL()).toMatch(/\/renderer\/action\/index\.html$/)
+    expect(wm.getInitData(id)).toEqual({ request: 'retry' })
+    expect(panelTracking.fillGuards).toEqual(new Set([window.getNativeWindowHandle()]))
+
+    wm.close(id)
+    wm.suspendPool('action' as never)
+    expect(panelTracking.fillGuards.size).toBe(0)
+  })
+
+  it.each(['win', 'linux'])('does not install a native Fill guard on %s', (platformName) => {
+    platform.isMac = false
+    platform.isWin = platformName === 'win'
+    platform.isLinux = platformName === 'linux'
+
+    const id = wm.open('action' as never)
+    expect(wm.getWindow(id)?.webContents.getURL()).toMatch(/\/renderer\/action\/index\.html$/)
+    expect(panelTracking.fillGuards.size).toBe(0)
+    wm.close(id)
+    wm.suspendPool('action' as never)
   })
 
   it('preserves other windows’ keyboard eligibility when a toolbar hides or an action is recycled', () => {

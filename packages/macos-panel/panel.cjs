@@ -14,6 +14,17 @@ exports.preventWindowActivation = (handle) => {
   native.preventWindowActivation(handle)
 }
 
+exports.preventWindowFill = (handle) => {
+  const native = require('node-gyp-build')(__dirname)
+  const id = native.preventWindowFill(handle)
+  let active = true
+  return () => {
+    if (!active) return
+    active = false
+    native.allowWindowFill(id)
+  }
+}
+
 exports.watchOutsideClicks = (handle, callback) => {
   const native = require('node-gyp-build')(__dirname)
   const id = native.watchOutsideClicks(handle, callback)
