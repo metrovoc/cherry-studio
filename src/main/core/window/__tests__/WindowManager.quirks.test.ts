@@ -19,9 +19,10 @@ const platform = vi.hoisted(() => ({
 }))
 vi.mock('@main/core/platform', () => platform)
 
-const panelTracking = vi.hoisted(() => ({ track: vi.fn(), dispose: vi.fn() }))
+const panelTracking = vi.hoisted(() => ({ track: vi.fn(), dispose: vi.fn(), preventActivation: vi.fn() }))
 vi.mock('@cherrystudio/macos-panel', () => ({
-  trackAuxiliaryPanels: panelTracking.track.mockImplementation(() => panelTracking.dispose)
+  trackAuxiliaryPanels: panelTracking.track.mockImplementation(() => panelTracking.dispose),
+  preventWindowActivation: panelTracking.preventActivation
 }))
 
 // ─── Mock BrowserWindow with quirks-related methods ────────────────
@@ -76,6 +77,8 @@ const allWindows: MockBrowserWindow[] = []
 
 function createMockBrowserWindow(): MockBrowserWindow {
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+  let destroyed = false
+  let loadedURL = ''
 
   const win: MockBrowserWindow = {
     id: Math.random(),
@@ -84,12 +87,15 @@ function createMockBrowserWindow(): MockBrowserWindow {
     hide: vi.fn(),
     focus: vi.fn(),
     close: vi.fn(),
-    destroy: vi.fn(),
+    destroy: vi.fn(() => {
+      destroyed = true
+      win.emit('closed')
+    }),
     minimize: vi.fn(),
     maximize: vi.fn(),
     unmaximize: vi.fn(),
     restore: vi.fn(),
-    isDestroyed: vi.fn(() => false),
+    isDestroyed: vi.fn(() => destroyed),
     isMaximized: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
     isFullScreen: vi.fn(() => false),
@@ -107,8 +113,14 @@ function createMockBrowserWindow(): MockBrowserWindow {
     getNativeWindowHandle: vi.fn(() => Buffer.alloc(8)),
     getTitle: vi.fn(() => 'Test Window'),
     setTitleBarOverlay: vi.fn(),
-    loadURL: vi.fn(() => Promise.resolve()),
-    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn((url: string) => {
+      loadedURL = url
+      return Promise.resolve()
+    }),
+    loadFile: vi.fn((path: string) => {
+      loadedURL = `file://${path}`
+      return Promise.resolve()
+    }),
     once: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
       if (!listeners.has(event)) listeners.set(event, [])
       listeners.get(event)!.push(cb)
@@ -132,7 +144,7 @@ function createMockBrowserWindow(): MockBrowserWindow {
       isCrashed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
       on: vi.fn(),
-      getURL: vi.fn(() => '')
+      getURL: vi.fn(() => loadedURL)
     }
   }
   return win
@@ -212,6 +224,7 @@ vi.mock('../windowRegistry', () => {
         alwaysOnTop: { level: 'screen-saver' }
       },
       quirks: {
+        macPreventActivation: true,
         macClearHoverOnHide: true,
         reapplyAlwaysOnTop: true
       }
@@ -342,6 +355,55 @@ describe('WindowManager quirks — applyQuirks monkey-patching', () => {
     vi.useRealTimers()
     vi.clearAllMocks()
   })
+
+  it.each(['immediate', 'deferred'])(
+    'allows a fresh singleton retry after quirk failure with %s closure',
+    (closure) => {
+      const failure = new Error('Native activation prevention is unavailable')
+      panelTracking.preventActivation.mockImplementationOnce(() => {
+        throw failure
+      })
+      const destroyedIds: string[] = []
+      const destroyedSubscription = wm.onWindowDestroyed(({ id }) => destroyedIds.push(id))
+      const createdSubscription = wm.onWindowCreated(({ window }) => {
+        if (closure === 'deferred') {
+          const nativeWindow = window as unknown as MockBrowserWindow
+          nativeWindow.destroy.mockImplementation(() => {
+            nativeWindow.isDestroyed.mockReturnValue(true)
+            setTimeout(() => nativeWindow.emit('closed'), 0)
+          })
+        }
+      })
+
+      let actualError: unknown
+      try {
+        wm.open('toolbar' as never)
+      } catch (error) {
+        actualError = error
+      }
+      expect(actualError).toBe(failure)
+      const failedWindow = firstWindow()
+      expect(failedWindow.isDestroyed()).toBe(true)
+      expect(failedWindow.webContents.getURL()).toBe('')
+      expect(wm.count).toBe(0)
+      expect(wm.getWindowsByType('toolbar' as never)).toEqual([])
+      expect(destroyedIds).toEqual(['test-uuid-1'])
+
+      const retryId = wm.open('toolbar' as never, { initData: { text: 'retry' } })
+      const retryWindow = wm.getWindow(retryId)!
+      expect(retryWindow).not.toBe(failedWindow)
+      expect(retryWindow.isDestroyed()).toBe(false)
+      expect(retryWindow.webContents.getURL()).toMatch(/\/renderer\/toolbar\/index\.html$/)
+      expect(wm.getInitData(retryId)).toEqual({ text: 'retry' })
+      expect(wm.getWindowsByType('toolbar' as never)).toEqual([retryWindow])
+
+      vi.runOnlyPendingTimers()
+      expect(destroyedIds).toEqual(['test-uuid-1'])
+      expect(wm.getWindow(retryId)).toBe(retryWindow)
+      destroyedSubscription.dispose()
+      createdSubscription.dispose()
+    }
+  )
 
   it('keeps native panel ownership across pool reuse and disposes it on destruction', () => {
     const id = wm.open('action' as never)
