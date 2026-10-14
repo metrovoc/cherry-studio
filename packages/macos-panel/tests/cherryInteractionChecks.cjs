@@ -117,6 +117,14 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
         }
         const jobs = new Set()
         const disposers = []
+        const sessionState = (id) => {
+          const session = service.actionWindows.get(id)
+          return {
+            requestId: session?.data.requestId ?? null,
+            ready: session?.ready ?? null,
+            storedRequestId: wm.getInitData(id)?.requestId ?? null
+          }
+        }
         const describe = (window) => ({
           id: wm.getWindowId(window),
           browserWindowId: window.id,
@@ -128,7 +136,8 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
           simpleFullscreen: window.isSimpleFullScreen(),
           minimized: window.isMinimized(),
           url: window.webContents.getURL(),
-          initData: wm.getInitData(wm.getWindowId(window))
+          initData: wm.getInitData(wm.getWindowId(window)),
+          session: sessionState(wm.getWindowId(window))
         })
         const fixture = (probe.interactions = {
           drags: {},
@@ -218,6 +227,26 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
             return { restored: true, nativeJobs: jobs.size, hookLoaded: !!service.getSelectionHook() }
           }
         })
+        const readyDescriptor = Object.getOwnPropertyDescriptor(service, 'markActionWindowReady')
+        const markReady = service.markActionWindowReady
+        Object.defineProperty(service, 'markActionWindowReady', {
+          configurable: true,
+          writable: true,
+          value(id, requestId) {
+            const record = (event) =>
+              fixture.events.push({ event, id, requestId, at: Date.now(), session: sessionState(id) })
+            record('renderer-ready-before')
+            try {
+              return markReady.call(this, id, requestId)
+            } finally {
+              record('renderer-ready-after')
+            }
+          }
+        })
+        disposers.push(() => {
+          if (readyDescriptor) Object.defineProperty(service, 'markActionWindowReady', readyDescriptor)
+          else delete service.markActionWindowReady
+        })
         service.isFollowToolbar = false
         service.isRemeberWinSize = false
         for (const [key, value] of Object.entries({
@@ -231,8 +260,10 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
         service.hideToolbar()
         const subscription = wm.onWindowCreatedByType('selectionAction', ({ window }) => {
           for (const event of ['show', 'hide', 'move', 'resize', 'maximize', 'enter-full-screen']) {
-            const listener = () =>
-              fixture.events.push({ event, id: wm.getWindowId(window), at: Date.now(), bounds: window.getBounds() })
+            const listener = () => {
+              const id = wm.getWindowId(window)
+              fixture.events.push({ event, id, at: Date.now(), bounds: window.getBounds(), session: sessionState(id) })
+            }
             window.on(event, listener)
             disposers.push(() => {
               if (!window.isDestroyed()) window.removeListener(event, listener)
