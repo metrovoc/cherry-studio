@@ -39,7 +39,7 @@ export function applyWindowQuirks(
   if (!quirks) return
 
   if (isMac && quirks.macPreventActivation) {
-    window.once('closed', preventWindowActivation(window.getNativeWindowHandle()))
+    preventWindowActivation(window.getNativeWindowHandle())
   }
 
   if (isMac && quirks.macAttachAuxiliaryPanels) {
