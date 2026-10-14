@@ -4,8 +4,10 @@
 #include "auxiliaryPanels.h"
 #include "outsideClicks.h"
 #include "windowActivation.h"
+#include "windowFill.h"
 
 static std::unordered_map<uint32_t, std::unique_ptr<AuxiliaryPanels>> trackers;
+static std::unordered_map<uint32_t, std::unique_ptr<WindowFill>> fillGuards;
 struct ClickSubscription {
   napi_env env;
   napi_ref callback;
@@ -142,6 +144,34 @@ static napi_value PreventWindowActivation(napi_env env, napi_callback_info info)
   return result;
 }
 
+static napi_value PreventWindowFill(napi_env env, napi_callback_info info) {
+  size_t argc = 1, size = 0;
+  napi_value handle, result;
+  void *data = nullptr;
+  napi_get_cb_info(env, info, &argc, &handle, nullptr, nullptr);
+  if (!NSThread.isMainThread || argc != 1 ||
+      napi_get_buffer_info(env, handle, &data, &size) != napi_ok || size != sizeof(void *)) {
+    napi_throw_error(env, nullptr, "Expected an Electron window handle on the macOS main thread");
+    return nullptr;
+  }
+  NSView *view = (__bridge NSView *)*(void **)data;
+  const uint32_t id = ++nextId;
+  fillGuards.emplace(id, std::make_unique<WindowFill>(view.window));
+  napi_create_uint32(env, id, &result);
+  return result;
+}
+
+static napi_value AllowWindowFill(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argument, result;
+  uint32_t id = 0;
+  napi_get_cb_info(env, info, &argc, &argument, nullptr, nullptr);
+  napi_get_value_uint32(env, argument, &id);
+  fillGuards.erase(id);
+  napi_get_undefined(env, &result);
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
       {"track", nullptr, Track, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -149,10 +179,12 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"watchOutsideClicks", nullptr, WatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"unwatchOutsideClicks", nullptr, UnwatchOutsideClicks, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setOutsideClickCompanions", nullptr, SetOutsideClickCompanions, nullptr, nullptr, nullptr, napi_default, nullptr},
-      {"preventWindowActivation", nullptr, PreventWindowActivation, nullptr, nullptr, nullptr, napi_default, nullptr}};
-  napi_define_properties(env, exports, 6, methods);
+      {"preventWindowActivation", nullptr, PreventWindowActivation, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"preventWindowFill", nullptr, PreventWindowFill, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"allowWindowFill", nullptr, AllowWindowFill, nullptr, nullptr, nullptr, napi_default, nullptr}};
+  napi_define_properties(env, exports, 8, methods);
   napi_add_env_cleanup_hook(env, [](void *) {
-    clickSubscriptions.clear(); trackers.clear();
+    fillGuards.clear(); clickSubscriptions.clear(); trackers.clear();
   }, nullptr);
   return exports;
 }

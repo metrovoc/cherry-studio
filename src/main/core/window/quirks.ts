@@ -1,12 +1,12 @@
 import type { BrowserWindow } from 'electron'
 
-import { preventWindowActivation, trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
+import { preventWindowActivation, preventWindowFill, trackAuxiliaryPanels } from '@cherrystudio/macos-panel'
 import { isMac } from '@main/core/platform'
 import type { AlwaysOnTopLevel, WindowBehavior, WindowQuirks } from '@main/core/window/types'
 
 /**
- * Apply declarative OS quirks to a freshly-created window by monkey-patching
- * the native instance methods. Consumers continue calling `window.hide()` /
+ * Apply declarative OS quirks with native controls and window method wrappers.
+ * Consumers continue calling `window.hide()` /
  * `window.show()` as usual; the wrappers transparently run the pre/post hooks.
  *
  * The native method is captured via `.bind(w)` so inner Electron C++ bindings
@@ -40,6 +40,10 @@ export function applyWindowQuirks(
 
   if (isMac && quirks.macPreventActivation) {
     preventWindowActivation(window.getNativeWindowHandle())
+  }
+
+  if (isMac && quirks.macPreventDoubleClickFill) {
+    window.once('closed', preventWindowFill(window.getNativeWindowHandle()))
   }
 
   if (isMac && quirks.macAttachAuxiliaryPanels) {

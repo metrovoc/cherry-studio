@@ -12,19 +12,20 @@ WindowManager splits per-window configuration into three orthogonal layers:
 
 - **`windowOptions`** — Electron `BrowserWindow` constructor parameters (including `platformOverrides` for static per-OS differences).
 - **`behavior`** — cross-platform declarative WM behavior that Electron's constructor cannot express (blur-auto-hide, `setAlwaysOnTop` level, `setVisibleOnAllWorkspaces` options, Dock visibility). See [README → Configuration Layers](./README.md#configuration-layers-windowoptions--behavior--quirks).
-- **`quirks`** — OS-specific hacks / workarounds applied via method-slot monkey-patches around `hide()` / `show()` / `close()`.
+- **`quirks`** — OS-specific workarounds using native settings, event monitors, or wrappers around window methods.
 
 Naming rule: any field effective on only one platform carries a `mac` / `win` / `linux` prefix, irrespective of layer (e.g. `behavior.macShowInDock`, `quirks.macClearHoverOnHide`).
 
 ## OS Quirks
 
-Some OS-specific behaviors are tedious to hand-roll at every call site (e.g. clearing stale hover state after `hide()`). WindowManager ships these as **declarative opt-in flags** under `WindowTypeMetadata.quirks`. When set, the manager transparently monkey-patches the corresponding `BrowserWindow` instance methods so business code continues calling `window.hide()` / `window.show()` as usual.
+Some OS-specific behaviors need native support (e.g. clearing stale hover state after `hide()`). WindowManager ships these as **declarative opt-in flags** under `WindowTypeMetadata.quirks`. The manager applies them when creating a window so business code continues calling `window.hide()` / `window.show()` as usual.
 
 ### Available Quirks
 
 | Quirk | Patches | Behavior |
 |---|---|---|
 | `macPreventActivation: boolean` | Native creation settings | On macOS 27+, configure a mouse-only panel before its first display so toolbar clicks do not activate the application. The setting lasts for the window's lifetime. |
+| `macPreventDoubleClickFill: boolean` | Native mouse monitor | Prevent the macOS title-bar double-click Fill action while retaining ordinary dragging, resizing, and control clicks. The monitor survives pool reuse and is released when the native window closes. |
 | `macAttachAuxiliaryPanels: boolean` | Native notifications | Attach non-key native panels (including IME candidates) to their focused editor so they inherit its Space. Release observers and restore relationships when the owner closes. |
 | `macClearHoverOnHide: boolean` | `hide()` | After invoking the native `hide()`, send `webContents.sendInputEvent({ type: 'mouseMove', x: -1, y: -1 })` to clear any residual hover state. |
 | `reapplyAlwaysOnTop: boolean` | `show()`, `showInactive()` | After invoking the native method, call `setAlwaysOnTop(true, level, relativeLevel)` with values read from `behavior.alwaysOnTop` (single source of truth). When `behavior.alwaysOnTop.level` is unset, falls back to `'floating'`. Compensates for macOS level resets between hide/show, and for Windows' last-writer-wins topmost z-order (the `level` argument is ignored there). |
@@ -62,7 +63,7 @@ The domain service carries none of this code.
 ### Implementation Notes
 
 - `w.hide.bind(w)` captures the native method with `this` correctly bound, so Electron's C++ bindings continue to see the real `BrowserWindow`.
-- EventEmitter behavior (`.on('hide', ...)`, `.once('close', ...)`) is untouched — the quirks patch only the method slots, not the emitter wiring.
+- Existing window events remain available. Native monitors use `closed` listeners to release their resources.
 - Quirks run *after* `onWindowCreated` and *after* `applyWindowBehavior` fires. This ordering means the behavior layer's initial setter calls (e.g. first `setAlwaysOnTop(true, level)`) do not trigger the monkey-patched show/showInactive.
 - Quirks are applied per-window at creation time; there is no runtime toggle.
 

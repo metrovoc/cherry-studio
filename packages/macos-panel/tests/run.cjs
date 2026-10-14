@@ -6,7 +6,7 @@ const { join } = require('node:path')
 if (process.platform === 'darwin') {
   const directory = mkdtempSync(join(tmpdir(), 'macos-panel-test-'))
   try {
-    for (const name of ['auxiliaryPanels', 'windowActivation']) {
+    for (const name of ['auxiliaryPanels', 'windowActivation', 'windowFill']) {
       const binary = join(directory, name)
       execFileSync(
         'xcrun',
