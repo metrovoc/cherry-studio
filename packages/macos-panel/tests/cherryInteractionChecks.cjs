@@ -120,6 +120,7 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
         const describe = (window) => ({
           id: wm.getWindowId(window),
           browserWindowId: window.id,
+          nativeHandle: window.getNativeWindowHandle().toString('hex'),
           bounds: window.getBounds(),
           visible: window.isVisible(),
           maximized: window.isMaximized(),
@@ -246,12 +247,20 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
 
     report.cold = await app(() => {
       const { wm, interactions: fixture } = globalThis.__cherryDesktopProof
-      const subscription = wm.onWindowCreatedByType('selectionAction', ({ window }) =>
+      const created = []
+      const subscription = wm.onWindowCreatedByType('selectionAction', ({ window }) => {
+        created.push(window.id)
         fixture.arm(window, 'cold-first-drag')
-      )
+      })
       try {
-        return fixture.open('Cold result first drag')
+        wm.resumePool('selectionAction')
+        const result = fixture.open('Cold result first drag')
+        if (created.length !== 1 || created[0] !== result.browserWindowId || result.visible)
+          throw Error('Cold result must be a newly created window awaiting its first native show')
+        return result
       } finally {
+        // Keep the in-use window tracked without an idle spare taking its next pool slot.
+        wm.suspendPool('selectionAction')
         subscription.dispose()
       }
     })
@@ -268,6 +277,7 @@ async function runInteractionChecks({ evaluate, nativeAsync, native, screenshot,
     }, report.cold.id)
     check(
       report.reused.browserWindowId === report.cold.browserWindowId &&
+        report.reused.nativeHandle === report.cold.nativeHandle &&
         report.reused.initData.requestId !== report.cold.initData.requestId,
       'Reuse check did not obtain the same BrowserWindow with a new request'
     )
