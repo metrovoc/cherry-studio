@@ -1448,9 +1448,19 @@ export class WindowManager extends BaseService {
     // wrappers then transparently apply around any subsequent hide()/show()/close().
     // Also runs AFTER applyWindowBehavior so the behavior layer's initial setter
     // calls do not trigger the monkey-patched show/showInactive.
-    applyWindowQuirks(managedWindow.window, managedWindow.metadata.quirks, managedWindow.metadata.behavior, () =>
-      this.behavior.getAlwaysOnTopLevelOverride(windowId)
-    )
+    try {
+      applyWindowQuirks(managedWindow.window, managedWindow.metadata.quirks, managedWindow.metadata.behavior, () =>
+        this.behavior.getAlwaysOnTopLevelOverride(windowId)
+      )
+    } catch (error) {
+      this.destroyWindow(window)
+      // A delayed native 'closed' event must not let a retry reuse the failed window.
+      if (this.windows.has(windowId)) {
+        this.cleanupWindowTracking(windowId, type)
+        this._onWindowDestroyed.fire(managedWindow)
+      }
+      throw error
+    }
 
     // 4c. Persist bounds on native close for singletons (GUI quit and
     // hide-to-tray, where the window is still alive). Attached to every singleton

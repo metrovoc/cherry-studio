@@ -244,7 +244,7 @@ export interface WindowBehavior {
  * bugs; pure-semantic declarative config lives in `behavior`.
  */
 export interface WindowQuirks {
-  /** Let a mouse-only panel handle clicks without activating the application. */
+  /** Configure a fresh mouse-only panel to handle clicks without activating the application. */
   macPreventActivation?: boolean
 
   /** Keep native non-key panels, including IME candidates, on their focused editor's Space. */
