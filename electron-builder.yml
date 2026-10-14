@@ -198,58 +198,14 @@ artifactBuildCompleted: scripts/packaging/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.8 - Assistant Windows and Agent Connections
+    Cherry Studio 2.1.9 - Network Recovery
 
     🐛 Bug Fixes
-    - [Selection Assistant] Prepare the title bar before showing a result, keep notifications below it, and prevent double-clicking it from maximizing the window.
-    - [Selection Assistant] Show new results reliably when reusing a recently closed window.
-    - [Selection Assistant] Keep results above Quick Assistant while preserving each result's pin setting.
-    - [Selection Assistant] Prevent opening selection results from bringing the main window forward on macOS 27.
-    - [Chat] Keep the response already received when streaming fails.
-    - [Data] Fix backup restoration on Windows when browser storage is locked.
-
-    ✨ New Features
-    - [Device Connections] Send images and files to Agents from compatible mobile clients, with resumable transfers up to 1 GiB per file.
-    - [Channels] Connect DingTalk and WeCom with QR setup, streaming replies, and attachments.
-    - [MCP] Answer interactive requests and forms in chats and Agents, with cancellation and structured results.
-    - [AI Doctor] Analyze diagnostic reports and apply supported suggested fixes.
-    - [Providers] Set billing cost multipliers and daily price schedules, with a price preview.
-
-    💄 Improvements
-    - [Chat] Write messages beyond the previous 40,000-character limit, use an expanding composer, collapse queued messages, and search names by pinyin initials.
-    - [Claude Code] Download the required runtime automatically, with progress and retry controls.
-
-    Upgrade Notes
-    - [Agents] Pi now uses its native Code Mode API; update custom Pi scripts to the codemode API.
-    - [Agents] DSH agents migrate to Pi with saved conversations, models, and workspaces. Plan permissions become Default; review tool access where legacy MCP restrictions cannot be mapped. Native DSH goals and child-process state are not migrated, and original files are retained.
-    - [Models] Legacy Tencent TI and Hunyuan integrations are retired. Existing data is retained; configure TokenHub or another provider for new requests.
-    - [MCP] OAuth connections may require authorization again after a restart when secure credential storage is unavailable.
+    - [Chat] When retries are enabled, recover from network changes before response content arrives. Cancellation and the configured retry limit remain effective, and partial responses are preserved without replaying them.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.8 - 助手窗口与 Agent 连接
+    Cherry Studio 2.1.9 - 网络恢复
 
     🐛 问题修复
-    - [划词助手] 结果显示前完成标题栏准备，将通知移至标题栏下方，并禁止双击标题栏最大化窗口。
-    - [划词助手] 修复快速复用刚关闭的窗口时新结果无法显示的问题。
-    - [划词助手] 结果窗口保持在快捷助手上方，同时保留各结果窗口的置顶设置。
-    - [划词助手] 修复 macOS 27 上打开划词结果时主窗口被带到前台的问题。
-    - [聊天] 流式响应失败时保留已接收的内容。
-    - [数据] 修复 Windows 浏览器存储被占用时无法恢复备份的问题。
-
-    ✨ 新功能
-    - [设备连接] 支持从兼容的移动客户端向 Agent 发送图片和文件，提供断点续传，单文件最大 1 GiB。
-    - [消息渠道] 支持通过二维码配置钉钉和企业微信连接，提供流式回复和附件支持。
-    - [MCP] 支持在聊天和 Agent 中处理交互请求与表单，并支持取消和结构化结果。
-    - [AI Doctor] 分析诊断报告，并应用支持的修复建议。
-    - [服务商] 支持设置计费倍率和每日分时价格，并提供价格预览。
-
-    💄 改进
-    - [聊天] 移除原有的 40,000 字符输入限制，支持自动展开输入框、折叠排队消息和按拼音首字母搜索名称。
-    - [Claude Code] 自动下载所需运行环境，并显示进度和重试入口。
-
-    升级说明
-    - [Agent] Pi 现使用原生 Code Mode API；请将自定义 Pi 脚本更新为 codemode API。
-    - [Agent] DSH Agent 迁移至 Pi，并保留已保存的对话、模型和工作区。Plan 权限转换为 Default；无法对应的旧 MCP 限制需重新检查工具权限。DSH 原生目标和子进程状态不迁移，原始文件会保留。
-    - [模型] 停用旧版腾讯 TI 和混元集成。现有数据保留；新请求请配置 TokenHub 或其他服务商。
-    - [MCP] 安全凭据存储不可用时，OAuth 连接可能需要在重启后重新授权。
+    - [聊天] 启用重试后，可在响应内容到达前从网络变化导致的中断中恢复。取消操作和配置的重试次数限制仍然有效，已接收的部分响应会被保留，不会重复生成。
     <!--LANG:END-->
