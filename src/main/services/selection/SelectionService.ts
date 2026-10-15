@@ -273,6 +273,7 @@ export class SelectionService extends BaseService implements Activatable {
       wm.onWindowCreatedByType(WindowType.SelectionAction, (mw) => {
         if (isMac) this.getNativePanel().configurePanel(mw.window.getNativeWindowHandle())
         const onHide = () => {
+          if (mw.window.isVisible() || this.actionWindows.get(mw.id)?.ready === false) return
           const session = wm.getInitData(mw.id) as SelectionActionWindowData | null
           if (session) {
             application.get('IpcApiService').send(mw.id, 'selection.action_dismissed', { sessionId: session.sessionId })

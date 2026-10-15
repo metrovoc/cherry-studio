@@ -288,10 +288,10 @@ describe('ActionGeneral', () => {
     state.saveConversations = true
     state.assistant = { id: 'assistant-1' }
     const action = createAction({ assistantId: 'assistant-1', selectedText: 'Selected passage' })
-    const view = render(<ActionGeneral action={action} />)
+    const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'
-    view.rerender(<ActionGeneral action={{ ...action }} />)
+    view.rerender(<ActionGeneral sourceEntityId="test-session" action={{ ...action }} />)
 
     await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Selected passage'))
   })
@@ -300,7 +300,7 @@ describe('ActionGeneral', () => {
     state.saveConversations = true
     state.streamStatus = 'done'
 
-    render(<ActionGeneral action={createAction()} />)
+    render(<ActionGeneral sourceEntityId="test-session" action={createAction()} />)
 
     expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
   })
@@ -310,10 +310,10 @@ describe('ActionGeneral', () => {
     state.assistant = { id: 'assistant-1' }
     state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
     const action = createAction({ assistantId: 'assistant-1' })
-    const view = render(<ActionGeneral action={action} />)
+    const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'
-    view.rerender(<ActionGeneral action={{ ...action }} />)
+    view.rerender(<ActionGeneral sourceEntityId="test-session" action={{ ...action }} />)
 
     const retry = await screen.findByRole('button', { name: 'common.retry:' })
     fireEvent.click(retry)

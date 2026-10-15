@@ -226,8 +226,11 @@ describe('selection action presentation', () => {
       expect(next.requestId).not.toBe(first.requestId)
       if (timing === 'after') service.markActionWindowReady('result', next.requestId)
 
+      const send = vi.mocked(application.get('IpcApiService').send)
+      send.mockClear()
       next.window.emit('hide')
 
+      expect(send).not.toHaveBeenCalledWith('result', 'selection.action_dismissed', expect.anything())
       if (timing === 'before') service.markActionWindowReady('result', next.requestId)
       expect(next.window.visible).toBe(true)
       expect(next.window.showCount).toBe(2)
@@ -235,6 +238,25 @@ describe('selection action presentation', () => {
       quick.show()
       quick.hide()
       expect(next.window.level).toBe(3)
+    }
+  )
+
+  it.each(['close', 'close all'] as const)(
+    'dismisses playback when a shown action is hidden by %s',
+    async (operation) => {
+      await service._doInit()
+      const { window, requestId } = openAction()
+      service.markActionWindowReady('result', requestId)
+
+      if (operation === 'close') wm.close('result')
+      else {
+        service.closeActionWindows()
+        window.hide()
+      }
+
+      expect(application.get('IpcApiService').send).toHaveBeenCalledWith('result', 'selection.action_dismissed', {
+        sessionId: requestId
+      })
     }
   )
 

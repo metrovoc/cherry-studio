@@ -8,23 +8,24 @@ import type { SelectionActionSession } from '@shared/types/selection'
 
 import ActionWindow from '../ActionWindow'
 
-const { actionState, ipcRequest, opacityPreference, autoPinPreference, platform, readAloud, dismissalListeners } = vi.hoisted(() => ({
-  actionState: {
-    value: {
-      id: 'test-action',
-      name: 'Test action',
-      icon: 'test-icon',
-      isBuiltIn: false,
-      sessionId: 'session-1'
-    } as SelectionActionSession
-  },
-  ipcRequest: vi.fn(),
-  opacityPreference: { value: 100 },
-  autoPinPreference: { value: false },
-  platform: { isMac: false },
-  readAloud: vi.fn<(input: ReadTextAloudInput) => Promise<void>>(async () => undefined),
-  dismissalListeners: new Set<(payload: { sessionId: string }) => void>()
-}))
+const { actionState, ipcRequest, opacityPreference, autoPinPreference, platform, readAloud, dismissalListeners } =
+  vi.hoisted(() => ({
+    actionState: {
+      value: {
+        id: 'test-action',
+        name: 'Test action',
+        icon: 'test-icon',
+        isBuiltIn: false,
+        sessionId: 'session-1'
+      } as SelectionActionSession
+    },
+    ipcRequest: vi.fn(),
+    opacityPreference: { value: 100 },
+    autoPinPreference: { value: false },
+    platform: { isMac: false },
+    readAloud: vi.fn<(input: ReadTextAloudInput) => Promise<void>>(async () => undefined),
+    dismissalListeners: new Set<(payload: { sessionId: string }) => void>()
+  }))
 
 vi.mock('@renderer/services/voice', () => ({
   readTextAloud: readAloud

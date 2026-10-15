@@ -22,6 +22,7 @@ import {
   WEB_SEARCH_TOOL_NAME
 } from '@shared/ai/builtinTools'
 import type { CompactionSink } from '@shared/ai/compaction'
+import { isDataApiNotFoundError } from '@shared/data/api/errors'
 import type { WebSearchCapability } from '@shared/data/preference/preferenceTypes'
 import {
   type Assistant,
@@ -451,21 +452,32 @@ async function resolveRequestToolSignals(
   if (!mcpIdList && request.assistantId) {
     mcpIdList = await resolveAssistantMcpToolIds(request.assistantId)
   }
+  const browserEnabled = Boolean(
+    assistant &&
+    assistant.settings.enableBrowser !== false &&
+    application.get('PreferenceService').get('app.browser.agent_control.enabled')
+  )
+  const computerUseEnabled = Boolean(
+    assistant && application.get('PreferenceService').get('app.computer_use.agent_control.enabled')
+  )
+  let ownsPersistentTopic = false
+  if (
+    request.contextOwner !== 'caller' &&
+    request.conversation.topicId &&
+    assistant &&
+    (browserEnabled || computerUseEnabled)
+  ) {
+    try {
+      ownsPersistentTopic = topicService.getById(request.conversation.topicId).assistantId === assistant.id
+    } catch (error) {
+      if (!isDataApiNotFoundError(error)) throw error
+    }
+  }
   return {
     mcpToolIds: new Set(mcpIdList ?? []),
     mcpResourceServerIds: new Set(resolveMcpResourceServers(assistant).map((server) => server.id)),
-    browserEnabled: Boolean(
-      request.conversation.topicId &&
-      assistant &&
-      assistant.settings.enableBrowser !== false &&
-      application.get('PreferenceService').get('app.browser.agent_control.enabled')
-    ),
-    computerUseEnabled: Boolean(
-      request.conversation.topicId &&
-      assistant &&
-      request.contextOwner !== 'caller' &&
-      application.get('PreferenceService').get('app.computer_use.agent_control.enabled')
-    ),
+    browserEnabled: ownsPersistentTopic && browserEnabled,
+    computerUseEnabled: ownsPersistentTopic && computerUseEnabled,
     hasAnyKnowledgeBase: resolveHasAnyKnowledgeBase()
   }
 }

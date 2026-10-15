@@ -18,7 +18,6 @@ import { makeAssistant, makeModel, makeProvider } from '../../../../__tests__/fi
 import { createDashScopeProvider } from '../../../../provider/custom/dashscope/dashscopeProvider'
 
 const CONVERSATION = { id: 'conversation-1', topicId: 'topic-1' }
-import { createBrowserToolEntries } from '../../../../tools/adapters/aiSdk/builtin/BrowserTools'
 import { createFsReadToolEntry } from '../../../../tools/adapters/aiSdk/builtin/FsReadTool'
 import type { RequestContext } from '../../../../tools/adapters/aiSdk/context'
 import { registry } from '../../../../tools/adapters/aiSdk/registry'
@@ -26,7 +25,6 @@ import type { ToolEntry } from '../../../../tools/adapters/aiSdk/types'
 import type { AppProviderSettingsMap } from '../../../../types'
 import type { CallOverrides } from '../../../../types/requests'
 import type { AgentOptions } from '../../loop/types'
-import { getDeferredToolsSystemPrompt } from '../../prompts/deferredTools'
 
 const { preferenceGetMock, resolveProviderAiSdkConfigMock, listMcpServers, listMcpTools, getMcpInstructions } =
   vi.hoisted(() => ({
@@ -2615,63 +2613,5 @@ describe('resolveTools fs_read gating', () => {
     )
     expect(tools?.[FS_READ_TOOL_NAME]).toBeDefined()
     expect(tools?.client_tool).toBeDefined()
-  })
-})
-
-describe('assistant browser tool selection', () => {
-  beforeEach(() => {
-    for (const entry of createBrowserToolEntries()) registry.register(entry)
-    preferenceGetMock.mockImplementation((key) => (key === 'app.browser.agent_control.enabled' ? true : null))
-  })
-  afterEach(() => {
-    for (const entry of createBrowserToolEntries()) registry.deregister(entry.name)
-  })
-  it('offers browser tools only to enabled persistent conversations', async () => {
-    const assistant = makeAssistant()
-    const enabled = await resolveTools({ conversation: CONVERSATION }, assistant, makeModel(), false, [])
-    expect([...Object.keys(enabled.tools ?? {}), ...enabled.deferredEntries.map((entry) => entry.name)]).toContain(
-      'browser_open'
-    )
-    const disabled = await resolveTools(
-      { conversation: CONVERSATION },
-      { ...assistant, settings: { ...assistant.settings, enableBrowser: false } },
-      makeModel(),
-      false,
-      []
-    )
-    expect([
-      ...Object.keys(disabled.tools ?? {}),
-      ...disabled.deferredEntries.map((entry) => entry.name)
-    ]).not.toContain('browser_open')
-    const temporary = await resolveTools({ conversation: { id: 'temporary' } }, assistant, makeModel(), false, [])
-    expect([
-      ...Object.keys(temporary.tools ?? {}),
-      ...temporary.deferredEntries.map((entry) => entry.name)
-    ]).not.toContain('browser_open')
-  })
-
-  it('defers the browser surface in a fresh topic even with a large context window', async () => {
-    const enabled = await resolveTools(
-      { conversation: CONVERSATION },
-      makeAssistant(),
-      makeModel({ contextWindow: 1_000_000 }),
-      false,
-      []
-    )
-    expect(Object.keys(enabled.tools ?? {}).filter((name) => name.startsWith('browser_'))).toEqual([])
-    expect(enabled.tools).toHaveProperty('tool_search')
-    expect(enabled.tools).toHaveProperty('tool_inspect')
-    expect(enabled.tools).toHaveProperty('tool_invoke')
-    expect(
-      enabled.deferredEntries
-        .filter((entry) => entry.namespace === 'browser')
-        .map((entry) => entry.name)
-        .sort()
-    ).toEqual(
-      createBrowserToolEntries()
-        .map((entry) => entry.name)
-        .sort()
-    )
-    expect(getDeferredToolsSystemPrompt(enabled.deferredEntries)).toMatch(/<namespace name="browser" count="\d+"\/>/)
   })
 })

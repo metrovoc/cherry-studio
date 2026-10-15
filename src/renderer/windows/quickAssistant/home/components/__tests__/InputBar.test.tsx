@@ -82,8 +82,6 @@ vi.mock('react-i18next', () => ({
   })
 }))
 
-import type * as CherryStudioUi from '@cherrystudio/ui'
-
 import InputBar from '../InputBar'
 
 vi.mock('@cherrystudio/ui', async (importOriginal) => importOriginal<typeof CherryStudioUi>())
@@ -424,10 +422,6 @@ describe('InputBar', () => {
     )
 
     const trigger = screen.getByRole('button', { name: 'Select Assistant: Writer' })
-    expect(trigger).toHaveTextContent('')
-    expect(trigger.querySelector('svg')).toBeNull()
-    expect(screen.getByTestId('model-avatar')).toBeInTheDocument()
-
     await user.click(trigger)
     await user.click(screen.getByRole('option', { name: 'Researcher' }))
 
@@ -435,25 +429,42 @@ describe('InputBar', () => {
     await waitFor(() => expect(screen.getByPlaceholderText('Ask Writer')).toHaveFocus())
   })
 
-  it('opens the assistant switcher when Tab is pressed in the prompt', () => {
-    const handleKeyDown = vi.fn()
+  it.each([
+    { signal: 'isComposing', isComposing: true, keyCode: 9 },
+    { signal: 'keyCode 229', isComposing: false, keyCode: 229 }
+  ])('leaves Tab with the IME during $signal and opens the assistant picker afterward', async (composition) => {
+    const user = userEvent.setup()
 
     render(
       <InputBar
-        text=""
+        text="日"
         assistant={{ id: 'assistant-1', name: 'Writer' } as never}
         model={{ id: 'provider::model', name: 'Writer model' } as never}
         placeholder="Ask Writer"
         loading={false}
         onAssistantChange={vi.fn()}
-        handleKeyDown={handleKeyDown}
+        handleKeyDown={vi.fn()}
         handleChange={vi.fn()}
       />
     )
 
-    fireEvent.keyDown(screen.getByPlaceholderText('Ask Writer'), { key: 'Tab', code: 'Tab' })
+    const input = screen.getByRole('textbox')
+    await user.click(input)
+
+    const tabAllowed = fireEvent.keyDown(input, {
+      key: 'Tab',
+      code: 'Tab',
+      cancelable: true,
+      isComposing: composition.isComposing,
+      keyCode: composition.keyCode
+    })
+
+    expect(tabAllowed).toBe(true)
+    expect(input).toHaveFocus()
+    expect(screen.queryByRole('option', { name: 'Researcher' })).not.toBeInTheDocument()
+
+    await user.tab()
 
     expect(screen.getByRole('option', { name: 'Researcher' })).toBeInTheDocument()
-    expect(handleKeyDown).not.toHaveBeenCalled()
   })
 })

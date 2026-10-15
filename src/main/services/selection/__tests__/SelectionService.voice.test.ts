@@ -37,7 +37,7 @@ describe('Selection action playback lifetime', () => {
   })
 
   function createActionWindow(id: string) {
-    const window = new EventEmitter()
+    const window = Object.assign(new EventEmitter(), { isVisible: () => false })
     const callback = vi
       .mocked(wm.onWindowCreatedByType)
       .mock.calls.find(([type]) => type === WindowType.SelectionAction)![1]
