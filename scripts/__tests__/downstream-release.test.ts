@@ -4,7 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
 
 import {
   cleanupSigningKeychain,
@@ -58,6 +58,22 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
   vi.useRealTimers()
   vi.unstubAllEnvs()
+})
+
+describe('downstream native toolchain', () => {
+  it('selects Swift 6.2-capable Xcode and checks it before installing native dependencies', () => {
+    const workflow = parse(
+      fs.readFileSync(path.resolve(import.meta.dirname, '../../.github/workflows/downstream-release.yml'), 'utf8')
+    )
+    const { env, steps } = workflow.jobs.release
+    expect(env.DEVELOPER_DIR).toBe('/Applications/Xcode_26.2.app/Contents/Developer')
+    const check = steps.findIndex((step: { run?: string }) => step.run?.includes('xcrun swift --version'))
+    const install = steps.findIndex((step: { run?: string }) => step.run?.includes('pnpm install'))
+    expect(check).toBeGreaterThanOrEqual(0)
+    expect(check).toBeLessThan(install)
+    expect(steps[check].if).toBeUndefined()
+    expect(steps[check]['continue-on-error']).toBeUndefined()
+  })
 })
 
 describe('downstream publication gates', () => {

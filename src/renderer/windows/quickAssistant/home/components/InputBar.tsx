@@ -132,6 +132,10 @@ const InputBar = ({
     : ''
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // Some IMEs expose composition only through the legacy keyCode value.
+    // oxlint-disable-next-line no-deprecated
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return
+
     if (event.key === 'Tab' && !event.shiftKey && assistant && onAssistantChange && !assistantSelectionDisabled) {
       event.preventDefault()
       setAssistantSwitcherOpen(true)

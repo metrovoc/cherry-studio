@@ -302,7 +302,7 @@ describe('ActionGeneral', () => {
     const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'
-    view.rerender(<ActionGeneral action={{ ...action }} />)
+    view.rerender(<ActionGeneral sourceEntityId="test-session" action={{ ...action }} />)
 
     await waitFor(() => expect(state.persistTemporaryTopic).toHaveBeenCalledWith('Selected passage'))
   })
@@ -311,7 +311,7 @@ describe('ActionGeneral', () => {
     state.saveConversations = true
     state.streamStatus = 'done'
 
-    render(<ActionGeneral action={createAction()} />)
+    render(<ActionGeneral sourceEntityId="test-session" action={createAction()} />)
 
     expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
   })
@@ -324,7 +324,7 @@ describe('ActionGeneral', () => {
     const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'
-    view.rerender(<ActionGeneral action={{ ...action }} />)
+    view.rerender(<ActionGeneral sourceEntityId="test-session" action={{ ...action }} />)
 
     const retry = await screen.findByRole('button', { name: 'common.retry:' })
     fireEvent.click(retry)

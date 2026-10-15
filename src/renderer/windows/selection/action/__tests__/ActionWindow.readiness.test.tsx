@@ -30,7 +30,8 @@ const action: SelectionActionWindowData = {
   name: 'Test action',
   enabled: true,
   isBuiltIn: false,
-  requestId: 'first-selection'
+  requestId: 'first-selection',
+  sessionId: 'first-selection'
 }
 
 describe('selection action renderer readiness', () => {
