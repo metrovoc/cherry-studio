@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Problem also present in the official Cherry Studio
+    url: https://github.com/CherryHQ/cherry-studio/issues
+    about: Report it upstream to CherryHQ, where the shared code is maintained.
+  - name: Cherry Studio documentation
+    url: https://docs.cherry-ai.com/docs/en-us
+    about: The upstream user guide also covers this build.
