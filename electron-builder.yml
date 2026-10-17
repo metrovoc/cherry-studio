@@ -198,44 +198,16 @@ artifactBuildCompleted: scripts/packaging/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.10 - Voice, Search and Assistant Improvements
+    Cherry Studio 2.1.11 - Fork Identity
 
-    ✨ New Features
-    - [Voice] Dictate in chats, Agents and Quick Assistant, and read responses and selected text aloud. New local models support offline speech recognition and synthesis.
-    - [Automation] Coordinate browser and computer actions through a shared automation session, with clearer progress and compact results.
-    - [Screenshots] Add screenshots and optional text directly to Chat or Agent drafts.
-    - [Web Search] Use DuckDuckGo keyword search without an API key.
-    - [Knowledge Base] Reorder knowledge bases and custom groups by dragging, with ordering preserved after restart.
-
-    🐛 Bug Fixes
-    - [Assistant Windows] Prevent temporary Selection and Quick Assistant chats from repeatedly attempting unavailable browser and computer actions. Built-in model web search remains available.
-    - [Quick Assistant] Keep Tab available for IME candidate selection; the assistant picker opens normally after composition ends.
-    - [Selection Assistant] Keep playback attached to the current session when a delayed hide event arrives from a previous window session.
-    - [Attachments] Read text files with unrecognized extensions instead of rejecting them as unsupported.
-    - [Web Search] Preserve SearxNG results when destination pages cannot be fetched.
-    - [Voice] Restore microphone access in signed macOS builds.
-
-    Upgrade Notes
-    - [Agents] If custom instructions name individual built-in browser or computer tools, update them to use the bundled automation skills and their js/reset interface.
+    💄 Improvements
+    - [About] Identify the app as an unofficial build of Cherry Studio.
+    - [Feedback] Open feedback, issue reports and release notes in this fork's GitHub repository.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.10 - 语音、搜索与助手改进
+    Cherry Studio 2.1.11 - 分支标识
 
-    ✨ 新功能
-    - [语音] 在聊天、Agent 和快捷助手中使用语音输入，朗读回复和选中文本。新增本地模型，支持离线语音识别与合成。
-    - [自动化] 通过共享自动化会话协调浏览器和电脑操作，提供更清晰的执行进度和精简结果。
-    - [截图] 将截图及可选文字直接添加到聊天或 Agent 草稿。
-    - [联网搜索] 新增无需 API 密钥的 DuckDuckGo 关键词搜索。
-    - [知识库] 支持拖动知识库和自定义分组调整顺序，重启后保留排序。
-
-    🐛 问题修复
-    - [助手窗口] 防止划词助手和快捷助手的临时聊天反复尝试不可用的浏览器和电脑操作，保留模型内置联网搜索。
-    - [快捷助手] 使用输入法选词时保留 Tab 键的选词功能，完成输入后仍可正常用 Tab 打开助手选择器。
-    - [划词助手] 忽略前一次窗口会话延迟到达的隐藏事件，避免中断当前会话的语音播放。
-    - [附件] 根据内容识别扩展名未知的文本文件，避免将其误判为不支持的文件。
-    - [联网搜索] 无法读取目标网页时，保留 SearxNG 已返回的搜索结果。
-    - [语音] 修复已签名 macOS 应用无法访问麦克风的问题。
-
-    升级说明
-    - [Agent] 如果自定义指令直接指定了内置浏览器或电脑操作工具，请改用随应用提供的自动化技能及其 js/reset 接口。
+    💄 改进
+    - [关于] 标明本应用为 Cherry Studio 的非官方构建版本。
+    - [反馈] 反馈、问题报告和更新日志改为在本分支的 GitHub 仓库中打开。
     <!--LANG:END-->
