@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Note de lansare",
   "settings.about.repository": "Depozit GitHub",
   "settings.about.title": "Despre",
+  "settings.about.unofficialBuild": "Versiune neoficială bazată pe Cherry Studio de la CherryHQ",
   "settings.about.updateAvailable": "S-a găsit o nouă versiune {{version}}",
   "settings.about.updateError": "Eroare actualizare",
   "settings.about.updateNotAvailable": "Utilizezi cea mai recentă versiune",

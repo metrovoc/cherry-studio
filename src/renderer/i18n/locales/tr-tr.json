@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Sürüm Notları",
   "settings.about.repository": "GitHub Deposu",
   "settings.about.title": "Hakkında",
+  "settings.about.unofficialBuild": "CherryHQ'nun Cherry Studio'suna dayanan resmi olmayan sürüm",
   "settings.about.updateAvailable": "Yeni {{version}} sürümü bulundu",
   "settings.about.updateError": "Güncelleme hatası",
   "settings.about.updateNotAvailable": "En son sürüm kullanılıyor",

@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "更新日志",
   "settings.about.repository": "GitHub 仓库",
   "settings.about.title": "关于我们",
+  "settings.about.unofficialBuild": "基于 CherryHQ 的 Cherry Studio 的非官方构建版本",
   "settings.about.updateAvailable": "发现新版本 {{version}}",
   "settings.about.updateError": "更新出错",
   "settings.about.updateNotAvailable": "你的软件已是最新版本",

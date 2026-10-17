@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Release Notes",
   "settings.about.repository": "GitHub Repository",
   "settings.about.title": "About",
+  "settings.about.unofficialBuild": "Unofficial build based on Cherry Studio by CherryHQ",
   "settings.about.updateAvailable": "Found new version {{version}}",
   "settings.about.updateError": "Update error",
   "settings.about.updateNotAvailable": "You are using the latest version",

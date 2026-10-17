@@ -21,7 +21,7 @@ import { openRoute } from '@renderer/services/mainWindowNavigation'
 import { toast } from '@renderer/services/toast'
 import { openExternalWebsite } from '@renderer/services/website'
 
-export const FEEDBACK_GITHUB_URL = 'https://github.com/CherryHQ/cherry-studio/issues/new/choose'
+export const FEEDBACK_GITHUB_URL = 'https://github.com/metrovoc/cherry-studio/issues/new/choose'
 
 const logger = loggerService.withContext('FeedbackDialog')
 

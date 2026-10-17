@@ -212,7 +212,7 @@ export class AppMenuService extends BaseService {
             click: () => {
               void application
                 .get('MainWindowService')
-                .openWebsite('https://github.com/CherryHQ/cherry-studio/issues/new/choose')
+                .openWebsite('https://github.com/metrovoc/cherry-studio/issues/new/choose')
                 .catch((error) => logger.warn('Failed to open website', { error }))
             }
           },
@@ -222,7 +222,7 @@ export class AppMenuService extends BaseService {
             click: () => {
               void application
                 .get('MainWindowService')
-                .openWebsite('https://github.com/CherryHQ/cherry-studio/releases')
+                .openWebsite('https://github.com/metrovoc/cherry-studio/releases')
                 .catch((error) => logger.warn('Failed to open website', { error }))
             }
           }

@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Registro de cambios",
   "settings.about.repository": "Repositorio de GitHub",
   "settings.about.title": "Acerca de nosotros",
+  "settings.about.unofficialBuild": "Compilación no oficial basada en Cherry Studio de CherryHQ",
   "settings.about.updateAvailable": "Versión nueva disponible {{version}}",
   "settings.about.updateError": "Error de actualización",
   "settings.about.updateNotAvailable": "Tu software ya está actualizado",

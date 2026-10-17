@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Changelog",
   "settings.about.repository": "GitHub-Repository",
   "settings.about.title": "Über uns",
+  "settings.about.unofficialBuild": "Inoffizieller Build auf Basis von Cherry Studio von CherryHQ",
   "settings.about.updateAvailable": "Neue Version {{version}} gefunden",
   "settings.about.updateError": "Aktualisierungsfehler",
   "settings.about.updateNotAvailable": "Ihre Software ist bereits auf dem neuesten Stand",

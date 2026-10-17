@@ -3665,6 +3665,7 @@
   "settings.about.releases.title": "Заметки о релизах",
   "settings.about.repository": "Репозиторий GitHub",
   "settings.about.title": "О программе",
+  "settings.about.unofficialBuild": "Неофициальная сборка на основе Cherry Studio от CherryHQ",
   "settings.about.updateAvailable": "Найдено новое обновление {{version}}",
   "settings.about.updateError": "Ошибка обновления",
   "settings.about.updateNotAvailable": "Вы используете последнюю версию",

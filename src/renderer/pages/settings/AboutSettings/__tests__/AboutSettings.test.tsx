@@ -71,7 +71,7 @@ vi.mock('@renderer/components/icons/LogoAvatar', () => ({
 
 import { AboutSettings } from '..'
 
-const REPOSITORY_URL = 'https://github.com/CherryHQ/cherry-studio'
+const REPOSITORY_URL = 'https://github.com/metrovoc/cherry-studio'
 
 async function renderAboutSettings() {
   render(<AboutSettings />)
@@ -162,5 +162,11 @@ describe('AboutSettings repository controls accessibility', () => {
 
     await user.click(repositoryButtons[1])
     expect(mocks.request).toHaveBeenCalledWith('system.shell.open_external_website', REPOSITORY_URL)
+  })
+
+  it('identifies the app as an unofficial build', async () => {
+    await renderAboutSettings()
+
+    expect(screen.getByText('settings.about.unofficialBuild')).toBeInTheDocument()
   })
 })
