@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is wrong in this build
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Cherry Studio version
+      description: Shown in Settings → About.
+      placeholder: 2.1.10
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.5
+    validations:
+      required: true
+  - type: dropdown
+    id: official
+    attributes:
+      label: Does it also happen in the official Cherry Studio?
+      description: If it does, please report it upstream to CherryHQ instead.
+      options:
+        - "No"
+        - Not tried
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Logs are in `~/Library/Logs/CherryStudio`.
