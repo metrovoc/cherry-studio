@@ -3974,6 +3974,7 @@
   "settings.about.repository": "GitHub 儲存庫",
   "settings.about.repository.button": "支持",
   "settings.about.repository.title": "開源專案",
+  "settings.about.unofficialBuild": "基於 CherryHQ 的 Cherry Studio 的非官方建置版本",
   "settings.about.updateAvailable": "發現新版本 {{version}}",
   "settings.about.updateError": "更新錯誤",
   "settings.about.updateNotAvailable": "您正在使用最新版本",

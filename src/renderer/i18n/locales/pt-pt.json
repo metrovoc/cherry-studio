@@ -3974,6 +3974,7 @@
   "settings.about.repository": "Repositório do GitHub",
   "settings.about.repository.button": "Apoiar",
   "settings.about.repository.title": "Projeto de código aberto",
+  "settings.about.unofficialBuild": "Compilação não oficial baseada no Cherry Studio da CherryHQ",
   "settings.about.updateAvailable": "Nova versão disponível {{version}}",
   "settings.about.updateError": "Erro ao atualizar",
   "settings.about.updateNotAvailable": "Já está a utilizar a versão mais recente",

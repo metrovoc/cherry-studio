@@ -177,7 +177,7 @@ const AboutSettings: FC = () => {
             <button
               type="button"
               aria-label={t('settings.about.repository')}
-              onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio')}
+              onClick={() => onOpenWebsite('https://github.com/metrovoc/cherry-studio')}
               className="relative cursor-pointer">
               <span aria-hidden="true">
                 {appUpdateState.downloading && appUpdateState.downloadProgress > 0 && (
@@ -199,10 +199,11 @@ const AboutSettings: FC = () => {
             <div className="flex min-h-18 flex-col items-start justify-center">
               <div className="mb-1 text-lg font-bold text-foreground">Cherry Studio</div>
               <div className="text-muted-foreground text-sm">{t('settings.about.description')}</div>
+              <div className="text-muted-foreground text-xs">{t('settings.about.unofficialBuild')}</div>
               <button
                 type="button"
                 aria-label={t('settings.about.releases.title')}
-                onClick={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio/releases')}
+                onClick={() => onOpenWebsite('https://github.com/metrovoc/cherry-studio/releases')}
                 className="mt-1.5">
                 <Badge className="cursor-pointer rounded-md border-primary/20 bg-primary/10 px-1.5 py-0 text-[11px] leading-4 text-primary transition-colors hover:bg-primary/15">
                   v{version}
@@ -323,7 +324,7 @@ const AboutSettings: FC = () => {
               {t('settings.about.repository.button')}
             </>
           }
-          onAction={() => onOpenWebsite('https://github.com/CherryHQ/cherry-studio')}
+          onAction={() => onOpenWebsite('https://github.com/metrovoc/cherry-studio')}
         />
         <Divider className="my-3" />
         <AboutActionRow

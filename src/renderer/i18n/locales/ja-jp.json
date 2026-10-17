@@ -3974,6 +3974,7 @@
   "settings.about.repository": "GitHubリポジトリ",
   "settings.about.repository.button": "支援",
   "settings.about.repository.title": "オープンソースプロジェクト",
+  "settings.about.unofficialBuild": "CherryHQ の Cherry Studio をベースにした非公式ビルド",
   "settings.about.updateAvailable": "新しいバージョン {{version}} が見つかりました",
   "settings.about.updateError": "更新エラー",
   "settings.about.updateNotAvailable": "最新バージョンを使用しています",

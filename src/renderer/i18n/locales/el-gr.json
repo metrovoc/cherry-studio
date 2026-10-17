@@ -3974,6 +3974,7 @@
   "settings.about.repository": "Αποθετήριο GitHub",
   "settings.about.repository.button": "Υποστήριξη",
   "settings.about.repository.title": "Έργο ανοιχτού κώδικα",
+  "settings.about.unofficialBuild": "Ανεπίσημη έκδοση βασισμένη στο Cherry Studio της CherryHQ",
   "settings.about.updateAvailable": "Νέα έκδοση {{version}} εντοπίστηκε",
   "settings.about.updateError": "Σφάλμα κατά την ενημέρωση",
   "settings.about.updateNotAvailable": "Το λογισμικό σας είναι ήδη στην πιο πρόσφατη έκδοση",
