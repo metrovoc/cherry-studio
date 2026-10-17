@@ -18,6 +18,7 @@ import {
 import { sanitizeSigningDiagnostic } from '../release/signing-diagnostics'
 import {
   createDownstreamHistory,
+  createGitHubReleaseNotes,
   validateDownstreamArtifacts,
   validateDownstreamRelease,
   validateResumableDraft,
@@ -116,6 +117,23 @@ describe('downstream publication gates', () => {
       { version: '2.1.3', releaseNotes: notes },
       { version: '2.1.2', releaseNotes: notes }
     ])
+  })
+
+  it('adds the fork footer on GitHub without carrying it into in-app history', () => {
+    const upstreamSha = 'b'.repeat(40)
+    const body = createGitHubReleaseNotes(notes, upstreamSha)
+    expect(body.startsWith(notes.trimEnd())).toBe(true)
+    expect(body).toContain(`https://github.com/CherryHQ/cherry-studio/commit/${upstreamSha}`)
+    expect(body).toContain('https://github.com/metrovoc/cherry-studio/issues')
+
+    expect(createDownstreamHistory([{ ...release, body }], '2.1.3', notes)[1]).toEqual({
+      version: '2.1.2',
+      releaseNotes: notes
+    })
+  })
+
+  it('refuses a release footer without an exact upstream base', () => {
+    expect(() => createGitHubReleaseNotes(notes, '')).toThrow('Upstream base')
   })
 })
 
