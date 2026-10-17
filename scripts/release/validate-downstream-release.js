@@ -65,6 +65,8 @@ function verifyDraftAssets(release, directory) {
   }
 }
 
+const LANGUAGE_END_MARKER = '<!--LANG:END-->'
+
 function hasLanguageSections(notes) {
   return typeof notes === 'string' && /<!--LANG:en-->[\s\S]+<!--LANG:zh-CN-->[\s\S]+<!--LANG:END-->/.test(notes)
 }
@@ -83,8 +85,27 @@ function createDownstreamHistory(releases, version, releaseNotes) {
           hasLanguageSections(entry.body)
       )
       .sort((a, b) => semver.rcompare(a.tag_name, b.tag_name))
-      .map((entry) => ({ version: semver.clean(entry.tag_name), releaseNotes: entry.body || '' }))
+      .map((entry) => ({ version: semver.clean(entry.tag_name), releaseNotes: stripReleaseFooter(entry.body) }))
   ]
+}
+
+// The footer exists only on GitHub; the app history keeps the curated bilingual notes.
+function stripReleaseFooter(body) {
+  return body.slice(0, body.indexOf(LANGUAGE_END_MARKER) + LANGUAGE_END_MARKER.length)
+}
+
+function createGitHubReleaseNotes(releaseNotes, upstreamSha) {
+  if (!/^[a-f0-9]{40}$/.test(upstreamSha)) throw new Error('Upstream base must be a full commit SHA')
+  const upstream = 'https://github.com/CherryHQ/cherry-studio'
+  return (
+    [
+      releaseNotes.trimEnd(),
+      '---',
+      `Unofficial build of [Cherry Studio](${upstream}), based on upstream [\`${upstreamSha.slice(0, 10)}\`](${upstream}/commit/${upstreamSha}).`,
+      'Requires macOS 13 or later on Apple Silicon. Signed and notarized; installed copies update in-app.',
+      "Report problems with this build in [the fork's issues](https://github.com/metrovoc/cherry-studio/issues)."
+    ].join('\n\n') + '\n'
+  )
 }
 
 function validateDownstreamArtifacts(directory, version, arch) {
@@ -133,7 +154,10 @@ function main() {
       'resources/cherry-studio/release-history.json',
       `${JSON.stringify(createDownstreamHistory(releases, version, releaseNotes), null, 2)}\n`
     )
-    fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'downstream-release-notes.md'), releaseNotes)
+    fs.writeFileSync(
+      path.join(process.env.RUNNER_TEMP, 'downstream-release-notes.md'),
+      createGitHubReleaseNotes(releaseNotes, process.env.UPSTREAM_BASE_SHA)
+    )
   }
 }
 
@@ -141,6 +165,7 @@ if (require.main === module) main()
 module.exports = {
   validateDownstreamRelease,
   createDownstreamHistory,
+  createGitHubReleaseNotes,
   validateDownstreamArtifacts,
   validateResumableDraft,
   verifyDraftAssets
