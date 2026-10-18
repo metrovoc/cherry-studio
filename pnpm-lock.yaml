@@ -252,7 +252,7 @@ patchedDependencies:
   ollama-ai-provider-v2@3.3.1: d2b640ac5475c802eee5f983bcad08fb4e5cec7615c57aac188850c3f531743b
   onnxruntime-node@1.25.1: 7a18bfdf39cbd83c60197c06e5f5c5b2b46d265d7483ed3d80ec3ad499d99cef
   ppu-paddle-ocr@6.0.0: 462a2a1d24fd9bdf645bed35f34c90d24b40389443b802018f77b85911f08096
-  selection-hook@2.1.1: 20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3
+  selection-hook@2.1.1: 38f480b5c20c858a49a806e1373b17623905ee2b4716c6bae0558f60e2f5d7d5
   sherpa-onnx-node@1.13.6: 63432398c7e4f08be86944fdaf2b39cc5a8ce719db9ae38913d794d8bdcbcf0e
   streamdown@2.5.0: e7275804eb3d9c069a4b2f193c03553501f4db2d37dac35230551a7ab14444df
   tesseract.js@6.0.1: a131c9f36e950911e9fc548408131145a3e5e53977d67abe5196f6b23b32bb6e
@@ -386,7 +386,7 @@ importers:
         version: 1.16.1
       selection-hook:
         specifier: 2.1.1
-        version: 2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3)
+        version: 2.1.1(patch_hash=38f480b5c20c858a49a806e1373b17623905ee2b4716c6bae0558f60e2f5d7d5)
       sharp:
         specifier: 0.35.3
         version: 0.35.3(@types/node@24.10.4)
@@ -29503,7 +29503,7 @@ snapshots:
     dependencies:
       parseley: 0.12.1
 
-  selection-hook@2.1.1(patch_hash=20f31f82007411d7b4754653c1864e2b8372c5673c6ea9aaa0b49ac7ee19c3b3):
+  selection-hook@2.1.1(patch_hash=38f480b5c20c858a49a806e1373b17623905ee2b4716c6bae0558f60e2f5d7d5):
     dependencies:
       node-addon-api: 8.5.0
       node-gyp-build: 4.8.4

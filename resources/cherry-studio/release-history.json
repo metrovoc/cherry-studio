@@ -1,5 +1,9 @@
 [
   {
+    "version": "2.1.12",
+    "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.1.12 - Selection Accuracy\n\n🐛 Bug Fixes\n- [Selection Assistant] Fix shifted text selections around wrapped lines in Chrome on macOS.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.1.12 - 划词准确性\n\n🐛 问题修复\n- [划词助手] 修复 macOS 上 Chrome 自动换行附近的划词文本出现字符偏移的问题。\n<!--LANG:END-->"
+  },
+  {
     "version": "2.1.11",
     "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.1.11 - Fork Identity\n\n💄 Improvements\n- [About] Identify the app as an unofficial build of Cherry Studio.\n- [Feedback] Open feedback, issue reports and release notes in this fork's GitHub repository.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.1.11 - 分支标识\n\n💄 改进\n- [关于] 标明本应用为 Cherry Studio 的非官方构建版本。\n- [反馈] 反馈、问题报告和更新日志改为在本分支的 GitHub 仓库中打开。\n<!--LANG:END-->"
   },
