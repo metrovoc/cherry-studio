@@ -116,3 +116,56 @@ index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa
          {
              switch (detectionType)
              {
+diff --git a/src/mac/core/engine.mm b/src/mac/core/engine.mm
+--- a/src/mac/core/engine.mm
++++ b/src/mac/core/engine.mm
+@@ -468,10 +468,11 @@
+ /**
+  * Get text selection from an accessibility element
+  *
+- * Two sources, in order:
+- * 1. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
++ * Three sources, in order:
++ * 1. kAXStringForRange with kAXSelectedTextRange - resolves browser soft-wrap offsets.
++ * 2. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
+  *    steppers report their selection as a number rather than a string.
+- * 2. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
++ * 3. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
+  *    and a range but not kAXSelectedText.
+  * Returns true only for a non-empty result; blank-only text is filtered by the caller.
+  */
+@@ -482,9 +483,32 @@
+         return false;
+     }
+ 
+-    // Try to get selected text first
++    // Chromium can shift AXSelectedText at soft wraps; resolve its range directly instead.
+     CFTypeRef selectedTextRef = nullptr;
+-    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
++    CFTypeRef rangeRef = nullptr;
++    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &rangeRef);
++    if (error == kAXErrorSuccess && rangeRef)
++    {
++        CFRange range = {0, 0};
++        if (CFGetTypeID(rangeRef) == AXValueGetTypeID() &&
++            AXValueGetValue((AXValueRef)rangeRef, kAXValueTypeCFRange, &range) &&
++            range.location >= 0 && range.length > 0)
++        {
++            AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute,
++                                                       rangeRef, &selectedTextRef);
++        }
++        CFRelease(rangeRef);
++    }
++    if (selectedTextRef && (CFGetTypeID(selectedTextRef) != CFStringGetTypeID() ||
++                            CFStringGetLength((CFStringRef)selectedTextRef) == 0))
++    {
++        CFRelease(selectedTextRef);
++        selectedTextRef = nullptr;
++    }
++    if (!selectedTextRef)
++        error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
++    else
++        error = kAXErrorSuccess;
+ 
+     if (error == kAXErrorSuccess && selectedTextRef)
+     {
