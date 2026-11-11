@@ -6,11 +6,14 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
+import { setupTestDatabase } from '@test-helpers/db'
 import { InvalidToolInputError, type Tool, type ToolSet } from 'ai'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as z from 'zod'
 
 import { generateText as aiCoreGenerateText } from '@cherrystudio/ai-core'
+import { assistantTable } from '@data/db/schemas/assistant'
+import { topicTable } from '@data/db/schemas/topic'
 import { FS_READ_TOOL_NAME } from '@shared/ai/builtinTools'
 import { ENDPOINT_TYPE, type EndpointType, MODEL_CAPABILITY, SERVER_TOOL } from '@shared/data/types/model'
 
@@ -40,21 +43,23 @@ vi.mock('../../../../provider/config', () => ({
   resolveProviderAiSdkConfig: resolveProviderAiSdkConfigMock
 }))
 
-vi.mock('@application', () => ({
-  application: {
-    getPath: (_namespace: string, filename: string) =>
-      path.join(process.cwd(), 'packages/provider-registry/data', filename),
-    get: (name: string) => {
-      if (name === 'KnowledgeService') return { hasAnyBase: () => true }
-      if (name === 'PreferenceService') return { get: preferenceGetMock }
-      // No connected MCP server in these tests, so nothing declares the resources capability.
-      if (name === 'McpRuntimeService')
-        return { getConnectedServerCapabilities: () => undefined, getConnectedServerInstructions: getMcpInstructions }
-      if (name === 'McpCatalogService') return { listTools: listMcpTools }
-      throw new Error(`unexpected service: ${name}`)
-    }
+vi.mock('@application', async () => {
+  const { mockApplicationFactory } = await import('@test-mocks/main/application')
+  const overrides = {
+    KnowledgeService: { hasAnyBase: () => true },
+    PreferenceService: { get: preferenceGetMock },
+    McpRuntimeService: {
+      getConnectedServerCapabilities: () => undefined,
+      getConnectedServerInstructions: getMcpInstructions
+    },
+    McpCatalogService: { listTools: listMcpTools }
   }
-}))
+  const mock = mockApplicationFactory(overrides)
+  mock.application.getPath.mockImplementation((_namespace, filename) =>
+    path.join(process.cwd(), 'packages/provider-registry/data', filename ?? '')
+  )
+  return mock
+})
 
 // No MCP servers configured in these tests — keeps the MCP tool/resource resolution off the DB.
 vi.mock('@main/data/services/McpServerService', () => ({
@@ -2576,7 +2581,23 @@ describe('resolveTools fs_read gating', () => {
 })
 
 describe('assistant automation tool selection', () => {
+  const dbh = setupTestDatabase()
+  const persistentAssistant = (overrides: Parameters<typeof makeAssistant>[0] = {}) =>
+    makeAssistant({ id: 'assistant-1', ...overrides })
+
   beforeEach(() => {
+    const assistant = persistentAssistant()
+    dbh.db
+      .insert(assistantTable)
+      .values({
+        id: assistant.id,
+        name: 'Assistant',
+        emoji: '',
+        settings: assistant.settings,
+        orderKey: 'a0'
+      })
+      .run()
+    dbh.db.insert(topicTable).values({ id: CONVERSATION.topicId, assistantId: assistant.id, orderKey: 'a0' }).run()
     for (const entry of createAutomationReplToolEntries()) registry.register(entry)
     preferenceGetMock.mockImplementation((key) => key === 'app.browser.agent_control.enabled')
   })
@@ -2584,7 +2605,7 @@ describe('assistant automation tool selection', () => {
     for (const entry of createAutomationReplToolEntries()) registry.deregister(entry.name)
   })
   it('offers automation tools only to browser-enabled persistent conversations', async () => {
-    const assistant = makeAssistant()
+    const assistant = persistentAssistant()
     const enabled = await resolveTools({ conversation: CONVERSATION }, assistant, makeModel(), false, [])
     expect([...Object.keys(enabled.tools ?? {}), ...enabled.deferredEntries.map((entry) => entry.name)]).toContain(
       'automation_repl'
@@ -2657,7 +2678,7 @@ describe('assistant automation tool selection', () => {
       setAccess(globalBrowser, globalComputer)
       const { tools, deferredEntries } = await resolveTools(
         { conversation: CONVERSATION },
-        makeAssistant({ settings: { enableBrowser } }),
+        persistentAssistant({ settings: { enableBrowser } }),
         makeModel(),
         false,
         []
@@ -2691,18 +2712,13 @@ describe('assistant automation tool selection', () => {
     setAccess(true, true)
     const { tools, deferredEntries } = await resolveTools(
       { conversation, ...(caller ? { contextOwner: 'caller' as const } : {}) },
-      hasAssistant ? makeAssistant({ settings: { enableBrowser: browser } }) : undefined,
+      hasAssistant ? persistentAssistant({ settings: { enableBrowser: browser } }) : undefined,
       makeModel(),
       false,
       []
     )
-    if (caller && browser) {
-      expectDescription(tools?.automation_repl.description, true, false)
-      expect(tools?.automation_repl_reset).toBeDefined()
-    } else {
-      expect(tools?.automation_repl).toBeUndefined()
-      expect(tools?.automation_repl_reset).toBeUndefined()
-    }
+    expect(tools?.automation_repl).toBeUndefined()
+    expect(tools?.automation_repl_reset).toBeUndefined()
     expect(deferredEntries.map((entry) => entry.name)).not.toContain('automation_repl')
     expect(deferredEntries.map((entry) => entry.name)).not.toContain('automation_repl_reset')
   })
@@ -2718,7 +2734,7 @@ describe('assistant automation tool selection', () => {
       tool: { inputSchema: z.object({}) }
     })
     try {
-      const resolve = () => resolveTools({ conversation: CONVERSATION }, makeAssistant(), makeModel(), false, [])
+      const resolve = () => resolveTools({ conversation: CONVERSATION }, persistentAssistant(), makeModel(), false, [])
       const { tools } = await resolve()
       const options = { toolCallId: 'meta-test', messages: [] }
       const stub = await tools!.tool_inspect.execute!({ name: 'automation_repl' }, options)
@@ -2753,7 +2769,13 @@ describe('assistant automation tool selection', () => {
       [false, true]
     ]) {
       setAccess(browser, computer)
-      const { tools } = await resolveTools({ conversation: CONVERSATION }, makeAssistant(), makeModel(), false, [])
+      const { tools } = await resolveTools(
+        { conversation: CONVERSATION },
+        persistentAssistant(),
+        makeModel(),
+        false,
+        []
+      )
       expectDescription(tools?.automation_repl.description, browser, computer)
       requests.push(tools!)
     }
@@ -2790,7 +2812,7 @@ describe('assistant automation tool selection', () => {
     })
     const params = await buildAgentParams({
       request: { conversation: CONVERSATION },
-      assistant: makeAssistant({ settings: { enableBrowser: false } }),
+      assistant: persistentAssistant({ settings: { enableBrowser: false } }),
       signal: undefined,
       provider: makeProvider(),
       model: makeModel({ capabilities: [MODEL_CAPABILITY.FUNCTION_CALL], apiModelId: 'model' })

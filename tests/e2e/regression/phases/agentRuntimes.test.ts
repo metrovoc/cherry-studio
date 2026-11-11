@@ -128,7 +128,7 @@ test(...caseDefinition('MP-55'), async ({ app, mainWindow }, testInfo) => {
   await agentStatusPanel(app, mainWindow, testInfo)
 })
 
-test(...caseDefinition('MP-152'), async ({ app, mainWindow }, testInfo) => {
+test(...caseDefinition('MP-153'), async ({ app, mainWindow }, testInfo) => {
   test.setTimeout(5 * 60_000)
   await agentTaskPlanProjection(app, mainWindow, testInfo)
 })

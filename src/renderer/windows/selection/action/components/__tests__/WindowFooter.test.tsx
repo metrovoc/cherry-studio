@@ -39,7 +39,7 @@ describe('WindowFooter', () => {
   it('closes the action window', () => {
     render(<WindowFooter content="result" onRegenerate={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'selection.action.window.esc_close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Esc: Close' }))
     expect(ipcRequest).toHaveBeenCalledWith('window.close')
   })
 

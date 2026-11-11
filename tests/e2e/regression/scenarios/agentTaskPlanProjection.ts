@@ -17,7 +17,7 @@ import { closeSettings } from '../helpers/settings'
 import type { RegressionApp } from '../RegressionApp'
 
 export async function agentTaskPlanProjection(app: RegressionApp, page: Page, testInfo: TestInfo): Promise<void> {
-  const name = app.resourceName(`MP-152 Task Plan ${Date.now()}`)
+  const name = app.resourceName(`MP-153 Task Plan ${Date.now()}`)
   const view = page.locator('[data-ui~="agent.view"]:visible').first()
   const capsule = view.getByTestId('agent-task-progress-capsule')
   const progress = capsule.getByRole('progressbar')
@@ -116,7 +116,7 @@ export async function agentTaskPlanProjection(app: RegressionApp, page: Page, te
     const phases: { phase: string; screenshot: string; parts: CherryMessagePart[] }[] = [
       {
         phase: 'A',
-        screenshot: 'MP-152 finished turn without stale running step',
+        screenshot: 'MP-153 finished turn without stale running step',
         parts: [
           createFirst,
           {
@@ -139,7 +139,7 @@ export async function agentTaskPlanProjection(app: RegressionApp, page: Page, te
       },
       {
         phase: 'B',
-        screenshot: 'MP-152 deleted task leaves the step list',
+        screenshot: 'MP-153 deleted task leaves the step list',
         parts: [
           createFirst,
           {
@@ -163,7 +163,7 @@ export async function agentTaskPlanProjection(app: RegressionApp, page: Page, te
     ]
     phases.push({
       phase: 'C',
-      screenshot: 'MP-152 unfinished task after reply ends',
+      screenshot: 'MP-153 unfinished task after reply ends',
       parts: [
         createFirst,
         {
@@ -233,7 +233,7 @@ export async function agentTaskPlanProjection(app: RegressionApp, page: Page, te
       await testInfo.attach(phase.screenshot, { path, contentType: 'image/png' })
     }
   } finally {
-    await testInfo.attach('MP-152 observed progress', {
+    await testInfo.attach('MP-153 observed progress', {
       body: JSON.stringify(observations, null, 2),
       contentType: 'application/json'
     })

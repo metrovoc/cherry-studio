@@ -93,7 +93,7 @@ export class TrayService extends BaseService implements Activatable {
       const clickTrayToShowQuickAssistant = preferenceService.get('feature.quick_assistant.click_tray_to_show')
 
       if (quickAssistantEnabled && clickTrayToShowQuickAssistant) {
-        application.get('QuickAssistantService').showQuickAssistant()
+        void application.get('QuickAssistantService').showQuickAssistant()
       } else {
         application.get('MainWindowService').showMainWindow()
       }

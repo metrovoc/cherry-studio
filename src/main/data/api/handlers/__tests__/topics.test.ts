@@ -157,7 +157,7 @@ describe('topicHandlers', () => {
         topicHandlers['/assistants/:assistantId/topics'].GET({
           params: { assistantId: 'assistant-1' },
           query: { limit: 20, cursor: 'previous' }
-        } as never)
+        })
       ).resolves.toBe(result)
 
       expect(listByAssistantActivityCursorMock).toHaveBeenCalledWith('assistant-1', {
