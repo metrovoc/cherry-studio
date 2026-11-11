@@ -2276,8 +2276,7 @@ describe('MessagePartsRenderer', () => {
       { name: 'no process history', prefix: [] },
       { name: 'empty reasoning', prefix: [{ type: 'reasoning', text: '', state: 'streaming' }] },
       { name: 'visible reasoning', prefix: [{ type: 'reasoning', text: 'Considering the answer', state: 'done' }] },
-      { name: 'an unsupported tool', prefix: [toolPart('unknown', 'output-available', 'unknown_provider_tool')] },
-      { name: 'an answered question entering history', prefix: [answeredAskUserQuestionPart('question')] }
+      { name: 'an unsupported tool', prefix: [toolPart('unknown', 'output-available', 'unknown_provider_tool')] }
     ])('keeps the final text node mounted when completing with $name', ({ prefix }) => {
       activateTurn('streaming')
       const parts = [...prefix, { type: 'text', text: 'stable answer node' }] as CherryMessagePart[]

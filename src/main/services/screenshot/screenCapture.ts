@@ -58,6 +58,14 @@ export async function captureAllMonitors(): Promise<Map<number, CaptureResult>> 
   return new Map(entries)
 }
 
+/** Capture only the requested display; never fall back to another monitor. */
+export async function captureMonitor(displayId: number): Promise<CaptureResult> {
+  const monitor = getMonitorsOrThrow().find((item) => item.id() === displayId)
+  if (!monitor) throw new ScreenCaptureError(`Display ${displayId} is no longer available`)
+  const image = await monitor.captureImage()
+  return { buffer: await image.toPng(true), width: image.width, height: image.height }
+}
+
 /**
  * List displays, classifying failure by the actual permission state.
  *

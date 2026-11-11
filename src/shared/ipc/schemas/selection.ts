@@ -6,7 +6,6 @@ import {
   SelectionAgentSummarySchema,
   SelectionAgentWindowLayoutSchema
 } from '@shared/types/selection'
-import type { SelectionActionItem } from '@shared/data/preference/preferenceTypes'
 import type { SelectionActionSession } from '@shared/types/selection'
 
 import { defineRoute } from '../define'

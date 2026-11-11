@@ -1,7 +1,7 @@
-import { MockApplicationUtils } from '@test-mocks/main/application'
-import { screen } from 'electron'
 import { EventEmitter } from 'events'
 
+import { MockApplicationUtils } from '@test-mocks/main/application'
+import { screen } from 'electron'
 import type { BrowserWindow, Rectangle } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -338,20 +338,6 @@ describe('SelectionService macOS toolbar', () => {
     access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft')
     expect(toolbarWindow.setFocusable).not.toHaveBeenCalled()
     expect(toolbarWindow.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
-    expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
-  })
-
-  it('treats the other edition as an external app', () => {
-    getApplicationIdMock.mockReturnValue('com.kangfenmao.CherryStudio')
-    const { access, toolbarWindow } = createToolbarHarness()
-
-    access.showToolbarAtPosition({ x: 10, y: 20 }, 'bottomLeft', 'com.cherryai.cherrystudio.cn')
-
-    expect(toolbarWindow.setFocusable).toHaveBeenCalledWith(false)
-    expect(toolbarWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
-      visibleOnFullScreen: true,
-      skipTransformProcessType: true
-    })
     expect(toolbarWindow.showInactive).toHaveBeenCalledOnce()
   })
 })

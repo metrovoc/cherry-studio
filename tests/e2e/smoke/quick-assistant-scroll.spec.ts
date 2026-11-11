@@ -28,14 +28,14 @@ test.beforeAll(async () => {
           if (source === './Message' && importer?.endsWith('/quickAssistant/chat/components/Messages.tsx')) {
             return '\0scroll-input:MessageItem'
           }
-          if (source === '@cherrystudio/ui') return '\0scroll-input:Scrollbar'
+          if (source === '@cherrystudio/ui') return '\0scroll-input:ScrollArea'
           return undefined
         },
         load(id) {
           if (!id.startsWith('\0scroll-input:')) return
           const name = id.split(':')[1]
-          if (name === 'Scrollbar') {
-            return `export { default as Scrollbar } from '${resolve('packages/ui/src/components/composites/scrollbar/index.tsx')}'`
+          if (name === 'ScrollArea') {
+            return `export { ScrollArea } from '${resolve('packages/ui/src/components/primitives/scroll-area.tsx')}'`
           }
           return `export { ${name}${name === 'MessageItem' ? ' as default' : ''} } from '${fixture}'`
         }

@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom/vitest'
+import { Blob as NodeBlob } from 'node:buffer'
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type React from 'react'
@@ -417,6 +419,66 @@ describe('HomeWindow', () => {
     state.dispatchListener = undefined
   })
 
+  it('sends an image-only message through managed storage and allows removing a pasted image', async () => {
+    const originalApi = window.api
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        ...originalApi,
+        file: {
+          ...originalApi.file,
+          createInternalEntry: vi.fn(async () => ({ id: 'image-entry' })),
+          getPhysicalPath: vi.fn(async () => '/managed/image.png')
+        }
+      }
+    })
+    state.ipcRequest.mockImplementation(async (route: string) =>
+      route === 'file.get_metadata' ? { kind: 'file', mime: 'image/png' } : null
+    )
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+    const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    try {
+      render(<HomeWindow draggable={false} />)
+      const image = new NodeBlob(['image bytes'], { type: 'image/png' })
+      fireEvent.paste(screen.getByTestId('quick-input'), { clipboardData: { files: [image] } })
+      expect(await screen.findByRole('img', { name: 'image.png' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'quickAssistant.images.remove' }))
+      expect(screen.queryByRole('img', { name: 'image.png' })).not.toBeInTheDocument()
+      fireEvent.paste(screen.getByTestId('quick-input'), { clipboardData: { files: [image] } })
+      fireEvent.keyDown(screen.getByTestId('quick-input'), { code: 'Enter' })
+      await waitFor(() =>
+        expect(state.sendMessage).toHaveBeenCalledWith(
+          {
+            text: '',
+            files: [
+              expect.objectContaining({
+                type: 'file',
+                mediaType: 'image/png',
+                url: 'file:///managed/image.png',
+                providerMetadata: { cherry: expect.objectContaining({ fileEntryId: 'image-entry' }) }
+              })
+            ]
+          },
+          expect.anything()
+        )
+      )
+      const parts: CherryMessagePart[] = state.sendMessage.mock.calls.at(-1)![1].body.userMessageParts
+      const file = parts.find((part: CherryMessagePart) => part.type === 'file')
+      const text = parts.find((part: CherryMessagePart) => part.type === 'text')
+      if (file?.type !== 'file' || text?.type !== 'text') throw new Error('Missing composed attachment')
+      const sourceId = readCherryMeta(file)?.fileTokenSourceId
+      expect(readCherryMeta(text)?.composer?.tokens).toEqual([
+        expect.objectContaining({ id: `file:${sourceId}`, kind: 'file' })
+      ])
+      expect(screen.queryByRole('img', { name: 'image.png' })).not.toBeInTheDocument()
+    } finally {
+      Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
+      state.ipcRequest.mockReset()
+      createUrl.mockRestore()
+      revokeUrl.mockRestore()
+    }
+  })
+
   it('persists an assistant selected from the quick assistant home view', async () => {
     const user = userEvent.setup()
     state.quickAssistantId = 'assistant-1'
@@ -652,7 +714,8 @@ describe('HomeWindow', () => {
     })
     state.autoReadUpdate.mockImplementation((input) => coordinator.update(input))
     const view = render(<HomeWindow draggable={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Chat route' }))
+    fireEvent.change(screen.getByTestId('quick-input'), { target: { value: 'Read this aloud' } })
+    fireEvent.keyDown(screen.getByTestId('quick-input'), { code: 'Enter' })
     state.activeExecutions = [{ executionId: 'provider::model', attemptId: 7 }]
     view.rerender(<HomeWindow draggable={false} />)
     await act(async () => {

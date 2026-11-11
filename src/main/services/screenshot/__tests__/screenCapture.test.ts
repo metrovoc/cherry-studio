@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@main/core/platform', () => ({ isMac: true }))
 
-const { captureAllMonitors } = await import('@main/services/screenshot/screenCapture')
+const { captureAllMonitors, captureMonitor } = await import('@main/services/screenshot/screenCapture')
 
 const toPng = vi.fn<(copyOutputData: boolean) => Promise<Buffer>>(async () => Buffer.from([1]))
 
@@ -39,6 +39,20 @@ describe('screenCapture', () => {
     monitorAll.mockReset()
     getMediaAccessStatus.mockReset()
     toPng.mockClear()
+  })
+
+  it('captures only the selected monitor and refuses a disconnected display', async () => {
+    monitorAll.mockReturnValue([
+      {
+        ...makeMonitor(1),
+        captureImage: () => {
+          throw new Error('unselected display captured')
+        }
+      },
+      makeMonitor(2)
+    ])
+    expect(await captureMonitor(2)).toEqual({ buffer: Buffer.from([1]), width: 3840, height: 2160 })
+    await expect(captureMonitor(3)).rejects.toThrow('Display 3 is no longer available')
   })
 
   it('reports an empty monitor list as missing permission when the OS says so', async () => {

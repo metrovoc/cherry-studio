@@ -11,6 +11,10 @@ import { defineRoute } from '../define'
  * delegate to QuickAssistantService, where that logic lives.
  */
 export const quickAssistantRequestSchemas = {
+  'quick_assistant.take_screen_context': defineRoute({
+    input: z.void(),
+    output: z.object({ image: z.string().nullable(), failed: z.boolean() }).nullable()
+  }),
   'quick_assistant.hide': defineRoute({ input: z.void(), output: z.void() }),
   'quick_assistant.close': defineRoute({ input: z.void(), output: z.void() }),
   'quick_assistant.set_pin': defineRoute({ input: z.object({ isPinned: z.boolean() }), output: z.void() })

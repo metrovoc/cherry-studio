@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BaseService } from '@main/core/lifecycle'
 import { WindowType } from '@main/core/window/types'
 
-const { platform, outsideClicks, windowManager } = vi.hoisted(() => ({
+const { captureMonitor, permission, platform, outsideClicks, windowManager } = vi.hoisted(() => ({
+  captureMonitor: vi.fn(),
+  permission: vi.fn(() => 'authorized'),
   platform: { isMac: true, isWin: false },
   outsideClicks: new Set<(target?: Buffer) => void>(),
   windowManager: {
@@ -18,6 +20,9 @@ const { platform, outsideClicks, windowManager } = vi.hoisted(() => ({
     getWindowsByType: vi.fn<(_type: WindowType) => TestWindow[]>(() => [])
   }
 }))
+
+vi.mock('../screenshot', () => ({ captureMonitor }))
+vi.mock('@main/utils/screenCapturePermission', () => ({ getScreenCapturePermissionStatus: permission }))
 
 vi.mock('@cherrystudio/macos-panel', () => ({
   watchOutsideClicks: (_handle: Buffer, callback: () => void) => {
@@ -50,9 +55,14 @@ vi.mock('@main/core/platform', () => ({
 }))
 
 vi.mock('electron', () => ({
+  nativeImage: {
+    createFromBuffer: (buffer: Buffer) => ({
+      resize: ({ width }: { width: number }) => ({ toDataURL: () => `${buffer.toString()}:${width}` })
+    })
+  },
   screen: {
     getCursorScreenPoint: () => ({ x: 0, y: 0 }),
-    getDisplayNearestPoint: () => ({ id: 1 })
+    getDisplayNearestPoint: () => ({ id: 1, size: { width: 1920, height: 1080 } })
   },
   shell: { openExternal: vi.fn() }
 }))
@@ -133,7 +143,7 @@ describe('QuickAssistantService window lifecycle', () => {
   const start = async () => {
     service = new QuickAssistantService()
     await service._doInit()
-    service.showQuickAssistant()
+    await service.showQuickAssistant()
   }
 
   beforeEach(() => {
@@ -178,6 +188,53 @@ describe('QuickAssistantService window lifecycle', () => {
     vi.clearAllMocks()
   })
 
+  it('captures before showing, consumes only in the owning window, and skips visible panels', async () => {
+    MockMainPreferenceServiceUtils.setPreferenceValue('feature.quick_assistant.screen_context', true)
+    captureMonitor.mockImplementation(async (id: number) => {
+      expect(id).toBe(1)
+      expect(quickWindow.visible).toBe(false)
+      return { buffer: Buffer.from('screen'), width: 3840, height: 2160 }
+    })
+    await start()
+    expect(quickWindow.visible).toBe(true)
+    expect(service.takeScreenContext('other-window')).toBeNull()
+    expect(service.takeScreenContext('quick-assistant-0')).toEqual({ image: 'screen:1920', failed: false })
+    expect(service.takeScreenContext('quick-assistant-0')).toBeNull()
+    captureMonitor.mockImplementation(() => {
+      throw new Error('must not capture visible panel')
+    })
+    await service.showQuickAssistant()
+    expect(service.takeScreenContext('quick-assistant-0')).toBeNull()
+  })
+
+  it('does not reopen or retain a late capture after dismissal', async () => {
+    await start()
+    service.hideQuickAssistant()
+    MockMainPreferenceServiceUtils.setPreferenceValue('feature.quick_assistant.screen_context', true)
+    let resolve!: (value: { buffer: Buffer }) => void
+    captureMonitor.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    const showing = service.showQuickAssistant()
+    service.hideQuickAssistant()
+    resolve({ buffer: Buffer.from('screen') })
+    await showing
+    expect(quickWindow.visible).toBe(false)
+    expect(service.takeScreenContext('quick-assistant-0')).toBeNull()
+  })
+
+  it('opens without an image when permission is unavailable', async () => {
+    MockMainPreferenceServiceUtils.setPreferenceValue('feature.quick_assistant.screen_context', true)
+    permission.mockReturnValueOnce('denied')
+    await start()
+    expect(quickWindow.visible).toBe(true)
+    expect(service.takeScreenContext('quick-assistant-0')).toEqual({ image: null, failed: true })
+    expect(captureMonitor).not.toHaveBeenCalled()
+  })
+
   it('keeps the panel open when another launcher takes keyboard focus', async () => {
     await start()
     quickWindow.focused = false
@@ -211,7 +268,7 @@ describe('QuickAssistantService window lifecycle', () => {
     clickOutside()
     expect(quickWindow.visible).toBe(false)
 
-    service.showQuickAssistant()
+    await service.showQuickAssistant()
     mainWindow.focused = false
     clickOutside()
     expect(quickWindow.visible).toBe(false)

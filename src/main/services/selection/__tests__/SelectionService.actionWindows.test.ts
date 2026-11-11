@@ -89,7 +89,7 @@ class NativeWindow extends EventEmitter {
   }
 }
 
-const action = { id: 'translate', name: 'Translate', enabled: true, isBuiltIn: true, selectedText: 'Hello' }
+const action = { id: 'translate', name: 'Translate', enabled: true, isBuiltIn: true, selectedText: 'Hello' } as const
 
 describe('selection action presentation', () => {
   const wm = application.get('WindowManager')

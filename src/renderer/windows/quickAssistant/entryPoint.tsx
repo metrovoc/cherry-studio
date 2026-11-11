@@ -19,6 +19,7 @@ await prepareWindow({
     'feature.quick_assistant.model_id',
     'chat.default_model_id',
     'feature.quick_assistant.read_clipboard_at_startup',
+    'feature.quick_assistant.screen_context',
     'feature.voice.dictation.hold_shortcut',
     'feature.voice.dictation.mouse_hold_enabled',
     'feature.voice.dictation.toggle_shortcut',

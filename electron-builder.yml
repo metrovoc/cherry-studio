@@ -212,14 +212,24 @@ artifactBuildCompleted: scripts/packaging/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 2.1.12 - Selection Accuracy
+    Cherry Studio 2.2.1 - Quick Assistant Images
 
-    🐛 Bug Fixes
-    - [Selection Assistant] Fix shifted text selections around wrapped lines in Chrome on macOS.
+    ✨ New Features
+    - [Quick Assistant] Attach images by pasting, dropping, or choosing files, including image-only messages.
+    - [Quick Assistant] Optionally capture the display under the cursor before opening. Preview or remove the image before sending it with the first message.
+    - [Quick Assistant] Keep image attachments when saving conversations to history.
+
+    🔄 Updates
+    - Rebase on upstream Cherry Studio 2.2.0, preserving this fork's assistant panels, model catalog, and signed macOS updates.
 
     <!--LANG:zh-CN-->
-    Cherry Studio 2.1.12 - 划词准确性
+    Cherry Studio 2.2.1 - 快捷助手图片
 
-    🐛 问题修复
-    - [划词助手] 修复 macOS 上 Chrome 自动换行附近的划词文本出现字符偏移的问题。
+    ✨ 新功能
+    - [快捷助手] 支持粘贴、拖放或选择图片，也可发送仅包含图片的消息。
+    - [快捷助手] 可选择在打开前截取光标所在的显示器。随首条消息发送前可预览或移除图片。
+    - [快捷助手] 保存对话历史时保留图片附件。
+
+    🔄 更新
+    - 同步上游 Cherry Studio 2.2.0，保留本分支的助手面板、模型目录及签名 macOS 更新。
     <!--LANG:END-->

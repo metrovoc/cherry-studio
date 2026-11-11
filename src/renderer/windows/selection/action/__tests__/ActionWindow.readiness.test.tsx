@@ -30,6 +30,7 @@ const action: SelectionActionWindowData = {
   name: 'Test action',
   enabled: true,
   isBuiltIn: false,
+  runner: 'default',
   requestId: 'first-selection',
   sessionId: 'first-selection'
 }

@@ -1,6 +1,6 @@
 {
   "name": "CherryStudio",
-  "version": "2.1.12",
+  "version": "2.2.1",
   "private": true,
   "description": "A powerful AI assistant for producer.",
   "homepage": "https://github.com/CherryHQ/cherry-studio",
@@ -147,8 +147,8 @@
     "@cherrystudio/agent-runtime-claude-code": "workspace:*",
     "@cherrystudio/agent-runtime-pi": "workspace:*",
     "@cherrystudio/agent-runtime-pi-durable": "workspace:*",
-    "@cherrystudio/mlx-asr": "github:CherryHQ/mlx-node#ad3bf3ec3a141ec06fb8f73933685b1420ed09ac&path:distribution/asr",
     "@cherrystudio/macos-panel": "workspace:*",
+    "@cherrystudio/mlx-asr": "github:CherryHQ/mlx-node#ad3bf3ec3a141ec06fb8f73933685b1420ed09ac&path:distribution/asr",
     "@cherrystudio/mlx-tts": "github:CherryHQ/mlx-node#f4c21043f557965345b527bc04179ad26d08378f&path:distribution/tts",
     "@earendil-works/chord": "1.5.2",
     "@earendil-works/pi-ai": "1.5.2",

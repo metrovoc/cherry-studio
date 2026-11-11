@@ -498,6 +498,13 @@
       "description": "Quick assistant model UniqueModelId (provider::modelId, from complex mapping llm_model_ids_to_unique)"
     },
     {
+      "targetKey": "feature.quick_assistant.screen_context",
+      "type": "boolean",
+      "defaultValue": false,
+      "status": "classified",
+      "description": "Attach the display under the cursor to the first Quick Assistant message"
+    },
+    {
       "targetKey": "feature.quick_assistant.save_conversations",
       "type": "boolean",
       "defaultValue": true,

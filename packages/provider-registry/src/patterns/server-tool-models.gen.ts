@@ -97,11 +97,15 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<
           'gpt-5-nano',
           'gpt-5-pro',
           'gpt-6-1-sol',
+          'gpt-6-1-sol-pro',
           'gpt-6-1-terra',
+          'gpt-6-1-terra-pro',
           'gpt-6-astra',
           'gpt-6-astra-pro',
           'gpt-6-luna',
+          'gpt-6-luna-pro',
           'gpt-6-sol',
+          'gpt-6-sol-pro',
           'o3',
           'o3-mini',
           'o3-pro',
@@ -934,6 +938,25 @@ export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<
           'o3-mini',
           'o3-pro',
           'o4-mini'
+        ]
+      }
+    ]
+  },
+  'openai-codex': {
+    'web-search': [
+      {
+        ids: [
+          'gpt-5-3-codex-spark',
+          'gpt-5-4',
+          'gpt-5-4-mini',
+          'gpt-5-5',
+          'gpt-5-6-luna',
+          'gpt-5-6-sol',
+          'gpt-5-6-terra',
+          'gpt-6-1-sol',
+          'gpt-6-astra',
+          'gpt-6-luna',
+          'gpt-6-sol'
         ]
       }
     ]

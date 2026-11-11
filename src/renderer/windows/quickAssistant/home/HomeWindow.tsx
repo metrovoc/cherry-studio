@@ -1,4 +1,4 @@
-import { isEmpty } from 'es-toolkit/compat'
+import { Paperclip } from 'lucide-react'
 import type { FC } from 'react'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -16,8 +16,12 @@ import { useTheme } from '@renderer/hooks/useTheme'
 import { useTopicMessages } from '@renderer/hooks/useTopicMessages'
 import { useTopicStreamStatus } from '@renderer/hooks/useTopicStreamStatus'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
+import { streamDispatchService } from '@renderer/services/aiTransport'
 import { toast } from '@renderer/services/toast'
 import { autoReadService, readMessageAloud, voiceTargetManager } from '@renderer/services/voice'
+import { buildFilePartsForAttachments } from '@renderer/utils/file/buildFileParts'
+import { dataUrlToBlob } from '@renderer/utils/image'
+import type { ComposerAttachment } from '@renderer/utils/message/composerAttachment'
 import { mergeMessagesById } from '@renderer/utils/message/mergeMessagesById'
 import { getTextFromParts } from '@renderer/utils/message/partsHelpers'
 import { isMac } from '@renderer/utils/platform'
@@ -29,7 +33,9 @@ import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@share
 import ClipboardPreview from './components/ClipboardPreview'
 import ConversationNavigationBar from './components/ConversationNavigationBar'
 import Footer from './components/Footer'
+import ImageAttachments from './components/ImageAttachments'
 import InputBar from './components/InputBar'
+import { useImageAttachments } from './hooks/useImageAttachments'
 import { useQuickAssistantHistory } from './hooks/useQuickAssistantHistory'
 
 // The chat branch carries the heavy message rendering chain (ChatMarkdown,
@@ -78,6 +84,7 @@ export const finalizeLiveMessages = (messages: CherryUIMessage[]): CherryUIMessa
 }
 
 const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
+  const [screenContextEnabled] = usePreference('feature.quick_assistant.screen_context')
   const [readClipboardAtStartup] = usePreference('feature.quick_assistant.read_clipboard_at_startup')
   const [quickAssistantId, setQuickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
   const [autoReadEnabled] = usePreference('feature.voice.auto_read.enabled')
@@ -86,6 +93,10 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const { theme } = useTheme()
   const { t } = useTranslation()
 
+  const { attachments, setAttachments, addImages } = useImageAttachments()
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const scratchAttachmentsRef = useRef<ComposerAttachment[]>([])
+  const screenAttachmentIdRef = useRef<string | null>(null)
   const [route, setRoute] = useState<MiniRoute>('home')
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [userInputText, setUserInputText] = useState('')
@@ -104,6 +115,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setIsPinnedState(next)
   }, [])
 
+  const lastClipboardImageRef = useRef<string | null>(null)
   const lastClipboardTextRef = useRef<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const latestRequestTextRef = useRef('')
@@ -114,6 +126,13 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   const scratchInputRef = useRef('')
   const scratchRouteRef = useRef<MiniRoute>('home')
   const scratchIsFirstMessageRef = useRef(true)
+
+  useEffect(() => {
+    if (screenContextEnabled) return
+    const id = screenAttachmentIdRef.current
+    setAttachments((current) => current.filter((item) => item.fileTokenSourceId !== id))
+    screenAttachmentIdRef.current = null
+  }, [screenContextEnabled, setAttachments])
 
   const { quickModel: quickApiModel } = useDefaultModel()
   const { assistants, hasLoaded: haveAssistantsLoaded } = useAssistants()
@@ -196,6 +215,24 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setIsPreparing(false)
     setFlowError(err.message)
   })
+
+  useEffect(
+    () =>
+      streamDispatchService.subscribe(activeTopicId ?? 'pending-topic', (result) => {
+        if (!result.ok || result.ack.mode === 'blocked') return
+        const acknowledgedUser = result.ack.reservedMessages?.find((message) => message.role === 'user')
+        if (!acknowledgedUser) return
+
+        setMessages((current) => {
+          const optimisticIndex = current.findLastIndex((message) => message.role === 'user')
+          if (optimisticIndex < 0 || current[optimisticIndex].id === acknowledgedUser.id) return current
+          const next = [...current]
+          next[optimisticIndex] = acknowledgedUser
+          return next
+        })
+      }),
+    [activeTopicId, setMessages]
+  )
 
   // Local inputs and projected assistant messages share the existing message list.
   const { status: streamStatus, activeExecutions, isPending } = useTopicStreamStatus(activeTopicId ?? 'pending-topic')
@@ -460,9 +497,22 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
   }, [])
 
   const readClipboard = useCallback(async () => {
-    if (!readClipboardAtStartup || !document.hasFocus()) return
+    if (!readClipboardAtStartup || !document.hasFocus() || !isFirstMessage || selectedTopicId) return
 
     try {
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const type = item.types.find((type) => type.startsWith('image/'))
+        if (!type) continue
+        const blob = await item.getType(type)
+        const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+        const signature = Array.from(new Uint8Array(digest)).join(',')
+        if (signature !== lastClipboardImageRef.current) {
+          lastClipboardImageRef.current = signature
+          addImages([blob])
+        }
+        return
+      }
       const text = await navigator.clipboard.readText()
       if (text && text !== lastClipboardTextRef.current) {
         lastClipboardTextRef.current = text
@@ -471,7 +521,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     } catch (clipboardError) {
       logger.warn('Failed to read clipboard:', clipboardError as Error)
     }
-  }, [readClipboardAtStartup])
+  }, [addImages, isFirstMessage, readClipboardAtStartup, selectedTopicId])
 
   const clearClipboard = useCallback(async () => {
     setClipboardText('')
@@ -479,37 +529,101 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     focusInput()
   }, [focusInput])
 
+  const acceptsScreenRef = useRef(false)
+  acceptsScreenRef.current = isFirstMessage && !selectedTopicId
+  const readScreenContext = useCallback(async () => {
+    if (!draggable) return
+    const context = await ipcApi.request('quick_assistant.take_screen_context')
+    if (!context || !acceptsScreenRef.current) return
+    const previousId = screenAttachmentIdRef.current
+    setAttachments((current) => current.filter((item) => item.fileTokenSourceId !== previousId))
+    screenAttachmentIdRef.current = null
+    if (context.failed) {
+      toast.error(t('quickAssistant.images.capture_failed'))
+    } else if (context.image) {
+      const blob = dataUrlToBlob(context.image)
+      if (!acceptsScreenRef.current) return
+      const id = crypto.randomUUID()
+      screenAttachmentIdRef.current = id
+      setAttachments((current) => [
+        ...current,
+        {
+          fileTokenSourceId: id,
+          blob,
+          name: 'screen.png',
+          origin_name: t('quickAssistant.images.screen'),
+          ext: '.png',
+          size: blob.size,
+          type: 'image'
+        }
+      ])
+    }
+  }, [draggable, setAttachments, t])
+
   const onWindowShow = useCallback(async () => {
-    await readClipboard()
+    await Promise.all([readClipboard(), readScreenContext()])
     focusInput()
-  }, [readClipboard, focusInput])
+  }, [readClipboard, readScreenContext, focusInput])
 
   useIpcOn('quick_assistant.shown', onWindowShow)
 
   useEffect(() => {
     void readClipboard()
-  }, [readClipboard])
+    void readScreenContext()
+  }, [readClipboard, readScreenContext])
 
   const handleCloseWindow = useCallback(() => ipcApi.request('quick_assistant.hide'), [])
 
   const handleSendMessage = useCallback(
     async (prompt?: string) => {
-      if (isEmpty(requestText)) return
+      if (!requestText && attachments.length === 0) return
       if (!activeTopicId || (!selectedTopicId && !isTopicReady)) return
 
       try {
         setFlowError(null)
-        latestRequestTextRef.current = requestText
+        setIsPreparing(true)
+        const files = attachments.length ? await buildFilePartsForAttachments(attachments) : undefined
+        setAttachments([])
+        screenAttachmentIdRef.current = null
+        latestRequestTextRef.current = requestText || attachments[0]?.origin_name || ''
         setIsFirstMessage(false)
         setUserInputText('')
         setIsPreparing(true)
+        const text = [prompt, requestText].filter(Boolean).join('\n\n')
         const parentAnchorId = selectedTopicId ? (activeNodeId ?? latestAssistantUIMsg?.id) : latestAssistantUIMsg?.id
         // Temporary topics are linear, while persisted topics need the current branch tip.
         // Main ignores the anchor until this topic is promoted to persistent history.
         void sendMessage(
-          { text: [prompt, requestText].filter(Boolean).join('\n\n') },
+          { text, ...(files && { files }) },
           {
             body: {
+              ...(files && {
+                userMessageParts: [
+                  withCherryMeta(
+                    { type: 'text', text },
+                    {
+                      composer: {
+                        version: 1,
+                        tokens: attachments.map((attachment, index) => ({
+                          id: `file:${attachment.fileTokenSourceId}`,
+                          kind: 'file' as const,
+                          label: attachment.origin_name,
+                          index,
+                          textOffset: text.length,
+                          payload: {
+                            type: attachment.type,
+                            name: attachment.name,
+                            origin_name: attachment.origin_name,
+                            ext: attachment.ext,
+                            size: attachment.size
+                          }
+                        }))
+                      }
+                    }
+                  ),
+                  ...files
+                ]
+              }),
               ...(parentAnchorId && { parentAnchorId }),
               ...(!isAssistantMode && currentModel && { mentionedModels: [currentModel.id] })
             }
@@ -517,11 +631,14 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
         )
       } catch (streamError) {
         const resolvedError = streamError instanceof Error ? streamError : new Error('An error occurred')
+        setIsPreparing(false)
         setFlowError(resolvedError.message)
         logger.error('Error fetching result:', resolvedError)
       }
     },
     [
+      attachments,
+      setAttachments,
       activeNodeId,
       activeTopicId,
       currentModel,
@@ -544,6 +661,9 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     voiceScopeTopicRef.current = null
     voiceExecutionContextsRef.current.clear()
     setLastCompletedVoiceMessage(null)
+    setAttachments([])
+    scratchAttachmentsRef.current = []
+    screenAttachmentIdRef.current = null
     latestRequestTextRef.current = ''
     initialRequestTextRef.current = ''
     resetTemporaryTopic()
@@ -551,7 +671,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     setSelectedTopicId(null)
     setHasRetainedScratch(true)
     setPendingOlderTopicId(null)
-  }, [clear, resetTemporaryTopic])
+  }, [clear, resetTemporaryTopic, setAttachments])
 
   useEffect(() => {
     if (!saveConversations && selectedTopicId) {
@@ -576,23 +696,37 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
       setIsPreparing(false)
 
       if (selectedTopicId === null && topicId) {
+        scratchAttachmentsRef.current = attachments
         scratchInputRef.current = userInputText
         scratchRouteRef.current = route
         scratchIsFirstMessageRef.current = isFirstMessage
       }
       setSelectedTopicId(topicId)
       if (topicId) {
+        setAttachments([])
         setUserInputText('')
         setIsFirstMessage(false)
         setRoute('chat')
       } else {
+        setAttachments(scratchAttachmentsRef.current)
         setUserInputText(scratchInputRef.current)
         setIsFirstMessage(scratchIsFirstMessageRef.current)
         setRoute(scratchRouteRef.current)
       }
       requestAnimationFrame(focusInput)
     },
-    [clearExecutionMessages, focusInput, isFirstMessage, route, selectedTopicId, setMessages, stopChat, userInputText]
+    [
+      attachments,
+      setAttachments,
+      clearExecutionMessages,
+      focusInput,
+      isFirstMessage,
+      route,
+      selectedTopicId,
+      setMessages,
+      stopChat,
+      userInputText
+    ]
   )
 
   const goToOlderConversation = useCallback(() => {
@@ -733,7 +867,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
       case 'NumpadEnter':
         if (isLoading || isResolvingSavedAssistant) return
         e.preventDefault()
-        if (requestText) {
+        if (requestText || attachments.length > 0) {
           setRoute('chat')
           void handleSendMessage()
           focusInput()
@@ -827,10 +961,64 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
     />
   ) : null
 
+  const imageControls = (
+    <>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        hidden
+        aria-label={t('quickAssistant.images.add')}
+        onChange={(event) => {
+          addImages(Array.from(event.target.files ?? []))
+          event.target.value = ''
+        }}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={isLoading}
+        aria-label={t('quickAssistant.images.add')}
+        onClick={() => imageInputRef.current?.click()}>
+        <Paperclip className="size-4" />
+      </Button>
+      {conversationNavigation}
+    </>
+  )
+  const imagePreview = attachments.length > 0 && (
+    <ImageAttachments
+      attachments={attachments}
+      onRemove={(id) => setAttachments((current) => current.filter((item) => item.fileTokenSourceId !== id))}
+    />
+  )
+  const imageEvents = {
+    onPaste: (event: React.ClipboardEvent<HTMLDivElement>) => {
+      if (isLoading) return
+      const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'))
+      if (files.length) {
+        event.preventDefault()
+        addImages(files)
+      }
+    },
+    onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+      if (event.dataTransfer.types.includes('Files')) event.preventDefault()
+    },
+    onDrop: (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      if (!isLoading) addImages(Array.from(event.dataTransfer.files))
+    }
+  }
+
   switch (route) {
     case 'chat':
       return (
-        <div data-ui="quick-assistant.view" className={containerClassName(draggable)} style={{ backgroundColor }}>
+        <div
+          {...imageEvents}
+          data-ui="quick-assistant.view"
+          className={containerClassName(draggable)}
+          style={{ backgroundColor }}>
           {(currentAssistant || currentModel) && (
             <>
               <InputBar
@@ -844,10 +1032,11 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
                 dictationTargetId={dictationTargetId}
                 onAssistantChange={handleAssistantChange}
                 assistantSelectionDisabled={isLoading}
-                actions={conversationNavigation}
+                actions={imageControls}
                 handleKeyDown={handleKeyDown}
                 handleChange={handleChange}
               />
+              {imagePreview}
               <Separator className="my-2.5" />
             </>
           )}
@@ -895,7 +1084,11 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
     default:
       return (
-        <div data-ui="quick-assistant.view" className={containerClassName(draggable)} style={{ backgroundColor }}>
+        <div
+          {...imageEvents}
+          data-ui="quick-assistant.view"
+          className={containerClassName(draggable)}
+          style={{ backgroundColor }}>
           {(currentAssistant || currentModel) && (
             <InputBar
               text={userInputText}
@@ -908,12 +1101,13 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               dictationTargetId={dictationTargetId}
               onAssistantChange={handleAssistantChange}
               assistantSelectionDisabled={isLoading}
-              actions={conversationNavigation}
+              actions={imageControls}
               handleKeyDown={handleKeyDown}
               handleChange={handleChange}
             />
           )}
           <Separator className="my-2.5" />
+          {imagePreview}
           <ClipboardPreview clipboardText={clipboardText} clearClipboard={clearClipboard} t={t} />
           <main className="flex-1" />
           <Separator className="my-2.5" />

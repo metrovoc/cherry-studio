@@ -16,10 +16,9 @@ import { createLatestReconciler, type LatestReconciler } from '@main/core/concur
 import { type Activatable, BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { isDev, isLinux, isMac, isWin } from '@main/core/platform'
 import { WindowType } from '@main/core/window/types'
-import { getApplicationId } from '@main/utils/appEdition'
 import { SelectionTriggerMode } from '@shared/data/preference/preferenceTypes'
-import { isAgentSelectionAction, type SelectionAction, type SelectionActionSession } from '@shared/types/selection'
 import type { SelectionActionWindowData } from '@shared/ipc/schemas/selection'
+import { isAgentSelectionAction, type SelectionAction } from '@shared/types/selection'
 
 import { SELECTION_FINETUNED_LIST, SELECTION_PREDEFINED_BLACKLIST } from './selectionConfig'
 import { getSelectionToolbarSize, type SelectionToolbarSize } from './selectionToolbarSize'

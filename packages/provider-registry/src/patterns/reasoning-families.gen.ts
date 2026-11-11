@@ -223,6 +223,7 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   { pattern: '^mistral-(?:small|medium)(?!.*instruct)' },
   // moonshot
   { pattern: '^kimi-k3[.-]1-pro(?:-highspeed)?$', effort: ['low', 'high', 'max'], toggle: false },
+  { pattern: '^kimi-k2$', toggle: false, template: true },
   { pattern: '^kimi-k2[.-]7-code', toggle: false },
   { pattern: '^kimi-k3$', effort: ['low', 'high', 'max'], toggle: true },
   { pattern: '^kimi-k3-fast$', effort: ['low', 'high', 'max'] },
@@ -261,7 +262,6 @@ export const REASONING_FAMILY_RULES: readonly ReasoningFamilyRule[] = [
   // stepfun
   { pattern: '^step-5-preview$', effort: ['low', 'medium', 'high'] },
   { pattern: 'step-3' },
-  { pattern: '^step-5-preview$' },
   { pattern: 'step-r1-v-mini' },
   // tencent
   { pattern: '^hunyuan-a13b', toggle: true },

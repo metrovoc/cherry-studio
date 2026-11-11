@@ -8,6 +8,8 @@ import type { IpcHandlersFor } from '@shared/ipc/types'
  * NSPanel focus-poll pin state machine) stays in those service methods, unchanged.
  */
 export const quickAssistantHandlers: IpcHandlersFor<typeof quickAssistantRequestSchemas> = {
+  'quick_assistant.take_screen_context': async (_, context) =>
+    application.get('QuickAssistantService').takeScreenContext(context.senderId),
   'quick_assistant.hide': async () => {
     application.get('QuickAssistantService').hideQuickAssistant()
   },

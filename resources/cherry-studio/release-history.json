@@ -1,5 +1,9 @@
 [
   {
+    "version": "2.2.1",
+    "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.2.1 - Quick Assistant Images\n\n✨ New Features\n- [Quick Assistant] Attach images by pasting, dropping, or choosing files, including image-only messages.\n- [Quick Assistant] Optionally capture the display under the cursor before opening. Preview or remove the image before sending it with the first message.\n- [Quick Assistant] Keep image attachments when saving conversations to history.\n\n🔄 Updates\n- Rebase on upstream Cherry Studio 2.2.0, preserving this fork's assistant panels, model catalog, and signed macOS updates.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.2.1 - 快捷助手图片\n\n✨ 新功能\n- [快捷助手] 支持粘贴、拖放或选择图片，也可发送仅包含图片的消息。\n- [快捷助手] 可选择在打开前截取光标所在的显示器。随首条消息发送前可预览或移除图片。\n- [快捷助手] 保存对话历史时保留图片附件。\n\n🔄 更新\n- 同步上游 Cherry Studio 2.2.0，保留本分支的助手面板、模型目录及签名 macOS 更新。\n<!--LANG:END-->"
+  },
+  {
     "version": "2.1.12",
     "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.1.12 - Selection Accuracy\n\n🐛 Bug Fixes\n- [Selection Assistant] Fix shifted text selections around wrapped lines in Chrome on macOS.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.1.12 - 划词准确性\n\n🐛 问题修复\n- [划词助手] 修复 macOS 上 Chrome 自动换行附近的划词文本出现字符偏移的问题。\n<!--LANG:END-->"
   },

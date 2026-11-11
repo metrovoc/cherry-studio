@@ -49,6 +49,7 @@ const QuickAssistantSettings: FC = () => {
   const [readClipboardAtStartup, setReadClipboardAtStartup] = usePreference(
     'feature.quick_assistant.read_clipboard_at_startup'
   )
+  const [screenContext, setScreenContext] = usePreference('feature.quick_assistant.screen_context')
   const [saveConversations, setSaveConversations] = usePreference('feature.quick_assistant.save_conversations')
   const [, setTray] = usePreference('app.tray.enabled')
   const [quickAssistantId, setQuickAssistantId] = usePreference('feature.quick_assistant.assistant_id')
@@ -120,6 +121,19 @@ const QuickAssistantSettings: FC = () => {
     void ipcApi.request('quick_assistant.close')
   }
 
+  const handleScreenContextChange = async (enabled: boolean) => {
+    if (enabled) {
+      const status = await ipcApi.request('system.mac.request_screen_capture')
+      if (status !== 'authorized') {
+        toast.info(t('quickAssistant.images.capture_failed'))
+        await ipcApi.request('system.mac.open_screen_capture_settings')
+        return
+      }
+    }
+    await setScreenContext(enabled)
+    await ipcApi.request('quick_assistant.close')
+  }
+
   const handleConversationModeChange = async (mode: 'saved' | 'temporary') => {
     if (mode === 'temporary') {
       await setSaveConversations(false)
@@ -160,6 +174,22 @@ const QuickAssistantSettings: FC = () => {
             <SettingRow>
               <SettingRowTitle>{t('settings.quickAssistant.read_clipboard_at_startup')}</SettingRowTitle>
               <Switch checked={readClipboardAtStartup} onCheckedChange={handleClickReadClipboardAtStartup} />
+            </SettingRow>
+          </>
+        )}
+        {enableQuickAssistant && (
+          <>
+            <SettingDivider />
+            <SettingRow>
+              <SettingRowTitle className="flex items-center gap-1">
+                {t('settings.quickAssistant.screen_context')}
+                <InfoTooltip content={t('settings.quickAssistant.screen_context_hint')} />
+              </SettingRowTitle>
+              <Switch
+                checked={screenContext}
+                onCheckedChange={handleScreenContextChange}
+                aria-label={t('settings.quickAssistant.screen_context')}
+              />
             </SettingRow>
           </>
         )}

@@ -22,7 +22,6 @@ import { UpgradeChannel } from '@shared/data/preference/preferenceTypes'
 import { IpcError, IpcErrorCode } from '@shared/ipc/errors/IpcError'
 import type { AppUpdaterNotAvailablePayload } from '@shared/ipc/schemas/app'
 import type { OutputFor } from '@shared/ipc/types'
-import type { AppEdition } from '@shared/types/appEdition'
 import { APP_NAME } from '@shared/utils/constants'
 import {
   hasMultiLanguageReleaseNotes,

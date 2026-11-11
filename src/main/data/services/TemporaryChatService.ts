@@ -25,6 +25,7 @@ import type { CreateTopicDto } from '@shared/data/api/schemas/topics'
 import type { FileEntryId } from '@shared/data/types/file'
 import type { Message, MessageRole, MessageRuntimeStatsInput, MessageStatus } from '@shared/data/types/message'
 import type { Topic } from '@shared/data/types/topic'
+import { readCherryMeta } from '@shared/data/types/uiParts'
 
 import { aiUsageRecordService, mergeMessageUsageProjection } from './AiUsageRecordService'
 import { messageService } from './MessageService'
@@ -73,22 +74,26 @@ function rowToMessage(row: TemporaryMessageRow): Message {
 export class TemporaryChatService {
   private topics = new Map<string, TemporaryTopicRow>()
   private messages = new Map<string, TemporaryMessageRow[]>()
-  private avatarRetentions = new Map<string, Map<FileEntryId, Disposable>>()
+  private fileRetentions = new Map<string, Map<FileEntryId, Disposable>>()
 
   retainAvatar(topicId: string, fileId: FileEntryId | undefined): void {
+    this.retainFile(topicId, fileId)
+  }
+
+  private retainFile(topicId: string, fileId: FileEntryId | undefined): void {
     if (!fileId) return
     if (!this.topics.has(topicId)) throw DataApiErrorFactory.notFound('TemporaryTopic', topicId)
-    let retained = this.avatarRetentions.get(topicId)
+    let retained = this.fileRetentions.get(topicId)
     if (!retained) {
       retained = new Map()
-      this.avatarRetentions.set(topicId, retained)
+      this.fileRetentions.set(topicId, retained)
     }
     if (!retained.has(fileId)) retained.set(fileId, application.get('FileManager').retainTemporaryEntry(fileId))
   }
 
-  private releaseAvatars(topicId: string): void {
-    for (const retention of this.avatarRetentions.get(topicId)?.values() ?? []) retention.dispose()
-    this.avatarRetentions.delete(topicId)
+  private releaseFiles(topicId: string): void {
+    for (const retention of this.fileRetentions.get(topicId)?.values() ?? []) retention.dispose()
+    this.fileRetentions.delete(topicId)
   }
 
   createTopic(dto: CreateTopicDto): Topic {
@@ -116,7 +121,7 @@ export class TemporaryChatService {
     if (!this.topics.has(id)) {
       throw DataApiErrorFactory.notFound('TemporaryTopic', id)
     }
-    this.releaseAvatars(id)
+    this.releaseFiles(id)
     this.topics.delete(id)
     this.messages.delete(id)
     logger.info('Deleted temporary topic', { id })
@@ -176,6 +181,9 @@ export class TemporaryChatService {
       throw DataApiErrorFactory.notFound('TemporaryTopic', topicId)
     }
     this.retainAvatar(topicId, row.messageSnapshot?.avatarFileId)
+    for (const part of row.data?.parts ?? []) {
+      if (part.type === 'file') this.retainFile(topicId, readCherryMeta(part)?.fileEntryId)
+    }
     list.push(row)
     const topic = this.topics.get(topicId)
     if (topic && isConversationActivityRole(row.role)) {
@@ -290,7 +298,7 @@ export class TemporaryChatService {
       throw err
     }
 
-    this.releaseAvatars(topicId)
+    this.releaseFiles(topicId)
     topicService.notifyReadModelChange([topicId], 'membership')
 
     // Promotion never creates or repairs facts. Rebuild the materialized

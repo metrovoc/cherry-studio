@@ -51,13 +51,16 @@ const Messages: FC<Props> = ({
       partsByMessageId={partsByMessageId}
       renderConfig={renderConfig}
       actions={platformActions}>
-      <Scrollbar
-        id="messages"
-        ref={scrollerRef}
-        tabIndex={0}
-        role="region"
-        aria-label={t('globalSearch.groups.message')}
-        className="min-h-0 w-full flex-1 overflow-x-hidden bg-transparent!">
+      <ScrollArea
+        className="min-h-0 w-full flex-1 bg-transparent!"
+        viewportProps={{
+          id: 'messages',
+          ref: scrollerRef,
+          tabIndex: 0,
+          role: 'region',
+          'aria-label': t('globalSearch.groups.message'),
+          className: 'overflow-x-hidden'
+        }}>
         <ScrollOwnershipProvider scrollContainerRef={scrollerRef} {...viewport}>
           <div ref={contentRef} className="flex w-full flex-col items-center pb-5">
             {messages.map((message, index) => (
@@ -72,7 +75,7 @@ const Messages: FC<Props> = ({
             {!isOutputted && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
           </div>
         </ScrollOwnershipProvider>
-      </Scrollbar>
+      </ScrollArea>
     </MessageContentProvider>
   )
 }

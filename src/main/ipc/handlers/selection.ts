@@ -19,8 +19,8 @@ export const selectionHandlers: IpcHandlersFor<typeof selectionRequestSchemas> =
   'selection.determine_toolbar_size': async ({ width, height }) => {
     application.get('SelectionService').determineToolbarSize(width, height)
   },
-  'selection.process_action': async ({ actionItem }) => {
-    application.get('SelectionService').processAction(actionItem)
+  'selection.process_action': async ({ actionItem, isFullScreen }) => {
+    application.get('SelectionService').processAction(actionItem, isFullScreen)
   },
   'selection.pin_action_window': async (isPinned, ctx) => {
     if (ctx.senderId) application.get('SelectionService').setActionWindowPinned(ctx.senderId, isPinned)

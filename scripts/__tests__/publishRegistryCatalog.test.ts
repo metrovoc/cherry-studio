@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -6,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { stampAndSerialize } from '../../packages/provider-registry/scripts/catalogSerialization.mjs'
 import { REGISTRY_MIN_APP_VERSION, REGISTRY_SCHEMA_VERSION } from '../../packages/provider-registry/src/registry-loader'
 import { publishRegistryCatalog } from '../publishRegistryCatalog'
 
@@ -20,13 +18,23 @@ afterEach(() => {
   }
 })
 
-function makeDirectories() {
+function makeDirectories(seedLegacy = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'registry-publish-'))
   temporaryDirectories.push(root)
   const sourceDirectory = path.join(root, 'data')
   const destinationDirectory = path.join(root, 'pub')
   fs.mkdirSync(sourceDirectory)
   fs.mkdirSync(destinationDirectory)
+  if (seedLegacy) {
+    for (const version of [1, 2, 3]) {
+      const directory = path.join(destinationDirectory, `v${version}`)
+      fs.mkdirSync(directory)
+      fs.writeFileSync(
+        path.join(directory, 'manifest.json'),
+        JSON.stringify({ minAppVersion: publishOptions.minAppVersion })
+      )
+    }
+  }
   return { sourceDirectory, destinationDirectory }
 }
 
@@ -118,11 +126,13 @@ describe('publishRegistryCatalog', () => {
       sourceAppVersion: '2.1.5'
     })
 
-    expect(published).toEqual(['v3'])
+    expect(published).toEqual([`v${REGISTRY_SCHEMA_VERSION}`])
     for (const [file, contents] of Object.entries(previous))
       expect(fs.readFileSync(path.join(oldDirectory, file), 'utf8')).toBe(contents)
     expect(fs.existsSync(path.join(destinationDirectory, 'v1'))).toBe(false)
-    expect(JSON.parse(fs.readFileSync(path.join(destinationDirectory, 'v3/providers.json'), 'utf8'))).toEqual(providers)
+    expect(
+      JSON.parse(fs.readFileSync(path.join(destinationDirectory, `v${REGISTRY_SCHEMA_VERSION}/providers.json`), 'utf8'))
+    ).toEqual(providers)
   })
 
   it('keeps a model reaching an older schema by dropping only what it cannot represent', async () => {
@@ -186,7 +196,13 @@ describe('publishRegistryCatalog', () => {
     const oldFloor = ['2.0.9', '2.0.13', '2.1.4'][version - 1]
     fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({ minAppVersion: oldFloor }))
 
-    await publishRegistryCatalog({ ...publishOptions, sourceDirectory, destinationDirectory, currentVersion: 4 })
+    await publishRegistryCatalog({
+      ...publishOptions,
+      sourceDirectory,
+      destinationDirectory,
+      currentVersion: 4,
+      minAppVersion: oldFloor
+    })
 
     const read = await readFrozenCatalog(version)
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'))
@@ -211,7 +227,7 @@ describe('publishRegistryCatalog', () => {
   })
 
   it.each([1, 2, 3])('publishes only executable legacy OpenAI controls in v%s', async (version) => {
-    const { sourceDirectory, destinationDirectory } = makeDirectories()
+    const { sourceDirectory, destinationDirectory } = makeDirectories(true)
     const endpointTypes = ['openai-image-generation', 'openai-image-edit']
     const supports = {
       numImages: { type: 'range', min: 1, max: 10, step: 1 },
@@ -293,7 +309,7 @@ describe('publishRegistryCatalog', () => {
   })
 
   it('retains a legacy model when optional image parameter vocabulary expands', async () => {
-    const { sourceDirectory, destinationDirectory } = makeDirectories()
+    const { sourceDirectory, destinationDirectory } = makeDirectories(true)
     writeCatalog(sourceDirectory, OVERRIDE_WITH_UNKNOWN_EFFORT)
     const readV3 = await readFrozenCatalog(3)
     const model = {
@@ -344,7 +360,7 @@ describe('publishRegistryCatalog', () => {
   })
 
   it.each([1, 2, 3])('preserves models and overrides in every v%s image mode', async (version) => {
-    const { sourceDirectory, destinationDirectory } = makeDirectories()
+    const { sourceDirectory, destinationDirectory } = makeDirectories(true)
     writeCatalog(sourceDirectory, OVERRIDE_WITH_UNKNOWN_EFFORT)
     const read = await readFrozenCatalog(version)
     const known = { quality: { type: 'enum', options: ['high', 'low'] } }
@@ -386,7 +402,7 @@ describe('publishRegistryCatalog', () => {
   })
 
   it('preserves current and unchanged legacy catalog bytes', async () => {
-    const { sourceDirectory, destinationDirectory } = makeDirectories()
+    const { sourceDirectory, destinationDirectory } = makeDirectories(true)
     writeCatalog(sourceDirectory, { providerId: 'openai', modelId: 'image-model' })
     const input =
       '{ "version": "untouched", "models": [{ "id": "image-model", "name": "Image model", "imageGeneration": { "modes": { "generate": { "supports": { "quality": { "type": "enum", "options": ["high"] }, "outputFormat": { "type": "enum", "options": ["png", "webp"], "default": "png" } } } } } }] }'
@@ -409,16 +425,6 @@ describe('publishRegistryCatalog', () => {
       fs.readFileSync(path.join(sourceDirectory, 'models.json'))
     )
   })
-
-  it.each(['models.json', 'providers.json', 'provider-models.json'])(
-    'preserves the generator content version and write shape for %s',
-    (file) => {
-      const original = fs.readFileSync(path.resolve(COMPAT_DIRECTORY, '../data', file), 'utf8')
-      const body = JSON.parse(original)
-      delete body.version
-      expect(stampAndSerialize(body)).toBe(`${JSON.stringify(JSON.parse(original), null, 2)}\n`)
-    }
-  )
 
   it('publishes the current version untouched', async () => {
     const { sourceDirectory, destinationDirectory } = makeDirectories()

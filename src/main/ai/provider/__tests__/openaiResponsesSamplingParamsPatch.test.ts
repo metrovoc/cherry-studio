@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { coerceCodexRequestBody } from '../codex'
 
 /**
- * Guards the sampling-parameter hunk in patches/@ai-sdk__openai@3.0.109.patch.
+ * Guards the sampling-parameter hunk in patches/@ai-sdk__openai@3.0.137.patch.
  * `forceReasoning` exists to make the adapter emit `reasoning` for models its
  * own id allowlist does not recognize — Cherry sets it for every Responses
  * request. Upstream also let it drive "OpenAI reasoning models reject

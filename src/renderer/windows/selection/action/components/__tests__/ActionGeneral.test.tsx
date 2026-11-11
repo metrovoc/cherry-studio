@@ -298,7 +298,11 @@ describe('ActionGeneral', () => {
   it('saves a successful assistant-backed action when conversation saving is enabled', async () => {
     state.saveConversations = true
     state.assistant = { id: 'assistant-1' }
-    const action = createAction({ assistantId: 'assistant-1', selectedText: 'Selected passage' })
+    const action = createCustomAction({
+      runner: 'assistant',
+      assistantId: 'assistant-1',
+      selectedText: 'Selected passage'
+    })
     const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'
@@ -311,7 +315,7 @@ describe('ActionGeneral', () => {
     state.saveConversations = true
     state.streamStatus = 'done'
 
-    render(<ActionGeneral sourceEntityId="test-session" action={createAction()} />)
+    render(<ActionGeneral sourceEntityId="test-session" action={createCustomAction()} />)
 
     expect(state.persistTemporaryTopic).not.toHaveBeenCalled()
   })
@@ -320,7 +324,7 @@ describe('ActionGeneral', () => {
     state.saveConversations = true
     state.assistant = { id: 'assistant-1' }
     state.persistTemporaryTopic.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
-    const action = createAction({ assistantId: 'assistant-1' })
+    const action = createCustomAction({ runner: 'assistant', assistantId: 'assistant-1' })
     const view = render(<ActionGeneral sourceEntityId="test-session" action={action} />)
 
     state.streamStatus = 'done'

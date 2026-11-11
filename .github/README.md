@@ -25,6 +25,8 @@ Everything not listed here is upstream Cherry Studio. Each release is rebased on
 
 **Quick Assistant**
 
+- Attach images by pasting, dropping, or choosing files. Enable screen context in settings to preview a capture of the display under the cursor before sending the first message.
+
 - Conversations are saved to history and can be continued later. You can browse saved conversations and switch assistants without leaving the panel.
 - Works as a transient macOS panel: it closes when you click outside it, keeps keyboard and input-method focus, and holds your scroll position while a reply streams in.
 
@@ -92,6 +94,7 @@ These parts belong to the fork. Keep them through every rebase, and keep the for
   - `FEEDBACK_GITHUB_URL` in `src/renderer/components/feedback/FeedbackDialog.tsx`.
   - The feedback and releases items in `src/main/services/AppMenuService.ts`.
 - **macOS window behavior:** `packages/macos-panel/` and `patches/selection-hook@*.patch`.
+- **Quick Assistant images:** attachment controls and screen context in `src/renderer/windows/quickAssistant/`, `src/main/services/QuickAssistantService.ts`, and their settings, IPC schemas, and preference definitions.
 - **Model catalog:** fork models in `packages/provider-registry/` and catalog publishing in `scripts/publishRegistryCatalog.js`.
 
 Repository settings that live outside Git:

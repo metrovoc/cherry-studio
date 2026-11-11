@@ -414,6 +414,47 @@ describe('TemporaryChatService', () => {
     // that uses a fresh tmpdir per case.
   })
 
+  it('promotes image attachments with durable file references before releasing temporary ownership', () => {
+    const fileId = '019606a0-0000-7000-8000-00000000aa05'
+    dbh.db
+      .insert(fileEntryTable)
+      .values({
+        id: fileId,
+        origin: 'internal',
+        name: 'screen',
+        ext: 'png',
+        size: 1,
+        cleanupPolicy: 'delete_when_unreferenced'
+      })
+      .run()
+    const topic = service.createTopic({ name: 'Screen question' })
+    const message = service.appendMessage(topic.id, {
+      role: 'user',
+      data: {
+        parts: [
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'file:///screen.png',
+            providerMetadata: { cherry: { fileEntryId: fileId } }
+          }
+        ]
+      }
+    })
+    const retention = MockMainFileManagerExport.fileManager.retainTemporaryEntry.mock.results.at(-1)!.value
+    retention.dispose.mockImplementation(() => {
+      expect(fileRefService.findBySource({ sourceType: 'chat_message', sourceId: message.id })).toEqual([
+        expect.objectContaining({ fileEntryId: fileId, role: 'attachment' })
+      ])
+    })
+    service.persist(topic.id)
+    expect(fileRefService.findByEntryId(fileId)).toEqual([expect.objectContaining({ role: 'attachment' })])
+    expect(
+      dbh.db.select().from(messageTable).where(eq(messageTable.id, message.id)).get()?.data?.parts?.[0]
+    ).toMatchObject({ type: 'file', mediaType: 'image/png' })
+    expect(retention.dispose).toHaveBeenCalledOnce()
+  })
+
   describe('frozen avatar retention handoff', () => {
     const fileId = '019606a0-0000-7000-8000-00000000aa04' as FileEntryId
     function prepare() {

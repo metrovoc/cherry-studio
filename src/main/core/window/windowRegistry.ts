@@ -511,7 +511,7 @@ export const WINDOW_TYPE_REGISTRY: Partial<Record<WindowType, WindowTypeMetadata
       macShowInDock: false
     },
     quirks: {
-      macRestoreFocusOnHide: true
+      macAttachAuxiliaryPanels: true
     },
     poolConfig: {
       standbySize: 1,

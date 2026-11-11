@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { screen } from 'electron'
+import { nativeImage, screen } from 'electron'
 
 /**
  * QuickAssistantService — business orchestration for the quick assistant window.
@@ -23,8 +23,10 @@ import { type Activatable, BaseService, DependsOn, Injectable, Phase, ServicePha
 import { isMac, isWin } from '@main/core/platform'
 import { isAppRendererUrl } from '@main/core/security/validateSender'
 import { WindowType } from '@main/core/window/types'
+import { getScreenCapturePermissionStatus } from '@main/utils/screenCapturePermission'
 
 import { isSafeExternalUrl } from '../utils/externalUrlSafety'
+import { captureMonitor } from './screenshot'
 
 const logger = loggerService.withContext('QuickAssistantService')
 
@@ -32,6 +34,8 @@ const logger = loggerService.withContext('QuickAssistantService')
 @ServicePhase(Phase.WhenReady)
 @DependsOn(['WindowManager'])
 export class QuickAssistantService extends BaseService implements Activatable {
+  private showGeneration = 0
+  private screenContext: { image: string | null; failed: boolean } | null = null
   private windowId: string | null = null
   private isPinnedQuickAssistant = false
   private disposeWindowListeners: (() => void) | null = null
@@ -92,6 +96,8 @@ export class QuickAssistantService extends BaseService implements Activatable {
   }
 
   private releaseActivationResources(): void {
+    this.showGeneration += 1
+    this.screenContext = null
     if (this.windowId) {
       // QuickAssistant is a singleton — wm.close() falls through to destroyWindow()
       // just like wm.destroy() would, but stays in the Consumer API layer. The
@@ -183,19 +189,12 @@ export class QuickAssistantService extends BaseService implements Activatable {
         this.hideQuickAssistant()
       }
     }
-    // The renderer refreshes its clipboard and input focus on each show.
-    const onShow = () => {
-      if (this.windowId && !window.isDestroyed()) {
-        application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
-      }
-    }
     const dispose = () => {
       outsideClicks?.dispose()
       companionListeners.forEach((listener) => listener.dispose())
       this.disposeWindowListeners = null
       if (window.isDestroyed()) return
       window.removeListener('blur', onBlur)
-      window.removeListener('show', onShow)
       window.removeListener('closed', onClosed)
     }
     const onClosed = () => {
@@ -204,7 +203,6 @@ export class QuickAssistantService extends BaseService implements Activatable {
     }
 
     window.on('blur', onBlur)
-    window.on('show', onShow)
     window.once('closed', onClosed)
 
     const outsideClicks = isMac
@@ -243,12 +241,33 @@ export class QuickAssistantService extends BaseService implements Activatable {
     return window
   }
 
-  public showQuickAssistant() {
+  public async showQuickAssistant() {
     // A closed window may be recreated only while the feature remains enabled.
     if (!this.isActivated) return
 
     this.createQuickAssistant()
-    this.proceedShow()
+    const generation = ++this.showGeneration
+    const window = this.getQuickAssistant()
+    this.screenContext = null
+    if (
+      window &&
+      (!window.isVisible() || window.isMinimized()) &&
+      application.get('PreferenceService').get('feature.quick_assistant.screen_context')
+    ) {
+      try {
+        if (getScreenCapturePermissionStatus() !== 'authorized') throw new Error('Screen capture permission required')
+        const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+        const capture = await captureMonitor(display.id)
+        const image = nativeImage.createFromBuffer(capture.buffer).resize({ width: display.size.width })
+        if (generation !== this.showGeneration) return
+        this.screenContext = { image: image.toDataURL(), failed: false }
+      } catch (error) {
+        if (generation !== this.showGeneration) return
+        logger.warn('Could not capture Quick Assistant screen context', error as Error)
+        this.screenContext = { image: null, failed: true }
+      }
+    }
+    if (generation === this.showGeneration && this.isActivated) this.proceedShow()
   }
 
   /** Inner show pipeline. Assumes the quick window exists and its content is ready. */
@@ -269,6 +288,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
 
     window.setOpacity(1)
     window.show()
+    if (this.windowId) application.get('IpcApiService').send(this.windowId, 'quick_assistant.shown', undefined)
   }
 
   /**
@@ -292,7 +312,16 @@ export class QuickAssistantService extends BaseService implements Activatable {
     window.setBounds({ x, y, width, height })
   }
 
+  public takeScreenContext(senderId: string | null) {
+    if (!senderId || senderId !== this.windowId) return null
+    const context = this.screenContext
+    this.screenContext = null
+    return application.get('PreferenceService').get('feature.quick_assistant.screen_context') ? context : null
+  }
+
   public hideQuickAssistant() {
+    this.showGeneration += 1
+    this.screenContext = null
     const window = this.getQuickAssistant()
     if (!window) return
 
@@ -318,7 +347,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
    * as a final fallback in WindowManager.onDestroy() at app quit.
    */
   public closeQuickAssistant() {
-    this.getQuickAssistant()?.hide()
+    this.hideQuickAssistant()
   }
 
   public toggleQuickAssistant() {
@@ -327,7 +356,7 @@ export class QuickAssistantService extends BaseService implements Activatable {
       this.hideQuickAssistant()
       return
     }
-    this.showQuickAssistant()
+    void this.showQuickAssistant()
   }
 
   public setPinQuickAssistant(isPinned: boolean) {
