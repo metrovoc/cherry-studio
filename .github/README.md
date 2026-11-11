@@ -84,7 +84,7 @@ Version numbers continue upstream's 2.x line but are assigned independently. Thi
 These parts belong to the fork. Keep them through every rebase, and keep the fork's side when they conflict with upstream:
 
 - **Fork documentation and issue intake:** `.github/README.md` and `.github/ISSUE_TEMPLATE/`, which replaces upstream's templates.
-- **Release pipeline:** `.github/workflows/downstream-release.yml` and `scripts/release/`; see [the release guide](../scripts/release/README.md).
+- **Release pipeline:** full downstream validation in `.github/workflows/ci.yml`, `.github/workflows/downstream-release.yml` and `scripts/release/`; see [the release guide](../scripts/release/README.md).
 - **Update feed:**
   - The `publish` settings in `electron-builder.yml` and `dev-app-update.yml` point at this repository.
   - `RELEASE_HISTORY_URL` in `src/main/services/AppUpdaterService.ts` does too.

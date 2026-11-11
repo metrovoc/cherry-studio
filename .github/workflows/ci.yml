@@ -48,6 +48,8 @@ jobs:
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             node scripts/validation/run.mjs --committed --base HEAD^1 --github-output
+          elif [[ "$EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/downstream" ]]; then
+            node scripts/validation/run.mjs --all --github-output
           elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
             if git fetch --no-tags --depth=1 origin "$BEFORE_SHA"; then
               node scripts/validation/run.mjs --committed --base "$BEFORE_SHA" --github-output
