@@ -140,12 +140,19 @@ describe('CI validation planning', () => {
     git('checkout', 'main')
     git('-c', 'commit.gpgsign=false', 'merge', '--no-ff', 'feature', '-m', 'merge')
     const script = workflow.jobs.changes.steps.find((step: { id?: string }) => step.id === 'plan').run
-    const run = (event: string, before = base) => {
+    const run = (event: string, before = base, ref = 'refs/heads/main') => {
       const output = join(cwd, '.git', 'validation-output')
       writeFileSync(output, '')
       execFileSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
         cwd,
-        env: { ...process.env, VALIDATION_PLAN: '', EVENT_NAME: event, BEFORE_SHA: before, GITHUB_OUTPUT: output }
+        env: {
+          ...process.env,
+          VALIDATION_PLAN: '',
+          EVENT_NAME: event,
+          BEFORE_SHA: before,
+          GITHUB_REF: ref,
+          GITHUB_OUTPUT: output
+        }
       })
       return JSON.parse(
         readFileSync(output, 'utf8')
@@ -165,6 +172,9 @@ describe('CI validation planning', () => {
     writeFileSync(join(cwd, 'README.md'), 'docs only')
     commit('docs only')
     expect(run('push').projects).toEqual([])
+    const downstream = run('push', base, 'refs/heads/downstream')
+    expect(downstream.projects).toContain('main')
+    expect(downstream.projects).toContain('renderer')
   })
 
   it('fails test gates on missing classification and failed, cancelled, skipped or missing dependencies', () => {
