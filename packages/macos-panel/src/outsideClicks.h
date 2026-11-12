@@ -22,6 +22,8 @@ class OutsideClicks {
   void Handle(NSWindow *target) {
     NSWindow *owner = owner_;
     if (!owner || !owner.isVisible) return;
+    // Native file-picker controls may deliver clicks through another process.
+    if (owner.attachedSheet) return;
     for (NSWindow *window = target; window; window = window.parentWindow) {
       if (window == owner || [companions_ containsObject:window]) return;
     }

@@ -90,9 +90,22 @@ int main() {
       monitor.SetCompanions([NSHashTable weakObjectsHashTable]);
       monitor.Handle(dialog);
       Check(clicks == 4, "A removed companion remained exempted");
+      for (NSModalResponse response : {NSModalResponseOK, NSModalResponseCancel}) {
+        const int before = clicks;
+        [owner beginSheet:dialog completionHandler:nil];
+        Check(owner.attachedSheet == dialog, "The native dialog did not attach to its owner");
+        monitor.Handle(dialog);
+        monitor.Handle(nil);
+        Check(clicks == before, "A native file-picker click dismissed its owner");
+        [owner endSheet:dialog returnCode:response];
+        [dialog orderOut:nil];
+        Check(owner.attachedSheet == nil, "The native dialog did not detach after completion");
+        monitor.Handle(nil);
+        Check(clicks == before + 1, "Outside dismissal did not resume after the dialog closed");
+      }
       owner.simulatedVisible = NO;
       monitor.Handle(nil);
-      Check(clicks == 4, "A hidden panel received outside clicks");
+      Check(clicks == 6, "A hidden panel received outside clicks");
     }
     [other removeChildWindow:foreign];
     for (TestPanel *panel in @[owner, candidate, dialog, foreign, other]) {
