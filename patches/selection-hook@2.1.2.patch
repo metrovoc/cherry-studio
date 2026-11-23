@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index b51cd6185a7852c1c07144a9ad6e0f34079cec01..622ff731c8ead9ee426b2bd4896beb9125370f2c 100644
+index 3842199aceb0a2c0c08304a32014ffcb7fa60f3e..812e3fa2d71b45b6b733d311a7d49ac214d3abb9 100644
 --- a/package.json
 +++ b/package.json
 @@ -17,7 +17,7 @@
@@ -20,6 +20,319 @@ index 0000000000000000000000000000000000000000..7d7c6e8f9d5cb35af7139e0dd1eb133f
 +// macOS source patches must take precedence over the bundled prebuild.
 +if (process.platform === "darwin") process.env.npm_config_build_from_source = "true";
 +require("node-gyp-build/bin.js");
+diff --git a/src/mac/core/engine.h b/src/mac/core/engine.h
+index 1ff4892f5616a570243569c8d243b1c051588ab1..a6b7ca63de345d80fd9cc5ea9bbbf7f25b2fa38e 100644
+--- a/src/mac/core/engine.h
++++ b/src/mac/core/engine.h
+@@ -94,6 +94,7 @@ class SelectionEngine
+      */
+     bool SendCopyKey(pid_t pid = 0) const;
+ 
++    bool preferSourceCopy_ = false;
+     const SelectionConfigSnapshot *config_ = nullptr;
+     int64_t clipboardSequence_ = 0;
+ };
+diff --git a/src/mac/core/engine.mm b/src/mac/core/engine.mm
+index f4d7fc43a693ba11757d13043dc4ef8c95acb64f..3875ce4af6f52de08d3da021fcfa99b67f0cdfbd 100644
+--- a/src/mac/core/engine.mm
++++ b/src/mac/core/engine.mm
+@@ -60,6 +60,7 @@ bool SelectionEngine::GetSelectedText(NSRunningApplication *frontApp, TextSelect
+ {
+     // Per-call context. The clipboard sequence is retrieval-local until it is
+     // published back to the owner through endingClipboardSequence.
++    preferSourceCopy_ = false;
+     config_ = &config;
+     clipboardSequence_ = config.clipboardSequence;
+ 
+@@ -104,8 +105,9 @@ bool SelectionEngine::GetSelectedText(NSRunningApplication *frontApp, TextSelect
+         result = true;
+     }
+ 
+-    // Last resort: try to get text using clipboard and Cmd+C if enabled
+-    if (!result && ShouldProcessViaClipboard(selectionInfo.programName) && GetTextViaClipboard(frontApp, selectionInfo))
++    // Let the source app serialize selections that AX cannot represent faithfully.
++    if (((!result && config.allowClipboardFallback) || preferSourceCopy_) &&
++        ShouldProcessViaClipboard(selectionInfo.programName) && GetTextViaClipboard(frontApp, selectionInfo))
+     {
+         selectionInfo.method = SelectionMethod::Clipboard;
+         result = true;
+@@ -264,6 +266,7 @@ bool SelectionEngine::GetTextViaAXAPI(NSRunningApplication *frontApp, TextSelect
+     // Removing this block silently breaks Chrome, Edge, Electron, and VS Code support.
+     if (!result)
+     {
++        preferSourceCopy_ = false;
+         // Chrome/Chromium: set "AXEnhancedUserInterface" to true to enable AXAPI
+         AXUIElementSetAttributeValue(appElement, CFSTR("AXEnhancedUserInterface"), kCFBooleanTrue);
+         // Electron Apps: set "AXManualAccessibility" to true to enable AXAPI
+@@ -284,14 +287,9 @@ bool SelectionEngine::GetTextViaAXAPI(NSRunningApplication *frontApp, TextSelect
+  * something themselves and it is read directly; (2) otherwise back up ALL pasteboard
+  * items, post Cmd+C to the target pid, poll changeCount, read, and restore.
+  *
+- * Invariants for anyone editing this function:
+- * - Every exit after SendCopyKey() must restore the backup when HasData() and then
+- *   refresh clipboardSequence_ from GetClipboardSequence(), because the restore itself
+- *   bumps changeCount. Missing either makes the next gesture treat our own restore as a
+- *   user copy and return stale pasteboard text.
+- * - The poll below runs on the JS thread (std::this_thread::sleep_for). Its 10 x 10 ms
+- *   budget is the upper bound on how long a gesture can block Node/Electron; do not
+- *   lengthen it without moving retrieval off the JS thread.
++ * A confirmed rich selection requires a fresh copy. Restore the previous contents
++ * only after a pasteboard write, and keep the sequence current for the next gesture.
++ * Polling blocks the JS thread for at most 100 ms.
+  */
+ bool SelectionEngine::GetTextViaClipboard(NSRunningApplication *frontApp, TextSelectionInfo &selectionInfo)
+ {
+@@ -307,7 +305,7 @@ bool SelectionEngine::GetTextViaClipboard(NSRunningApplication *frontApp, TextSe
+ 
+     // Check if clipboard sequence number has changed since mouse down
+     // if it's changed, it means user has copied something, we can read it directly
+-    if (newClipboardSequence != clipboardSequence_)
++    if (!preferSourceCopy_ && newClipboardSequence != clipboardSequence_)
+     {
+         // Read the new clipboard content
+         std::string newContent;
+@@ -321,7 +319,13 @@ bool SelectionEngine::GetTextViaClipboard(NSRunningApplication *frontApp, TextSe
+     // no new copied message or read clipboard failed, we need to send Cmd+C to copy
+     clipboardSequence_ = newClipboardSequence;
+     // Store ALL current clipboard content to restore later (all formats, not just text)
++    bool wasEmpty = IsClipboardEmpty();
+     ClipboardBackup clipboardBackup = BackupClipboard();
++    if ((!wasEmpty && !clipboardBackup.HasData()) || GetClipboardSequence() != newClipboardSequence)
++    {
++        clipboardSequence_ = GetClipboardSequence();
++        return false;
++    }
+ 
+     // Send Cmd+C to copy selected text
+     if (!SendCopyKey(frontApp.processIdentifier))
+@@ -343,39 +347,23 @@ bool SelectionEngine::GetTextViaClipboard(NSRunningApplication *frontApp, TextSe
+     }
+ 
+     if (!clipboardChanged)
+-    {
+-        if (clipboardBackup.HasData())
+-        {
+-            RestoreClipboard(clipboardBackup);
+-            clipboardSequence_ = GetClipboardSequence();
+-        }
+         return false;
+-    }
+ 
+-    // Read the new clipboard content
+     std::string newContent;
+-    if (!ReadClipboard(newContent) || IsTrimmedEmpty(newContent))
++    bool hasText = ReadClipboard(newContent) && !IsTrimmedEmpty(newContent);
++    if (GetClipboardSequence() != newClipboardSequence)
+     {
+-        // Restore original clipboard if possible (all formats)
+-        if (clipboardBackup.HasData())
+-        {
+-            RestoreClipboard(clipboardBackup);
+-            clipboardSequence_ = GetClipboardSequence();
+-        }
+-
++        clipboardSequence_ = GetClipboardSequence();
+         return false;
+     }
+-
+-    // Store the copied text
+-    selectionInfo.text = newContent;
+-
+-    // Restore original clipboard content (all formats)
+     if (clipboardBackup.HasData())
+-    {
+         RestoreClipboard(clipboardBackup);
+-        clipboardSequence_ = GetClipboardSequence();
+-    }
+-
++    else if (wasEmpty)
++        ClearClipboardLocal();
++    clipboardSequence_ = GetClipboardSequence();
++    if (!hasText)
++        return false;
++    selectionInfo.text = newContent;
+     return true;
+ }
+ 
+@@ -465,26 +453,101 @@ bool SelectionEngine::SendCopyKey(pid_t pid) const
+     return true;
+ }
+ 
++struct ScopedCFRef
++{
++    CFTypeRef ref = nullptr;
++    explicit ScopedCFRef(CFTypeRef value) : ref(value) {}
++    ~ScopedCFRef()
++    {
++        if (ref)
++            CFRelease(ref);
++    }
++    ScopedCFRef(const ScopedCFRef &) = delete;
++    ScopedCFRef &operator=(const ScopedCFRef &) = delete;
++};
++
++static CFTypeRef CopyMarkerAttribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef parameter)
++{
++    CFTypeRef result = nullptr;
++    if (!parameter ||
++        AXUIElementCopyParameterizedAttributeValue(element, attribute, parameter, &result) != kAXErrorSuccess)
++    {
++        return nullptr;
++    }
++    return result;
++}
++
++// Chromium's numeric range uses a different text representation from its markers.
++// Both can omit layout separators when the selection crosses accessible elements.
++static bool NeedsSourceCopy(AXUIElementRef element, CFStringRef characters)
++{
++    CFTypeRef value = nullptr;
++    if (AXUIElementCopyAttributeValue(element, CFSTR("AXSelectedTextMarkerRange"), &value) != kAXErrorSuccess)
++        return false;
++    ScopedCFRef markers(value);
++    if (!markers.ref || CFGetTypeID(markers.ref) != AXTextMarkerRangeGetTypeID())
++        return false;
++
++    ScopedCFRef markerText(CopyMarkerAttribute(element, CFSTR("AXStringForTextMarkerRange"), markers.ref));
++    if (markerText.ref && CFGetTypeID(markerText.ref) == CFStringGetTypeID() &&
++        CFStringGetLength((CFStringRef)markerText.ref) > 0 && !CFEqual(markerText.ref, characters))
++    {
++        return true;
++    }
++
++    AXTextMarkerRangeRef range = (AXTextMarkerRangeRef)markers.ref;
++    ScopedCFRef start(AXTextMarkerRangeCopyStartMarker(range));
++    ScopedCFRef end(AXTextMarkerRangeCopyEndMarker(range));
++    ScopedCFRef startElement(CopyMarkerAttribute(element, CFSTR("AXUIElementForTextMarker"), start.ref));
++    ScopedCFRef endElement(CopyMarkerAttribute(element, CFSTR("AXUIElementForTextMarker"), end.ref));
++    return startElement.ref && endElement.ref && !CFEqual(startElement.ref, endElement.ref);
++}
++
+ /**
+  * Get text selection from an accessibility element
+  *
+- * Two sources, in order:
+- * 1. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
++ * Three sources, in order:
++ * 1. kAXStringForRange with kAXSelectedTextRange - resolves browser soft-wrap offsets.
++ * 2. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
+  *    steppers report their selection as a number rather than a string.
+- * 2. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
++ * 3. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
+  *    and a range but not kAXSelectedText.
+  * Returns true only for a non-empty result; blank-only text is filtered by the caller.
+  */
+ bool SelectionEngine::GetSelectedTextFromElement(AXUIElementRef element, std::string &text)
+ {
++    preferSourceCopy_ = false;
+     if (!element)
+     {
+         return false;
+     }
+ 
+-    // Try to get selected text first
++    // Chromium can shift AXSelectedText at soft wraps; resolve its range directly instead.
+     CFTypeRef selectedTextRef = nullptr;
+-    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
++    CFTypeRef rangeRef = nullptr;
++    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &rangeRef);
++    if (error == kAXErrorSuccess && rangeRef)
++    {
++        CFRange range = {0, 0};
++        if (CFGetTypeID(rangeRef) == AXValueGetTypeID() &&
++            AXValueGetValue((AXValueRef)rangeRef, kAXValueTypeCFRange, &range) &&
++            range.location >= 0 && range.length > 0)
++        {
++            AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute,
++                                                       rangeRef, &selectedTextRef);
++        }
++        CFRelease(rangeRef);
++    }
++    if (selectedTextRef && (CFGetTypeID(selectedTextRef) != CFStringGetTypeID() ||
++                            CFStringGetLength((CFStringRef)selectedTextRef) == 0))
++    {
++        CFRelease(selectedTextRef);
++        selectedTextRef = nullptr;
++    }
++    if (!selectedTextRef)
++        error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
++    else
++        error = kAXErrorSuccess;
+ 
+     if (error == kAXErrorSuccess && selectedTextRef)
+     {
+@@ -504,6 +567,8 @@ bool SelectionEngine::GetSelectedTextFromElement(AXUIElementRef element, std::st
+                 {
+                     text = std::string(buffer);
+                     delete[] buffer;
++                    if (!text.empty())
++                        preferSourceCopy_ = NeedsSourceCopy(element, selectedText);
+                     CFRelease(selectedTextRef);
+                     return !text.empty();
+                 }
+diff --git a/src/mac/core/types.h b/src/mac/core/types.h
+index e3a96a672f9a89df811131ecd3ddd68c1621490a..11e67b11bf4981a5cef8642d1fa34bf5bb731b25 100644
+--- a/src/mac/core/types.h
++++ b/src/mac/core/types.h
+@@ -122,6 +122,7 @@ struct TextSelectionInfo
+ struct SelectionConfigSnapshot
+ {
+     bool clipboardEnabled = true;
++    bool allowClipboardFallback = true;
+     FilterMode clipboardFilterMode = FilterMode::Default;
+     std::vector<std::string> clipboardFilterList;
+     FilterMode globalFilterMode = FilterMode::Default;
+diff --git a/src/mac/lib/clipboard.h b/src/mac/lib/clipboard.h
+index e99673b5ec97c2c03ccab8c6abcc6c036161c393..b1d94549c473f98bd9d7b3f55e54828fb7278d39 100644
+--- a/src/mac/lib/clipboard.h
++++ b/src/mac/lib/clipboard.h
+@@ -72,3 +72,13 @@ ClipboardBackup BackupClipboard();
+  * whatever the user copied on their other devices. Bumps changeCount.
+  */
+ bool RestoreClipboard(const ClipboardBackup &backup);
++
++/**
++ * Returns whether the general pasteboard currently exposes no types.
++ */
++bool IsClipboardEmpty();
++
++/**
++ * Clears the general pasteboard locally without triggering Universal Clipboard sync.
++ */
++void ClearClipboardLocal();
+diff --git a/src/mac/lib/clipboard.mm b/src/mac/lib/clipboard.mm
+index 96033bf691f471f65dd22e3e5e4c3bf67bda2f32..e6cee95b295141e92bb526468bce1661ab5f3301 100644
+--- a/src/mac/lib/clipboard.mm
++++ b/src/mac/lib/clipboard.mm
+@@ -92,7 +92,7 @@ ClipboardBackup BackupClipboard()
+             {
+                 NSData *data = [item dataForType:type];
+                 if (data == nil)
+-                    continue;  // Unresolvable promised type, skip
++                    return {};  // Copying would discard a representation we cannot restore.
+ 
+                 const uint8_t *bytes = static_cast<const uint8_t *>([data bytes]);
+                 NSUInteger length = [data length];
+@@ -150,3 +150,19 @@ bool RestoreClipboard(const ClipboardBackup &backup)
+         return [pasteboard writeObjects:items] == YES;
+     }
+ }
++
++bool IsClipboardEmpty()
++{
++    @autoreleasepool
++    {
++        return [NSPasteboard generalPasteboard].types.count == 0;
++    }
++}
++
++void ClearClipboardLocal()
++{
++    @autoreleasepool
++    {
++        [[NSPasteboard generalPasteboard] prepareForNewContentsWithOptions:NSPasteboardContentsCurrentHostOnly];
++    }
++}
 diff --git a/src/mac/lib/utils.mm b/src/mac/lib/utils.mm
 index 829f0a615ae4207df5bef9cd474b905594a1804f..433639aa4c823bff45feb72c8ae9930dd5728b7c 100644
 --- a/src/mac/lib/utils.mm
@@ -49,7 +362,7 @@ index 829f0a615ae4207df5bef9cd474b905594a1804f..433639aa4c823bff45feb72c8ae9930d
  
  /**
 diff --git a/src/mac/selection_hook.mm b/src/mac/selection_hook.mm
-index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa696c0336 100644
+index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..fdff9df60f7bcbad896dc3078c18dc1ff83270c4 100644
 --- a/src/mac/selection_hook.mm
 +++ b/src/mac/selection_hook.mm
 @@ -167,7 +167,8 @@ class SelectionHook : public Napi::ObjectWrap<SelectionHook>
@@ -76,7 +389,7 @@ index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa
      } gateGuard{is_processing};
  
      SelectionConfigSnapshot config = BuildSelectionConfigSnapshot();
-+    config.clipboardEnabled = config.clipboardEnabled && allowClipboardFallback;
++    config.allowClipboardFallback = allowClipboardFallback;
      SelectionEngine engine;
      int64_t endingClipboardSequence = config.clipboardSequence;
      bool result = engine.GetSelectedText(frontApp, selectionInfo, config, &endingClipboardSequence);
@@ -116,56 +429,3 @@ index 65ec6f3d8e0cb634cf8dc9560d12ba462382deea..2db48c69b68d7127c1f7f0419134e4fa
          {
              switch (detectionType)
              {
-diff --git a/src/mac/core/engine.mm b/src/mac/core/engine.mm
---- a/src/mac/core/engine.mm
-+++ b/src/mac/core/engine.mm
-@@ -468,10 +468,11 @@
- /**
-  * Get text selection from an accessibility element
-  *
-- * Two sources, in order:
-- * 1. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
-+ * Three sources, in order:
-+ * 1. kAXStringForRange with kAXSelectedTextRange - resolves browser soft-wrap offsets.
-+ * 2. kAXSelectedText - most apps. CFNumber is accepted because numeric fields and
-  *    steppers report their selection as a number rather than a string.
-- * 2. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
-+ * 3. kAXValue sliced by kAXSelectedTextRange - for providers that expose the full text
-  *    and a range but not kAXSelectedText.
-  * Returns true only for a non-empty result; blank-only text is filtered by the caller.
-  */
-@@ -482,9 +483,32 @@
-         return false;
-     }
- 
--    // Try to get selected text first
-+    // Chromium can shift AXSelectedText at soft wraps; resolve its range directly instead.
-     CFTypeRef selectedTextRef = nullptr;
--    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
-+    CFTypeRef rangeRef = nullptr;
-+    AXError error = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute, &rangeRef);
-+    if (error == kAXErrorSuccess && rangeRef)
-+    {
-+        CFRange range = {0, 0};
-+        if (CFGetTypeID(rangeRef) == AXValueGetTypeID() &&
-+            AXValueGetValue((AXValueRef)rangeRef, kAXValueTypeCFRange, &range) &&
-+            range.location >= 0 && range.length > 0)
-+        {
-+            AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute,
-+                                                       rangeRef, &selectedTextRef);
-+        }
-+        CFRelease(rangeRef);
-+    }
-+    if (selectedTextRef && (CFGetTypeID(selectedTextRef) != CFStringGetTypeID() ||
-+                            CFStringGetLength((CFStringRef)selectedTextRef) == 0))
-+    {
-+        CFRelease(selectedTextRef);
-+        selectedTextRef = nullptr;
-+    }
-+    if (!selectedTextRef)
-+        error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute, &selectedTextRef);
-+    else
-+        error = kAXErrorSuccess;
- 
-     if (error == kAXErrorSuccess && selectedTextRef)
-     {
