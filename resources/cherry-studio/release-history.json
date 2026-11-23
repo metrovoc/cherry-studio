@@ -1,5 +1,9 @@
 [
   {
+    "version": "2.2.3",
+    "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.2.3 - Selection Accuracy Fix\n\n🐛 Bug Fixes\n- [Selection Assistant] Preserve complete text and layout separators for wrapped and multi-element browser selections on macOS, while keeping prior clipboard contents intact.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.2.3 - 划词准确性修复\n\n🐛 问题修复\n- [划词助手] 修复 macOS 上浏览器自动换行及跨元素划词时的文本截断与分隔符丢失问题，并保持原有剪贴板内容不变。\n<!--LANG:END-->"
+  },
+  {
     "version": "2.2.2",
     "releaseNotes": "<!--LANG:en-->\nCherry Studio 2.2.2 - File Picker Fix\n\n🐛 Bug Fixes\n- Keep floating assistant windows open while selecting files. Outside-click dismissal resumes when the picker closes.\n\n<!--LANG:zh-CN-->\nCherry Studio 2.2.2 - 文件选择器修复\n\n🐛 问题修复\n- 选择文件时保持悬浮助手窗口打开，文件选择器关闭后恢复点击外部隐藏窗口的行为。\n<!--LANG:END-->"
   },
